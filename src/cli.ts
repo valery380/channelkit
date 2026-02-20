@@ -407,4 +407,118 @@ service
     console.log(c('green', `\n  ✅ Removed service "${removed.name}" (code: ${removed.code})\n`));
   });
 
+// Provision command
+const provision = program
+  .command('provision')
+  .description('Provision a new phone number for WhatsApp');
+
+provision
+  .command('whatsapp')
+  .description('Buy a number and register it with WhatsApp')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (opts) => {
+    banner();
+    console.log(c('bright', '  📱 Provision a WhatsApp number\n'));
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+    try {
+      // Get Twilio credentials
+      console.log(c('dim', '  We\'ll use Twilio to buy a number and receive the WhatsApp\n  verification SMS automatically.\n'));
+      console.log(c('dim', '  Don\'t have a Twilio account? Sign up at https://twilio.com\n'));
+
+      const accountSid = await ask(rl, 'Twilio Account SID:');
+      const authToken = await ask(rl, 'Twilio Auth Token:');
+
+      if (!accountSid || !authToken) {
+        console.log(c('yellow', '\n  ❌ Account SID and Auth Token are required.\n'));
+        rl.close();
+        return;
+      }
+
+      console.log(c('dim', '\n  Connecting to Twilio...'));
+
+      const { TwilioProvisioner } = await import('./provisioning/twilio');
+      const twilio = new TwilioProvisioner({ accountSid, authToken });
+
+      // Choose country
+      const country = await ask(rl, 'Country code (e.g. US, GB, IL):', 'US');
+
+      // Search for numbers
+      console.log(c('dim', `\n  Searching for mobile numbers in ${country}...\n`));
+
+      let numbers;
+      try {
+        numbers = await twilio.searchNumbers(country, { type: 'mobile', limit: 5 });
+      } catch (err: any) {
+        // Fallback to local if mobile not available
+        console.log(c('dim', '  No mobile numbers found, trying local numbers...\n'));
+        numbers = await twilio.searchNumbers(country, { type: 'local', limit: 5 });
+      }
+
+      if (numbers.length === 0) {
+        console.log(c('yellow', '  ❌ No numbers available in this country.\n'));
+        rl.close();
+        return;
+      }
+
+      // Display options
+      const idx = await select(rl, 'Choose a number:', numbers.map(n => {
+        const features = [
+          n.capabilities.sms ? 'SMS' : '',
+          n.capabilities.voice ? 'Voice' : '',
+        ].filter(Boolean).join(', ');
+        return `${n.phoneNumber}  ${c('dim', `(${n.locality || n.region || n.isoCountry}) [${features}]`)}`;
+      }));
+
+      const chosen = numbers[idx];
+      console.log(c('dim', `\n  Purchasing ${chosen.phoneNumber}...`));
+
+      // Purchase
+      const purchased = await twilio.purchaseNumber(chosen.phoneNumber);
+      console.log(c('green', `  ✅ Purchased: ${purchased.phoneNumber}\n`));
+
+      // Save to config
+      const configPath = resolve(opts.config);
+      if (existsSync(configPath)) {
+        const { loadConfig, saveConfig } = await import('./config/parser');
+        const config = loadConfig(configPath);
+
+        // Update or add WhatsApp channel
+        const waKey = Object.keys(config.channels).find(k => (config.channels[k] as any).type === 'whatsapp') || 'whatsapp';
+        config.channels[waKey] = {
+          type: 'whatsapp',
+          number: purchased.phoneNumber,
+        };
+
+        // Save Twilio config for future use
+        (config as any).providers = (config as any).providers || {};
+        (config as any).providers.twilio = {
+          accountSid,
+          numberSid: purchased.sid,
+        };
+
+        saveConfig(configPath, config);
+        console.log(c('dim', `  Updated ${configPath} with new number.\n`));
+      }
+
+      // Next steps
+      console.log(c('green', '  ╔═══════════════════════════════════════╗'));
+      console.log(c('green', '  ║   Number provisioned! 🎉              ║'));
+      console.log(c('green', '  ╚═══════════════════════════════════════╝'));
+      console.log();
+      console.log(c('white', '  Next steps:\n'));
+      console.log(c('dim', '  1. Start ChannelKit: npm start'));
+      console.log(c('dim', '  2. When prompted for WhatsApp verification,'));
+      console.log(c('dim', `     the SMS will be sent to ${purchased.phoneNumber}`));
+      console.log(c('dim', '  3. Check your Twilio console for the verification code'));
+      console.log(c('dim', `     https://console.twilio.com/develop/sms/logs\n`));
+
+    } catch (err: any) {
+      console.error(c('yellow', `\n  ❌ ${err.message}\n`));
+    } finally {
+      rl.close();
+    }
+  });
+
 program.parse();
