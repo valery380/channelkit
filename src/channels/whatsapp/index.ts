@@ -28,13 +28,31 @@ export class WhatsAppChannel extends Channel {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
       },
-      printQRInTerminal: true,
     });
 
     this.sock.ev.on('creds.update', saveCreds);
 
     this.sock.ev.on('connection.update', (update) => {
-      const { connection, lastDisconnect } = update;
+      const { connection, lastDisconnect, qr } = update;
+      
+      if (qr) {
+        // Dynamic import to handle optional dependency
+        import('qrcode-terminal').then(({ default: qrcode }) => {
+          console.log(`\n  📱 Scan this QR code with WhatsApp:\n`);
+          qrcode.generate(qr, { small: true }, (output: string) => {
+            // Indent the QR code
+            const indented = output.split('\n').map(line => '     ' + line).join('\n');
+            console.log(indented);
+          });
+          console.log(`\n  ${'\x1b[2m'}Open WhatsApp → Settings → Linked Devices → Link a Device${'\x1b[0m'}\n`);
+        }).catch(() => {
+          // Fallback: print raw QR string
+          console.log(`\n  📱 QR Code (scan with WhatsApp):\n`);
+          console.log(`  ${qr}\n`);
+          console.log(`  Tip: install qrcode-terminal for a scannable QR in the terminal\n`);
+        });
+      }
+
       if (connection === 'close') {
         const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
         if (reason !== DisconnectReason.loggedOut) {
