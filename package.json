@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/cli.ts start",
-    "dev": "tsx watch src/cli.ts start"
+    "dev": "tsx watch src/cli.ts start",
+    "init": "tsx src/cli.ts init"
   },
   "keywords": [
     "whatsapp",
