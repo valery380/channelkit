@@ -502,17 +502,104 @@ provision
         console.log(c('dim', `  Updated ${configPath} with new number.\n`));
       }
 
-      // Next steps
-      console.log(c('green', '  ╔═══════════════════════════════════════╗'));
-      console.log(c('green', '  ║   Number provisioned! 🎉              ║'));
-      console.log(c('green', '  ╚═══════════════════════════════════════╝'));
+      // Step 2: Connect to WhatsApp via pairing code
+      console.log(c('bright', '\n  📲 Connecting to WhatsApp...\n'));
+      console.log(c('dim', '  We\'ll register this number as a linked device on your WhatsApp.\n'));
+
+      const connectNow = await ask(rl, 'Connect to WhatsApp now? (Y/n):', 'Y');
+      
+      if (connectNow.toLowerCase() !== 'n') {
+        const { useMultiFileAuthState, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
+        const makeWASocket = (await import('@whiskeysockets/baileys')).default;
+        const { join } = await import('path');
+        const { mkdirSync, existsSync: dirExists } = await import('fs');
+
+        const authDir = join('.', 'auth', `whatsapp-provisioned`);
+        if (!dirExists(authDir)) mkdirSync(authDir, { recursive: true });
+
+        const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+        const phoneForPairing = purchased.phoneNumber.replace(/[^0-9]/g, '');
+        
+        console.log(c('dim', '  Starting WhatsApp connection...\n'));
+
+        const sock = makeWASocket({
+          auth: {
+            creds: state.creds,
+            keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
+          },
+        });
+
+        sock.ev.on('creds.update', saveCreds);
+
+        await new Promise<void>((resolveConn, rejectConn) => {
+          let pairingRequested = false;
+          const timeout = setTimeout(() => {
+            sock.end(undefined);
+            rejectConn(new Error('Connection timeout'));
+          }, 120000);
+
+          sock.ev.on('connection.update', async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if ((connection === 'connecting' || qr) && !pairingRequested) {
+              pairingRequested = true;
+              try {
+                const code = await sock.requestPairingCode(phoneForPairing);
+                const formatted = code.match(/.{1,4}/g)?.join('-') || code;
+
+                console.log(c('green', '  ╔═══════════════════════════════════════╗'));
+                console.log(c('green', '  ║                                       ║'));
+                console.log(c('green', `  ║   Pairing code: ${c('bright', formatted)}          ║`));
+                console.log(c('green', '  ║                                       ║'));
+                console.log(c('green', '  ╚═══════════════════════════════════════╝'));
+                console.log();
+                console.log(c('white', '  On your phone (any phone with WhatsApp):'));
+                console.log(c('dim', '  1. Open WhatsApp → Settings → Linked Devices'));
+                console.log(c('dim', '  2. Tap "Link a Device"'));
+                console.log(c('dim', '  3. Tap "Link with phone number instead"'));
+                console.log(c('dim', `  4. Enter number: ${purchased.phoneNumber}`));
+                console.log(c('dim', `  5. Enter the code: ${formatted}`));
+                console.log(c('dim', '\n  Waiting for pairing...\n'));
+              } catch (err: any) {
+                clearTimeout(timeout);
+                sock.end(undefined);
+                rejectConn(new Error(`Failed to request pairing code: ${err.message}`));
+              }
+            }
+
+            if (connection === 'open') {
+              clearTimeout(timeout);
+              console.log(c('green', '  ✅ WhatsApp connected!\n'));
+              sock.end(undefined);
+              resolveConn();
+            }
+
+            if (connection === 'close') {
+              const reason = (lastDisconnect?.error as any)?.output?.statusCode;
+              if (reason === 515) {
+                // Restart required after pairing — this is normal
+                clearTimeout(timeout);
+                console.log(c('green', '  ✅ WhatsApp paired successfully!\n'));
+                sock.end(undefined);
+                resolveConn();
+              }
+            }
+          });
+        });
+      }
+
+      // Done!
+      console.log(c('green', '  ╔═══════════════════════════════════════════╗'));
+      console.log(c('green', '  ║                                           ║'));
+      console.log(c('green', '  ║   🎉 Provisioning complete!               ║'));
+      console.log(c('green', '  ║                                           ║'));
+      console.log(c('green', `  ║   Number: ${purchased.phoneNumber.padEnd(28)}║`));
+      console.log(c('green', '  ║                                           ║'));
+      console.log(c('green', '  ╚═══════════════════════════════════════════╝'));
       console.log();
-      console.log(c('white', '  Next steps:\n'));
-      console.log(c('dim', '  1. Start ChannelKit: npm start'));
-      console.log(c('dim', '  2. When prompted for WhatsApp verification,'));
-      console.log(c('dim', `     the SMS will be sent to ${purchased.phoneNumber}`));
-      console.log(c('dim', '  3. Check your Twilio console for the verification code'));
-      console.log(c('dim', `     https://console.twilio.com/develop/sms/logs\n`));
+      console.log(c('white', '  Start ChannelKit:\n'));
+      console.log(c('cyan', '    npm start\n'));
 
     } catch (err: any) {
       console.error(c('yellow', `\n  ❌ ${err.message}\n`));
