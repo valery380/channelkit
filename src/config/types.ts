@@ -21,14 +21,12 @@ export interface RouteConfig {
 
 export interface OnboardingCodeConfig {
   code: string;
-  service: string;
+  name: string;
   webhook: string;
 }
 
 export interface OnboardingConfig {
-  method: 'code' | 'landing';
   codes?: OnboardingCodeConfig[];
-  port?: number;
 }
 
 export interface AppConfig {

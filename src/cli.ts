@@ -282,4 +282,129 @@ program
     await startCommand(configPath);
   });
 
+// Service management commands
+const service = program
+  .command('service')
+  .description('Manage onboarding services');
+
+service
+  .command('add')
+  .description('Add a new service interactively')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig, saveConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+    try {
+      console.log(c('cyan', '\n  📦 Add a new service\n'));
+
+      const name = await ask(rl, 'Service name:');
+      if (!name) { rl.close(); return; }
+
+      const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const code = await ask(rl, 'Magic code:', suggestedCode);
+
+      const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
+
+      if (!config.onboarding) config.onboarding = { codes: [] };
+      if (!config.onboarding.codes) config.onboarding.codes = [];
+
+      // Check for duplicate code
+      const existing = config.onboarding.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
+      if (existing) {
+        console.log(c('yellow', `\n  ⚠️  Code "${code}" already exists for service "${existing.name}"\n`));
+        rl.close();
+        return;
+      }
+
+      config.onboarding.codes.push({ code: code.toUpperCase(), name, webhook });
+      saveConfig(configPath, config);
+
+      // Find WhatsApp number for share link
+      const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
+      const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
+
+      console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
+      console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
+      console.log(c('dim', `  Webhook: ${webhook}`));
+      if (number) {
+        console.log(c('cyan', `\n  📱 Share link: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}\n`));
+      }
+    } finally {
+      rl.close();
+    }
+  });
+
+service
+  .command('list')
+  .description('List all configured services')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+    const codes = config.onboarding?.codes || [];
+
+    if (codes.length === 0) {
+      console.log(c('dim', '\n  No services configured. Run `channelkit service add` to add one.\n'));
+      return;
+    }
+
+    const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
+    const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
+
+    console.log(c('cyan', '\n  📦 Configured Services\n'));
+    for (const svc of codes) {
+      console.log(c('bright', `  ${svc.name}`));
+      console.log(c('dim', `    Code:    ${svc.code}`));
+      console.log(c('dim', `    Webhook: ${svc.webhook}`));
+      if (number) {
+        console.log(c('dim', `    Share:   https://wa.me/${number}?text=${encodeURIComponent(svc.code)}`));
+      }
+      console.log();
+    }
+  });
+
+service
+  .command('remove <name>')
+  .description('Remove a service by name')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (name, opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig, saveConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+    const codes = config.onboarding?.codes || [];
+
+    const idx = codes.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
+    if (idx === -1) {
+      console.error(c('yellow', `\n  ❌ Service "${name}" not found.\n`));
+      process.exit(1);
+    }
+
+    const removed = codes.splice(idx, 1)[0];
+    if (!config.onboarding) config.onboarding = { codes: [] };
+    config.onboarding.codes = codes;
+    saveConfig(configPath, config);
+
+    console.log(c('green', `\n  ✅ Removed service "${removed.name}" (code: ${removed.code})\n`));
+  });
+
 program.parse();

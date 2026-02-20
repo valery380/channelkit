@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs';
-import { parse } from 'yaml';
+import { readFileSync, writeFileSync } from 'fs';
+import { parse, stringify } from 'yaml';
 import { AppConfig } from './types';
 
 export function loadConfig(path: string): AppConfig {
@@ -14,4 +14,9 @@ export function loadConfig(path: string): AppConfig {
   }
 
   return config;
+}
+
+export function saveConfig(path: string, config: AppConfig): void {
+  const yaml = stringify(config, { lineWidth: 0 });
+  writeFileSync(path, `# ChannelKit Configuration\n\n${yaml}`);
 }

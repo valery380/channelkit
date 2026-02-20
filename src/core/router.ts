@@ -1,11 +1,30 @@
 import { RouteConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from './types';
 import { dispatchWebhook } from './webhook';
+import { GroupStore } from './groupStore';
 
 export class Router {
+  private groupStore?: GroupStore;
+
   constructor(private routes: RouteConfig[]) {}
 
+  setGroupStore(store: GroupStore): void {
+    this.groupStore = store;
+  }
+
   private matchRoute(message: UnifiedMessage): RouteConfig | undefined {
+    // Check group→service mapping first
+    if (message.groupId && this.groupStore) {
+      const mapping = this.groupStore.get(message.groupId);
+      if (mapping) {
+        return {
+          channel: message.channel,
+          match: '*',
+          webhook: mapping.webhook,
+        };
+      }
+    }
+
     return this.routes.find((route) => {
       if (route.channel !== '*' && route.channel !== message.channel) {
         return false;

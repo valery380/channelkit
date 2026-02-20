@@ -1,11 +1,82 @@
-import { OnboardingConfig } from '../config/types';
+import { OnboardingConfig, OnboardingCodeConfig } from '../config/types';
+import { WhatsAppChannel } from '../channels/whatsapp';
+import { GroupStore } from '../core/groupStore';
+import { UnifiedMessage } from '../core/types';
 
 export class Onboarding {
-  constructor(private config: OnboardingConfig) {}
+  private groupStore: GroupStore;
 
-  async start(): Promise<void> {
-    console.log(`⏳ Onboarding (${this.config.method}) is a placeholder — not yet implemented`);
+  constructor(
+    private config: OnboardingConfig,
+    private whatsappChannel?: WhatsAppChannel
+  ) {
+    this.groupStore = new GroupStore();
   }
 
-  async stop(): Promise<void> {}
+  getGroupStore(): GroupStore {
+    return this.groupStore;
+  }
+
+  /**
+   * Handle a direct (non-group) message. Returns true if handled by onboarding.
+   */
+  async handleDirectMessage(message: UnifiedMessage): Promise<boolean> {
+    if (!this.whatsappChannel || message.channel !== 'whatsapp') return false;
+    if (message.groupId) return false; // only handle DMs
+
+    const codes = this.config.codes || [];
+    const text = (message.text || '').trim().toUpperCase();
+
+    const matched = codes.find(c => c.code.toUpperCase() === text);
+    if (matched) {
+      await this.createServiceGroup(message.from, matched);
+      return true;
+    }
+
+    // No match — send menu
+    if (codes.length > 0) {
+      const codeList = codes.map(c => c.code).join(' or ');
+      await this.whatsappChannel.sendToJid(
+        message.from,
+        `Available services: send ${codeList} to connect`
+      );
+    }
+    return true; // handled (sent menu)
+  }
+
+  private async createServiceGroup(userJid: string, service: OnboardingCodeConfig): Promise<void> {
+    if (!this.whatsappChannel) return;
+
+    // Extract user name or phone from JID
+    const phone = userJid.replace(/@s\.whatsapp\.net$/, '');
+    const userName = phone; // Baileys doesn't give us contact names easily
+    const groupName = `${service.name} - ${userName}`;
+
+    try {
+      const group = await this.whatsappChannel.createGroup(groupName, [userJid]);
+
+      // Store group→service mapping
+      this.groupStore.add(group.id, {
+        groupId: group.id,
+        serviceName: service.name,
+        webhook: service.webhook,
+        userId: userJid,
+        createdAt: Date.now(),
+      });
+
+      // Send welcome message
+      await this.whatsappChannel.sendToJid(
+        group.id,
+        `Welcome to ${service.name}! 🎉\nAll messages in this group will be forwarded to the service.`
+      );
+
+      console.log(`[onboarding] Created group "${groupName}" (${group.id}) for service ${service.name}`);
+    } catch (err) {
+      console.error(`[onboarding] Failed to create group:`, err);
+      await this.whatsappChannel.sendToJid(
+        userJid,
+        `Sorry, failed to set up ${service.name}. Please try again.`
+      );
+    }
+  }
 }

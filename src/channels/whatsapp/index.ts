@@ -20,6 +20,21 @@ export class WhatsAppChannel extends Channel {
     this.authDir = join(authDir, `whatsapp-${name}`);
   }
 
+  getSocket(): WASocket | null {
+    return this.sock;
+  }
+
+  async createGroup(name: string, participants: string[]): Promise<{ id: string; subject: string }> {
+    if (!this.sock) throw new Error('WhatsApp not connected');
+    const result = await this.sock.groupCreate(name, participants);
+    return { id: result.id, subject: name };
+  }
+
+  async sendToJid(jid: string, text: string): Promise<void> {
+    if (!this.sock) return;
+    await this.sock.sendMessage(jid, { text });
+  }
+
   async connect(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
 
