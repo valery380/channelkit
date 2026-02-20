@@ -29,6 +29,23 @@ export class Onboarding {
 
     const matched = codes.find(c => c.code.toUpperCase() === text);
     if (matched) {
+      // Skip if group already exists for this user + service
+      const existing = this.groupStore.findByUserAndService(message.from, matched.name);
+      if (existing) {
+        await this.whatsappChannel.sendToJid(
+          message.from,
+          `You're already connected to ${matched.name}! Check the group "${matched.name}" in your chats.`
+        );
+        return true;
+      }
+
+      // Skip old messages (older than 30 seconds)
+      const now = Math.floor(Date.now() / 1000);
+      if (message.timestamp && now - message.timestamp > 30) {
+        console.log(`[onboarding] Skipping old message from ${message.from} (${now - message.timestamp}s old)`);
+        return true;
+      }
+
       await this.createServiceGroup(message.from, matched);
       return true;
     }
