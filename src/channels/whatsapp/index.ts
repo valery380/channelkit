@@ -84,6 +84,12 @@ export class WhatsAppChannel extends Channel {
     this.sock.ev.on('messages.upsert', ({ messages }) => {
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
+        // Debug: log full key to understand JID formats
+        console.log(`[whatsapp:${this.name}] msg.key:`, JSON.stringify(msg.key));
+        if (msg.key.remoteJid?.endsWith('@lid')) {
+          console.log(`[whatsapp:${this.name}] pushName:`, (msg as any).pushName);
+          console.log(`[whatsapp:${this.name}] verifiedBizName:`, (msg as any).verifiedBizName);
+        }
         const unified = this.toUnified(msg);
         if (unified) this.emitMessage(unified);
       }
