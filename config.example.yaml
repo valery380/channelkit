@@ -1,0 +1,24 @@
+channels:
+  main:
+    type: whatsapp
+    number: "+44..."
+
+  # support-bot:
+  #   type: telegram
+  #   bot_token: "123:ABC..."
+
+routes:
+  - channel: whatsapp
+    match: "*"
+    webhook: "http://localhost:3000/api/chat"
+
+  # - channel: telegram
+  #   match: "status|temperature"
+  #   webhook: "http://localhost:8080/smart-home"
+
+# onboarding:
+#   method: code
+#   codes:
+#     - code: "HELLO"
+#       service: "my-service"
+#       webhook: "http://localhost:3000/api/chat"

@@ -1,0 +1,38 @@
+export interface ChannelConfig {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface WhatsAppChannelConfig extends ChannelConfig {
+  type: 'whatsapp';
+  number?: string;
+}
+
+export interface TelegramChannelConfig extends ChannelConfig {
+  type: 'telegram';
+  bot_token: string;
+}
+
+export interface RouteConfig {
+  channel: string;
+  match: string;
+  webhook: string;
+}
+
+export interface OnboardingCodeConfig {
+  code: string;
+  service: string;
+  webhook: string;
+}
+
+export interface OnboardingConfig {
+  method: 'code' | 'landing';
+  codes?: OnboardingCodeConfig[];
+  port?: number;
+}
+
+export interface AppConfig {
+  channels: Record<string, ChannelConfig>;
+  routes: RouteConfig[];
+  onboarding?: OnboardingConfig;
+}
