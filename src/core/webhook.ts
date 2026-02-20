@@ -2,13 +2,15 @@ import { UnifiedMessage, WebhookResponse } from './types';
 
 export async function dispatchWebhook(
   url: string,
-  message: UnifiedMessage
+  message: UnifiedMessage,
+  replyUrl?: string
 ): Promise<WebhookResponse | null> {
   try {
+    const payload = replyUrl ? { ...message, replyUrl } : message;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {

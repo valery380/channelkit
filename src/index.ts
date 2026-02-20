@@ -1,5 +1,6 @@
 import { AppConfig } from './config/types';
 import { Router } from './core/router';
+import { ApiServer } from './core/apiServer';
 import { Channel } from './channels/base';
 import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
@@ -8,11 +9,14 @@ import { UnifiedMessage } from './core/types';
 
 export class ChannelKit {
   private channels: Channel[] = [];
+  private channelMap: Map<string, Channel> = new Map();
   private router: Router;
+  private apiServer: ApiServer;
   private onboarding?: Onboarding;
 
   constructor(private config: AppConfig) {
     this.router = new Router(config.routes);
+    this.apiServer = new ApiServer(config.apiPort || 4000);
   }
 
   async start(): Promise<void> {
@@ -35,6 +39,8 @@ export class ChannelKit {
       }
 
       this.channels.push(channel);
+      this.channelMap.set(channelConfig.type, channel);
+      this.apiServer.registerChannel(channelConfig.type, channel);
     }
 
     // Set up onboarding if configured
@@ -53,20 +59,23 @@ export class ChannelKit {
           if (handled) return;
         }
 
-        const response = await this.router.route(message);
+        const replyTo = message.groupId || message.from;
+        const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
+        const response = await this.router.route(message, replyUrl);
         if (response) {
-          const replyTo = message.groupId || message.from;
           await channel.send(replyTo, response);
         }
       });
     }
 
-    // Connect all channels
+    // Start API server + connect all channels
+    await this.apiServer.start();
     await Promise.all(this.channels.map((ch) => ch.connect()));
     console.log('Listening for messages...');
   }
 
   async stop(): Promise<void> {
+    await this.apiServer.stop();
     await Promise.all(this.channels.map((ch) => ch.disconnect()));
   }
 }

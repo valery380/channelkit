@@ -33,4 +33,5 @@ export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   routes: RouteConfig[];
   onboarding?: OnboardingConfig;
+  apiPort?: number;
 }

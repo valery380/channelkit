@@ -42,13 +42,13 @@ export class Router {
     });
   }
 
-  async route(message: UnifiedMessage): Promise<WebhookResponse | null> {
+  async route(message: UnifiedMessage, replyUrl?: string): Promise<WebhookResponse | null> {
     const route = this.matchRoute(message);
     if (!route) {
       console.log(`[router] No route matched for message ${message.id} on ${message.channel}`);
       return null;
     }
     console.log(`[router] Routing ${message.id} → ${route.webhook}`);
-    return dispatchWebhook(route.webhook, message);
+    return dispatchWebhook(route.webhook, message, replyUrl);
   }
 }
