@@ -46,7 +46,7 @@ export class Onboarding {
         return true;
       }
 
-      await this.createServiceGroup(message.from, matched);
+      await this.createServiceGroup(message.from, matched, message.senderName);
       return true;
     }
 
@@ -61,13 +61,11 @@ export class Onboarding {
     return true; // handled (sent menu)
   }
 
-  private async createServiceGroup(userJid: string, service: OnboardingCodeConfig): Promise<void> {
+  private async createServiceGroup(userJid: string, service: OnboardingCodeConfig, senderName?: string): Promise<void> {
     if (!this.whatsappChannel) return;
 
-    // Extract user name or phone from JID
     const phone = userJid.replace(/@s\.whatsapp\.net$/, '');
-    const userName = phone; // Baileys doesn't give us contact names easily
-    const groupName = `${service.name} - ${userName}`;
+    const groupName = `${service.name} - ${senderName || phone}`;
 
     try {
       console.log(`[onboarding] Creating group "${groupName}" with participant: ${userJid}`);

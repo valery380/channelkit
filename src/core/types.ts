@@ -12,6 +12,7 @@ export interface UnifiedMessage {
     mimetype?: string;
     filename?: string;
   };
+  senderName?: string;
   groupId?: string;
   groupName?: string;
 }

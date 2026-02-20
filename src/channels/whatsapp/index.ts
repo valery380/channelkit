@@ -84,13 +84,11 @@ export class WhatsAppChannel extends Channel {
     this.sock.ev.on('messages.upsert', ({ messages }) => {
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
-        // Debug: log full key to understand JID formats
-        console.log(`[whatsapp:${this.name}] msg.key:`, JSON.stringify(msg.key));
-        if (msg.key.remoteJid?.endsWith('@lid')) {
-          console.log(`[whatsapp:${this.name}] pushName:`, (msg as any).pushName);
-          console.log(`[whatsapp:${this.name}] verifiedBizName:`, (msg as any).verifiedBizName);
+        // Resolve LID to regular JID
+        if (msg.key.remoteJid?.endsWith('@lid') && (msg.key as any).remoteJidAlt) {
+          msg.key.remoteJid = (msg.key as any).remoteJidAlt;
         }
-        const unified = this.toUnified(msg);
+        const unified = this.toUnified(msg, (msg as any).pushName);
         if (unified) this.emitMessage(unified);
       }
     });
@@ -115,7 +113,7 @@ export class WhatsAppChannel extends Channel {
     }
   }
 
-  private toUnified(msg: proto.IWebMessageInfo): UnifiedMessage | null {
+  private toUnified(msg: proto.IWebMessageInfo, pushName?: string): UnifiedMessage | null {
     const key = msg.key!;
     const jid = key.remoteJid;
     if (!jid) return null;
@@ -149,6 +147,7 @@ export class WhatsAppChannel extends Channel {
       text: text || undefined,
       timestamp: (msg.messageTimestamp as number) || Math.floor(Date.now() / 1000),
       replyTo: content.extendedTextMessage?.contextInfo?.stanzaId || undefined,
+      senderName: pushName || undefined,
       groupId: isGroup ? jid : undefined,
       groupName: undefined,
     };
