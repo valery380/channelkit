@@ -502,92 +502,112 @@ provision
         console.log(c('dim', `  Updated ${configPath} with new number.\n`));
       }
 
-      // Step 2: Connect to WhatsApp via pairing code
-      console.log(c('bright', '\n  📲 Connecting to WhatsApp...\n'));
-      console.log(c('dim', '  We\'ll register this number as a linked device on your WhatsApp.\n'));
+      // Step 2: Register number with WhatsApp
+      console.log(c('bright', '\n  📲 Step 2: Register with WhatsApp\n'));
+      console.log(c('white', '  Now add this number as a second account on your WhatsApp:\n'));
+      console.log(c('dim', '  1. Open WhatsApp on your phone'));
+      console.log(c('dim', '  2. Go to Settings → Add Account (or switch accounts)'));
+      console.log(c('dim', `  3. Enter the new number: ${c('cyan', purchased.phoneNumber)}`));
+      console.log(c('dim', '  4. WhatsApp will send an SMS to verify the number'));
+      console.log(c('dim', '  5. We\'ll catch the SMS automatically via Twilio!\n'));
 
-      const connectNow = await ask(rl, 'Connect to WhatsApp now? (Y/n):', 'Y');
+      const ready = await ask(rl, 'Ready? Press Enter when you\'ve requested the SMS verification in WhatsApp...');
+
+      // Start polling for SMS
+      console.log(c('dim', '\n  ⏳ Waiting for WhatsApp verification SMS...'));
       
-      if (connectNow.toLowerCase() !== 'n') {
-        const { useMultiFileAuthState, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
-        const makeWASocket = (await import('@whiskeysockets/baileys')).default;
-        const { join } = await import('path');
-        const { mkdirSync, existsSync: dirExists } = await import('fs');
+      let dots = 0;
+      const code = await twilio.waitForSms(purchased.phoneNumber, 120000, () => {
+        dots = (dots + 1) % 4;
+        process.stdout.write(`\r  ⏳ Waiting for SMS${'·'.repeat(dots)}${' '.repeat(3 - dots)}  `);
+      });
 
-        const authDir = join('.', 'auth', `whatsapp-provisioned`);
-        if (!dirExists(authDir)) mkdirSync(authDir, { recursive: true });
+      console.log(`\r                                        `);
+      console.log(c('green', `\n  ╔═══════════════════════════════════════╗`));
+      console.log(c('green', `  ║                                       ║`));
+      console.log(c('green', `  ║   📬 Verification code: ${c('bright', code)}        ║`));
+      console.log(c('green', `  ║                                       ║`));
+      console.log(c('green', `  ╚═══════════════════════════════════════╝`));
+      console.log(c('white', `\n  Enter this code in WhatsApp to complete registration.\n`));
 
-        const { state, saveCreds } = await useMultiFileAuthState(authDir);
+      await ask(rl, 'Press Enter once WhatsApp is set up on the new number...');
 
-        const phoneForPairing = purchased.phoneNumber.replace(/[^0-9]/g, '');
-        
-        console.log(c('dim', '  Starting WhatsApp connection...\n'));
+      // Step 3: Connect CK as linked device
+      console.log(c('bright', '\n  🔗 Step 3: Connect ChannelKit\n'));
+      console.log(c('dim', '  Now we\'ll connect ChannelKit as a linked device...\n'));
 
-        const sock = makeWASocket({
-          auth: {
-            creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
-          },
-        });
+      const { useMultiFileAuthState, makeCacheableSignalKeyStore } = await import('@whiskeysockets/baileys');
+      const makeWASocket = (await import('@whiskeysockets/baileys')).default;
+      const { join } = await import('path');
+      const { mkdirSync, existsSync: dirExists } = await import('fs');
 
-        sock.ev.on('creds.update', saveCreds);
+      const authDir = join('.', 'auth', `whatsapp-provisioned`);
+      if (!dirExists(authDir)) mkdirSync(authDir, { recursive: true });
 
-        await new Promise<void>((resolveConn, rejectConn) => {
-          let pairingRequested = false;
-          const timeout = setTimeout(() => {
-            sock.end(undefined);
-            rejectConn(new Error('Connection timeout'));
-          }, 120000);
+      const { state, saveCreds } = await useMultiFileAuthState(authDir);
+      const phoneForPairing = purchased.phoneNumber.replace(/[^0-9]/g, '');
 
-          sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+      const sock = makeWASocket({
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
+        },
+      });
 
-            if ((connection === 'connecting' || qr) && !pairingRequested) {
-              pairingRequested = true;
-              try {
-                const code = await sock.requestPairingCode(phoneForPairing);
-                const formatted = code.match(/.{1,4}/g)?.join('-') || code;
+      sock.ev.on('creds.update', saveCreds);
 
-                console.log(c('green', '  ╔═══════════════════════════════════════╗'));
-                console.log(c('green', '  ║                                       ║'));
-                console.log(c('green', `  ║   Pairing code: ${c('bright', formatted)}          ║`));
-                console.log(c('green', '  ║                                       ║'));
-                console.log(c('green', '  ╚═══════════════════════════════════════╝'));
-                console.log();
-                console.log(c('white', '  On your phone (any phone with WhatsApp):'));
-                console.log(c('dim', '  1. Open WhatsApp → Settings → Linked Devices'));
-                console.log(c('dim', '  2. Tap "Link a Device"'));
-                console.log(c('dim', '  3. Tap "Link with phone number instead"'));
-                console.log(c('dim', `  4. Enter number: ${purchased.phoneNumber}`));
-                console.log(c('dim', `  5. Enter the code: ${formatted}`));
-                console.log(c('dim', '\n  Waiting for pairing...\n'));
-              } catch (err: any) {
-                clearTimeout(timeout);
-                sock.end(undefined);
-                rejectConn(new Error(`Failed to request pairing code: ${err.message}`));
-              }
-            }
+      await new Promise<void>((resolveConn, rejectConn) => {
+        let pairingRequested = false;
+        const timeout = setTimeout(() => {
+          sock.end(undefined);
+          rejectConn(new Error('Connection timeout'));
+        }, 120000);
 
-            if (connection === 'open') {
+        sock.ev.on('connection.update', async (update) => {
+          const { connection, lastDisconnect, qr } = update;
+
+          if ((connection === 'connecting' || qr) && !pairingRequested) {
+            pairingRequested = true;
+            try {
+              const pairingCode = await sock.requestPairingCode(phoneForPairing);
+              const formatted = pairingCode.match(/.{1,4}/g)?.join('-') || pairingCode;
+
+              console.log(c('green', '  ╔═══════════════════════════════════════╗'));
+              console.log(c('green', '  ║                                       ║'));
+              console.log(c('green', `  ║   Pairing code: ${c('bright', formatted)}          ║`));
+              console.log(c('green', '  ║                                       ║'));
+              console.log(c('green', '  ╚═══════════════════════════════════════╝'));
+              console.log();
+              console.log(c('white', '  On your phone:'));
+              console.log(c('dim', `  1. Switch to the ${purchased.phoneNumber} account in WhatsApp`));
+              console.log(c('dim', '  2. Go to Settings → Linked Devices → Link a Device'));
+              console.log(c('dim', '  3. Tap "Link with phone number instead"'));
+              console.log(c('dim', `  4. Enter: ${purchased.phoneNumber}`));
+              console.log(c('dim', `  5. Enter the pairing code: ${formatted}`));
+              console.log(c('dim', '\n  Waiting for pairing...\n'));
+            } catch (err: any) {
               clearTimeout(timeout);
-              console.log(c('green', '  ✅ WhatsApp connected!\n'));
+              sock.end(undefined);
+              rejectConn(new Error(`Failed to request pairing code: ${err.message}`));
+            }
+          }
+
+          if (connection === 'open') {
+            clearTimeout(timeout);
+            sock.end(undefined);
+            resolveConn();
+          }
+
+          if (connection === 'close') {
+            const reason = (lastDisconnect?.error as any)?.output?.statusCode;
+            if (reason === 515) {
+              clearTimeout(timeout);
               sock.end(undefined);
               resolveConn();
             }
-
-            if (connection === 'close') {
-              const reason = (lastDisconnect?.error as any)?.output?.statusCode;
-              if (reason === 515) {
-                // Restart required after pairing — this is normal
-                clearTimeout(timeout);
-                console.log(c('green', '  ✅ WhatsApp paired successfully!\n'));
-                sock.end(undefined);
-                resolveConn();
-              }
-            }
-          });
+          }
         });
-      }
+      });
 
       // Done!
       console.log(c('green', '  ╔═══════════════════════════════════════════╗'));
@@ -595,6 +615,7 @@ provision
       console.log(c('green', '  ║   🎉 Provisioning complete!               ║'));
       console.log(c('green', '  ║                                           ║'));
       console.log(c('green', `  ║   Number: ${purchased.phoneNumber.padEnd(28)}║`));
+      console.log(c('green', '  ║   WhatsApp: Connected ✅                  ║'));
       console.log(c('green', '  ║                                           ║'));
       console.log(c('green', '  ╚═══════════════════════════════════════════╝'));
       console.log();
