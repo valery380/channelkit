@@ -45,4 +45,10 @@ export class GroupStore {
   getAll(): Record<string, GroupMapping> {
     return { ...this.groups };
   }
+
+  findByUserAndService(userId: string, serviceName: string): GroupMapping | undefined {
+    return Object.values(this.groups).find(
+      g => g.userId === userId && g.serviceName === serviceName
+    );
+  }
 }
