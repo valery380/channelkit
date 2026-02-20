@@ -100,6 +100,52 @@ onboarding:
       webhook: "http://localhost:8080/home"
 ```
 
+## Async Messaging API
+
+Every webhook payload includes a `replyUrl` field — a callback endpoint your service can use to send messages at any time, not just as a response.
+
+### Webhook payload with replyUrl
+
+```json
+{
+  "id": "msg_abc123",
+  "channel": "whatsapp",
+  "from": "+972501234567",
+  "text": "What's my balance?",
+  "replyUrl": "http://localhost:4000/api/send/whatsapp/972501234567%40s.whatsapp.net"
+}
+```
+
+### Sync response (as before)
+Return a response from your webhook — it gets sent back immediately:
+```json
+{ "text": "Your balance is $42.00" }
+```
+
+### Async message (anytime)
+Store the `replyUrl` and send messages whenever you want:
+```bash
+curl -X POST "http://localhost:4000/api/send/whatsapp/972501234567%40s.whatsapp.net" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your invoice was approved! ✅"}'
+```
+
+This is useful for:
+- **Notifications** — send alerts when something happens in your system
+- **Long-running tasks** — acknowledge immediately, send results later
+- **Proactive messages** — reminders, status updates, scheduled messages
+
+The API server runs on port 4000 by default. Change it in config:
+```yaml
+apiPort: 5000
+```
+
+### Health check
+```
+GET http://localhost:4000/api/health
+→ { "status": "ok", "channels": ["whatsapp"] }
+```
+
 ### Routing
 
 Routes match messages by channel and pattern. Patterns support `*` (match all), pipe-separated keywords (`status|temp`), or regex.
