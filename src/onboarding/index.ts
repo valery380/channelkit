@@ -70,6 +70,7 @@ export class Onboarding {
     const groupName = `${service.name} - ${userName}`;
 
     try {
+      console.log(`[onboarding] Creating group "${groupName}" with participant: ${userJid}`);
       const group = await this.whatsappChannel.createGroup(groupName, [userJid]);
 
       // Store group→service mapping
