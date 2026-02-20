@@ -83,31 +83,36 @@ export class TwilioProvisioner {
   }
 
   /**
-   * Read incoming SMS for a number (for WhatsApp verification).
-   * Sets up a webhook temporarily to capture the verification code.
+   * Poll Twilio for incoming SMS to a specific number.
+   * Returns the 6-digit verification code when found.
    */
-  async waitForSms(numberSid: string, timeoutMs = 60000): Promise<string> {
+  async waitForSms(phoneNumber: string, timeoutMs = 120000, onPoll?: () => void): Promise<string> {
     const startTime = Date.now();
+    const sentAfter = new Date(startTime - 5000); // small buffer
 
-    // Poll for messages
     while (Date.now() - startTime < timeoutMs) {
-      const messages = await this.client.messages.list({
-        to: undefined, // will filter below
-        limit: 5,
-      });
+      if (onPoll) onPoll();
 
-      // Look for recent WhatsApp verification messages
-      for (const msg of messages) {
-        const age = Date.now() - new Date(msg.dateCreated).getTime();
-        if (age < timeoutMs && msg.body) {
-          const codeMatch = msg.body.match(/(\d{6})/);
-          if (codeMatch) {
-            return codeMatch[1];
+      try {
+        const messages = await this.client.messages.list({
+          to: phoneNumber,
+          dateSentAfter: sentAfter,
+          limit: 10,
+        });
+
+        for (const msg of messages) {
+          if (msg.body) {
+            // Match WhatsApp verification codes (6 digits, or "xxx-xxx" format)
+            const codeMatch = msg.body.match(/(\d{3})-?(\d{3})/);
+            if (codeMatch) {
+              return codeMatch[1] + codeMatch[2];
+            }
           }
         }
+      } catch (err) {
+        // Ignore polling errors, keep trying
       }
 
-      // Wait 3 seconds before polling again
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
 
