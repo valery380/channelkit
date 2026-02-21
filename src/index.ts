@@ -97,7 +97,21 @@ export class ChannelKit {
         const mode = this.router.getChannelMode(channel.name);
         if (this.onboarding && !message.groupId && mode === 'groups') {
           const handled = await this.onboarding.handleDirectMessage(message);
-          if (handled) return;
+          if (handled) {
+            this.logger.log({
+              id: message.id,
+              timestamp: Date.now(),
+              channel: message.channel,
+              from: message.from,
+              senderName: message.senderName,
+              text: message.text,
+              type: message.type,
+              route: 'onboarding',
+              status: 'success',
+              latency: 0,
+            });
+            return;
+          }
 
           // Check if Telegram user has a service mapping
           if (message.channel === 'telegram') {
@@ -106,7 +120,21 @@ export class ChannelKit {
               const replyTo = message.from;
               const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
               const { dispatchWebhook } = await import('./core/webhook');
+              const startTime = Date.now();
               const response = await dispatchWebhook(webhook, message, replyUrl);
+              this.logger.log({
+                id: message.id,
+                timestamp: Date.now(),
+                channel: message.channel,
+                from: message.from,
+                senderName: message.senderName,
+                text: message.text,
+                type: message.type,
+                route: webhook,
+                responseText: response?.text,
+                status: response ? 'success' : 'error',
+                latency: Date.now() - startTime,
+              });
               if (response) {
                 await channel.send(replyTo, response);
               }
