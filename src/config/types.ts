@@ -29,9 +29,14 @@ export interface OnboardingConfig {
   codes?: OnboardingCodeConfig[];
 }
 
+export interface DashboardConfig {
+  enabled?: boolean;
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   routes: RouteConfig[];
   onboarding?: OnboardingConfig;
   apiPort?: number;
+  dashboard?: DashboardConfig;
 }

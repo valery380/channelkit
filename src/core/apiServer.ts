@@ -1,14 +1,37 @@
 import express from 'express';
+import { createServer } from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
+import { join } from 'path';
+import { readFileSync } from 'fs';
 import { Channel } from '../channels/base';
+import { Logger } from './logger';
 
 export class ApiServer {
   private app = express();
-  private server: ReturnType<typeof this.app.listen> | null = null;
+  private httpServer = createServer(this.app);
+  private wss: WebSocketServer;
+  private server: ReturnType<typeof this.httpServer.listen> | null = null;
   private channels: Map<string, Channel> = new Map();
+  private logger?: Logger;
+  private startTime = Date.now();
 
   constructor(private port: number = 4000) {
     this.app.use(express.json());
+    this.wss = new WebSocketServer({ server: this.httpServer });
     this.setupRoutes();
+  }
+
+  setLogger(logger: Logger): void {
+    this.logger = logger;
+    // Broadcast new log entries via WebSocket
+    logger.on('entry', (entry) => {
+      const data = JSON.stringify({ type: 'newEntry', entry });
+      this.wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(data);
+        }
+      });
+    });
   }
 
   registerChannel(name: string, channel: Channel): void {
@@ -54,12 +77,60 @@ export class ApiServer {
     this.app.get('/api/health', (_req, res) => {
       res.json({ status: 'ok', channels: [...this.channels.keys()] });
     });
+
+    // GET /api/logs
+    this.app.get('/api/logs', (req, res) => {
+      if (!this.logger) {
+        res.json([]);
+        return;
+      }
+      const { limit, channel, search } = req.query as Record<string, string>;
+      const results = this.logger.search({
+        limit: limit ? parseInt(limit) : undefined,
+        channel: channel || undefined,
+        search: search || undefined,
+      });
+      res.json(results);
+    });
+
+    // GET /api/logs/stats
+    this.app.get('/api/logs/stats', (_req, res) => {
+      if (!this.logger) {
+        res.json({ total: 0, byChannel: {}, avgLatency: 0, uptime: 0, channels: [] });
+        return;
+      }
+      const stats = this.logger.getStats();
+      res.json({
+        ...stats,
+        uptime: Date.now() - this.startTime,
+        channels: [...this.channels.keys()],
+      });
+    });
+
+    // GET /dashboard — serve the HTML dashboard
+    this.app.get('/dashboard', (_req, res) => {
+      const htmlPath = join(__dirname, '..', 'dashboard', 'index.html');
+      try {
+        const html = readFileSync(htmlPath, 'utf-8');
+        res.type('html').send(html);
+      } catch {
+        // Try source path (for tsx/dev mode)
+        try {
+          const devPath = join(__dirname, '..', '..', 'src', 'dashboard', 'index.html');
+          const html = readFileSync(devPath, 'utf-8');
+          res.type('html').send(html);
+        } catch {
+          res.status(404).send('Dashboard HTML not found');
+        }
+      }
+    });
   }
 
   async start(): Promise<void> {
     return new Promise((resolve) => {
-      this.server = this.app.listen(this.port, () => {
+      this.server = this.httpServer.listen(this.port, () => {
         console.log(`[api] Async API listening on port ${this.port}`);
+        console.log(`📊 Dashboard: http://localhost:${this.port}/dashboard`);
         resolve();
       });
     });
@@ -67,6 +138,7 @@ export class ApiServer {
 
   async stop(): Promise<void> {
     return new Promise((resolve) => {
+      this.wss.close();
       if (this.server) {
         this.server.close(() => resolve());
       } else {

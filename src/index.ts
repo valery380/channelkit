@@ -6,17 +6,25 @@ import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
 import { Onboarding } from './onboarding';
 import { UnifiedMessage } from './core/types';
+import { Logger } from './core/logger';
 
 export class ChannelKit {
   private channels: Channel[] = [];
   private channelMap: Map<string, Channel> = new Map();
   private router: Router;
   private apiServer: ApiServer;
+  private logger: Logger;
   private onboarding?: Onboarding;
 
   constructor(private config: AppConfig) {
     this.router = new Router(config.routes);
     this.apiServer = new ApiServer(config.apiPort || 4000);
+    this.logger = new Logger();
+
+    if (config.dashboard?.enabled !== false) {
+      this.router.setLogger(this.logger);
+      this.apiServer.setLogger(this.logger);
+    }
   }
 
   async start(): Promise<void> {

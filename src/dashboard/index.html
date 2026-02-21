@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChannelKit Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--highlight:rgba(88,166,255,0.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.mono{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace}
+
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+header h1{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px}
+header h1 span{color:var(--accent)}
+.stats{display:flex;gap:20px;flex-wrap:wrap}
+.stat{text-align:center}
+.stat-value{font-size:20px;font-weight:700;color:var(--accent)}
+.stat-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px}
+
+.filters{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.filters select,.filters input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px}
+.filters input{flex:1;min-width:200px}
+.filters select:focus,.filters input:focus{outline:none;border-color:var(--accent)}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.badge-live{background:var(--green);color:#000;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+
+.table-wrap{overflow-x:auto;padding:0 24px 24px}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th{text-align:left;padding:10px 12px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;cursor:pointer}
+tr:hover td{background:var(--highlight)}
+tr.new-entry td{animation:fadeIn 0.5s ease}
+@keyframes fadeIn{from{background:rgba(88,166,255,0.15)}to{background:transparent}}
+
+.channel-icon{font-size:16px}
+.text-preview{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
+.status-ok{color:var(--green)}
+.status-err{color:var(--red)}
+.status-noroute{color:var(--yellow)}
+.latency{color:var(--dim);font-size:12px}
+.from-cell .name{color:var(--text);font-weight:500}
+.from-cell .number{color:var(--dim);font-size:11px}
+.route-cell{color:var(--dim);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.time-cell{color:var(--dim);font-size:12px;white-space:nowrap}
+
+.detail{display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:4px 0 8px;padding:16px}
+.detail.open{display:block}
+.detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.detail-item label{font-size:11px;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:2px}
+.detail-item p{font-size:13px;word-break:break-all}
+.detail-response{margin-top:12px;padding:12px;background:var(--bg);border-radius:6px;white-space:pre-wrap;font-size:13px}
+
+.empty{text-align:center;padding:60px 20px;color:var(--dim)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+
+@media(max-width:768px){
+  header{padding:12px 16px}
+  .filters{padding:8px 16px}
+  .table-wrap{padding:0 8px 16px}
+  td,th{padding:8px 6px;font-size:12px}
+  .text-preview{max-width:150px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📡 <span>ChannelKit</span> Dashboard</h1>
+  <div class="stats">
+    <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Messages</div></div>
+    <div class="stat"><div class="stat-value" id="stat-latency">0ms</div><div class="stat-label">Avg Latency</div></div>
+    <div class="stat"><div class="stat-value" id="stat-uptime">0s</div><div class="stat-label">Uptime</div></div>
+    <div class="stat"><span class="badge badge-live" id="ws-status">● LIVE</span></div>
+  </div>
+</header>
+
+<div class="filters">
+  <select id="filter-channel">
+    <option value="">All Channels</option>
+    <option value="whatsapp">📱 WhatsApp</option>
+    <option value="telegram">💬 Telegram</option>
+  </select>
+  <input type="text" id="filter-search" placeholder="Search messages, senders, responses...">
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th></th>
+        <th>From</th>
+        <th>Message</th>
+        <th>Webhook</th>
+        <th>Status</th>
+        <th>Latency</th>
+      </tr>
+    </thead>
+    <tbody id="log-body"></tbody>
+  </table>
+  <div class="empty" id="empty-state">
+    <div class="empty-icon">📭</div>
+    <div>No messages yet. Waiting for traffic...</div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const WS_URL = `ws://${window.location.host}`;
+
+const logBody = document.getElementById('log-body');
+const emptyState = document.getElementById('empty-state');
+const filterChannel = document.getElementById('filter-channel');
+const filterSearch = document.getElementById('filter-search');
+const wsStatus = document.getElementById('ws-status');
+
+let allEntries = [];
+let expandedId = null;
+
+const channelIcons = { whatsapp: '📱', telegram: '💬' };
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + formatTime(ts);
+}
+
+function formatUptime(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
+}
+
+function statusIcon(status) {
+  if (status === 'success') return '<span class="status-ok">✅</span>';
+  if (status === 'error') return '<span class="status-err">❌</span>';
+  return '<span class="status-noroute">⚪</span>';
+}
+
+function truncate(str, len = 60) {
+  if (!str) return '<span style="color:var(--dim)">—</span>';
+  return str.length > len ? str.slice(0, len) + '…' : str;
+}
+
+function shortUrl(url) {
+  if (!url) return '—';
+  try {
+    const u = new URL(url);
+    return u.pathname;
+  } catch { return url; }
+}
+
+function renderRow(entry, isNew) {
+  const tr = document.createElement('tr');
+  if (isNew) tr.classList.add('new-entry');
+  tr.innerHTML = `
+    <td class="time-cell mono">${formatTime(entry.timestamp)}</td>
+    <td class="channel-icon">${channelIcons[entry.channel] || '📨'}</td>
+    <td class="from-cell">
+      <div class="name">${entry.senderName || ''}</div>
+      <div class="number mono">${entry.from}</div>
+    </td>
+    <td class="text-preview">${truncate(entry.text)}</td>
+    <td class="route-cell mono">${shortUrl(entry.route)}</td>
+    <td>${statusIcon(entry.status)}</td>
+    <td class="latency mono">${entry.latency != null ? entry.latency + 'ms' : '—'}</td>
+  `;
+
+  tr.addEventListener('click', () => {
+    // Toggle detail row
+    const existing = tr.nextElementSibling;
+    if (existing && existing.classList.contains('detail-row')) {
+      existing.remove();
+      expandedId = null;
+      return;
+    }
+    // Remove other expanded
+    document.querySelectorAll('.detail-row').forEach(el => el.remove());
+    expandedId = entry.id;
+
+    const detailTr = document.createElement('tr');
+    detailTr.classList.add('detail-row');
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    td.innerHTML = `
+      <div class="detail open">
+        <div class="detail-grid">
+          <div class="detail-item"><label>ID</label><p class="mono">${entry.id}</p></div>
+          <div class="detail-item"><label>Timestamp</label><p>${formatDate(entry.timestamp)}</p></div>
+          <div class="detail-item"><label>Channel</label><p>${entry.channel}</p></div>
+          <div class="detail-item"><label>From</label><p>${entry.senderName || ''} (${entry.from})</p></div>
+          <div class="detail-item"><label>Type</label><p>${entry.type}</p></div>
+          <div class="detail-item"><label>Group</label><p>${entry.groupName || entry.groupId || '—'}</p></div>
+          <div class="detail-item"><label>Webhook</label><p class="mono">${entry.route || '—'}</p></div>
+          <div class="detail-item"><label>Status</label><p>${entry.status}</p></div>
+          <div class="detail-item"><label>Latency</label><p>${entry.latency != null ? entry.latency + 'ms' : '—'}</p></div>
+        </div>
+        <div class="detail-item" style="margin-top:12px"><label>Full Message</label><div class="detail-response">${entry.text || '—'}</div></div>
+        <div class="detail-item" style="margin-top:8px"><label>Response</label><div class="detail-response">${entry.responseText || '—'}</div></div>
+      </div>
+    `;
+    detailTr.appendChild(td);
+    tr.after(detailTr);
+  });
+
+  return tr;
+}
+
+function render(entries, isNew) {
+  if (isNew && entries.length === 1) {
+    // Prepend single new entry
+    const row = renderRow(entries[0], true);
+    logBody.prepend(row);
+    emptyState.style.display = 'none';
+    return;
+  }
+  logBody.innerHTML = '';
+  if (entries.length === 0) {
+    emptyState.style.display = '';
+    return;
+  }
+  emptyState.style.display = 'none';
+  entries.forEach(e => logBody.appendChild(renderRow(e, false)));
+}
+
+function getFiltered() {
+  let results = allEntries;
+  const ch = filterChannel.value;
+  const q = filterSearch.value.toLowerCase();
+  if (ch) results = results.filter(e => e.channel === ch);
+  if (q) results = results.filter(e =>
+    (e.text || '').toLowerCase().includes(q) ||
+    (e.from || '').toLowerCase().includes(q) ||
+    (e.senderName || '').toLowerCase().includes(q) ||
+    (e.responseText || '').toLowerCase().includes(q)
+  );
+  return results;
+}
+
+function applyFilters() {
+  render(getFiltered(), false);
+}
+
+filterChannel.addEventListener('change', applyFilters);
+let searchTimeout;
+filterSearch.addEventListener('input', () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(applyFilters, 200);
+});
+
+// Stats
+function updateStats() {
+  fetch(API + '/api/logs/stats').then(r => r.json()).then(s => {
+    document.getElementById('stat-total').textContent = s.total;
+    document.getElementById('stat-latency').textContent = s.avgLatency + 'ms';
+    document.getElementById('stat-uptime').textContent = formatUptime(s.uptime);
+  }).catch(() => {});
+}
+
+// Initial load
+fetch(API + '/api/logs').then(r => r.json()).then(entries => {
+  allEntries = entries;
+  render(getFiltered(), false);
+  updateStats();
+}).catch(() => {});
+
+// WebSocket
+let ws;
+function connectWs() {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = () => {
+    wsStatus.textContent = '● LIVE';
+    wsStatus.className = 'badge badge-live';
+  };
+  ws.onclose = () => {
+    wsStatus.textContent = '● OFFLINE';
+    wsStatus.style.background = 'var(--red)';
+    setTimeout(connectWs, 3000);
+  };
+  ws.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'newEntry') {
+        allEntries.unshift(msg.entry);
+        if (allEntries.length > 1000) allEntries.pop();
+        // If entry matches filters, render it
+        const filtered = getFiltered();
+        if (filtered[0] && filtered[0].id === msg.entry.id) {
+          render([msg.entry], true);
+        }
+        updateStats();
+      }
+    } catch {}
+  };
+}
+connectWs();
+
+// Refresh stats periodically
+setInterval(updateStats, 30000);
+</script>
+</body>
+</html>
