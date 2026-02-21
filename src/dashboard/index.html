@@ -6,7 +6,7 @@
 <title>ChannelKit Dashboard</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--highlight:rgba(88,166,255,0.08)}
+:root{--bg:#f8f9fa;--surface:#ffffff;--border:#e1e4e8;--text:#24292f;--dim:#656d76;--accent:#0969da;--green:#1a7f37;--red:#cf222e;--yellow:#9a6700;--highlight:rgba(9,105,218,0.06)}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 .mono{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace}
 
@@ -50,7 +50,7 @@ tr.new-entry td{animation:fadeIn 0.5s ease}
 .detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
 .detail-item label{font-size:11px;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:2px}
 .detail-item p{font-size:13px;word-break:break-all}
-.detail-response{margin-top:12px;padding:12px;background:var(--bg);border-radius:6px;white-space:pre-wrap;font-size:13px}
+.detail-response{margin-top:12px;padding:12px;background:#f0f2f5;border-radius:6px;white-space:pre-wrap;font-size:13px}
 
 .empty{text-align:center;padding:60px 20px;color:var(--dim)}
 .empty-icon{font-size:48px;margin-bottom:12px}
@@ -119,7 +119,12 @@ const wsStatus = document.getElementById('ws-status');
 let allEntries = [];
 let expandedId = null;
 
-const channelIcons = { whatsapp: '📱', telegram: '💬' };
+const channelIcons = { whatsapp: '📱', telegram: '💬', 'system (async)': '🔄' };
+
+function typeLabel(entry) {
+  if (entry.type === 'async-outbound') return '<span style="color:var(--accent);font-size:11px;font-weight:600">ASYNC ↗</span>';
+  return '';
+}
 
 function formatTime(ts) {
   const d = new Date(ts);
@@ -163,12 +168,12 @@ function renderRow(entry, isNew) {
   if (isNew) tr.classList.add('new-entry');
   tr.innerHTML = `
     <td class="time-cell mono">${formatTime(entry.timestamp)}</td>
-    <td class="channel-icon">${channelIcons[entry.channel] || '📨'}</td>
+    <td class="channel-icon">${entry.type === 'async-outbound' ? '🔄' : (channelIcons[entry.channel] || '📨')}</td>
     <td class="from-cell">
       <div class="name">${entry.senderName || ''}</div>
       <div class="number mono">${entry.from}</div>
     </td>
-    <td class="text-preview">${truncate(entry.text)}</td>
+    <td class="text-preview">${typeLabel(entry)} ${truncate(entry.text)}</td>
     <td class="route-cell mono">${shortUrl(entry.route)}</td>
     <td>${statusIcon(entry.status)}</td>
     <td class="latency mono">${entry.latency != null ? entry.latency + 'ms' : '—'}</td>
