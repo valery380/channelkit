@@ -63,12 +63,48 @@ export class ApiServer {
         return;
       }
 
+      const start = Date.now();
       try {
         await channel.send(decodeURIComponent(jid), { text, media });
         console.log(`[api] Sent async message via ${channelName} to ${jid}`);
+        
+        // Log async message
+        if (this.logger) {
+          this.logger.log({
+            id: `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            channel: channelName,
+            from: 'system (async)',
+            senderName: 'Async API',
+            text: text || '(media)',
+            type: 'async-outbound',
+            route: `/api/send/${channelName}/${jid}`,
+            responseText: undefined,
+            status: 'success',
+            latency: Date.now() - start,
+          });
+        }
+        
         res.json({ ok: true });
       } catch (err: any) {
         console.error(`[api] Failed to send:`, err);
+        
+        if (this.logger) {
+          this.logger.log({
+            id: `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            channel: channelName,
+            from: 'system (async)',
+            senderName: 'Async API',
+            text: text || '(media)',
+            type: 'async-outbound',
+            route: `/api/send/${channelName}/${jid}`,
+            responseText: err.message,
+            status: 'error',
+            latency: Date.now() - start,
+          });
+        }
+        
         res.status(500).json({ error: err.message });
       }
     });
