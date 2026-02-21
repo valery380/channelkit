@@ -274,11 +274,17 @@ async function startCommand(configPath: string) {
 
   const kit = new ChannelKit(config);
 
-  process.on('SIGINT', async () => {
-    console.log(c('yellow', '\n  Shutting down gracefully...'));
-    await kit.stop();
-    console.log(c('green', '  Done. Bye! 👋\n'));
-    process.exit(0);
+  process.on('SIGINT', () => {
+    console.log(c('yellow', '\n  Shutting down...'));
+    kit.stop().finally(() => {
+      console.log(c('green', '  Done. Bye! 👋\n'));
+      process.exit(0);
+    });
+    // Force exit after 3 seconds if graceful shutdown hangs
+    setTimeout(() => {
+      console.log(c('dim', '  Force exit.'));
+      process.exit(0);
+    }, 3000);
   });
 
   await kit.start();
