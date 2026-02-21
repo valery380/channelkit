@@ -8,11 +8,11 @@
   },
   "scripts": {
     "build": "tsc && cp -r src/dashboard dist/",
-    "start": "tsx src/cli.ts start",
-    "dev": "tsx watch src/cli.ts start",
-    "init": "tsx src/cli.ts init",
-    "service": "tsx src/cli.ts service",
-    "channel": "tsx src/cli.ts channel"
+    "start": "NODE_NO_WARNINGS=1 tsx src/cli.ts start",
+    "dev": "NODE_NO_WARNINGS=1 tsx watch src/cli.ts start",
+    "init": "NODE_NO_WARNINGS=1 tsx src/cli.ts init",
+    "service": "NODE_NO_WARNINGS=1 tsx src/cli.ts service",
+    "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel"
   },
   "keywords": [
     "whatsapp",
