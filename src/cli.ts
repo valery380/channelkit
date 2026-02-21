@@ -490,6 +490,244 @@ service
     console.log(c('green', `\n  ✅ Removed service "${removed.name}" (code: ${removed.code})\n`));
   });
 
+// Channel management commands
+const channel = program
+  .command('channel')
+  .description('Manage channels');
+
+channel
+  .command('list')
+  .description('List all configured channels')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+
+    const channels = Object.entries(config.channels);
+    if (channels.length === 0) {
+      console.log(c('dim', '\n  No channels configured. Run `channelkit channel add` to add one.\n'));
+      return;
+    }
+
+    console.log(c('cyan', '\n  📡 Configured Channels\n'));
+    for (const [name, cfg] of channels) {
+      const chCfg = cfg as any;
+      const icon = chCfg.type === 'whatsapp' ? '📱' : chCfg.type === 'telegram' ? '💬' : chCfg.type === 'email' ? '📧' : '📡';
+      console.log(c('bright', `  ${icon} ${name}`));
+      console.log(c('dim', `    Type: ${chCfg.type}`));
+      if (chCfg.number) console.log(c('dim', `    Number: ${chCfg.number}`));
+      if (chCfg.mode) console.log(c('dim', `    Mode: ${chCfg.mode}`));
+      if (chCfg.bot_token) console.log(c('dim', `    Token: ${chCfg.bot_token.slice(0, 8)}...`));
+      if (chCfg.address) console.log(c('dim', `    Address: ${chCfg.address}`));
+
+      // Count routes for this channel
+      const routeCount = config.routes.filter(r => r.channel === name).length;
+      console.log(c('dim', `    Routes: ${routeCount}`));
+      console.log();
+    }
+  });
+
+channel
+  .command('add')
+  .description('Add a new channel interactively')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig, saveConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+    try {
+      console.log(c('cyan', '\n  📡 Add a new channel\n'));
+
+      const channelIdx = await select(rl, 'Which channel do you want to add?', [
+        '📱 WhatsApp — connect with your phone number',
+        '💬 Telegram — create a bot',
+        '📧 Email — connect IMAP/SMTP',
+      ]);
+
+      let channelName: string;
+      let channelConfig: any;
+
+      if (channelIdx === 0) {
+        // WhatsApp
+        // Check if already exists
+        const existingWa = Object.entries(config.channels).find(([, v]) => (v as any).type === 'whatsapp');
+        if (existingWa) {
+          const overwrite = await ask(rl, `WhatsApp channel "${existingWa[0]}" already exists. Replace? (y/N):`, 'N');
+          if (overwrite.toLowerCase() !== 'y') { rl.close(); return; }
+          // Remove old channel and its routes
+          delete config.channels[existingWa[0]];
+          config.routes = config.routes.filter(r => r.channel !== existingWa[0]);
+        }
+
+        console.log();
+        const number = await ask(rl, 'Your WhatsApp phone number (with country code):', '+972...');
+        const modeIdx = await select(rl, 'How will you use this channel?', [
+          '👤 Personal — route messages from groups on your number',
+          '🏢 Service — dedicated number, every incoming message routed',
+        ]);
+
+        channelName = 'whatsapp';
+        channelConfig = {
+          type: 'whatsapp',
+          number,
+          mode: modeIdx === 0 ? 'groups' : 'direct',
+        };
+
+      } else if (channelIdx === 1) {
+        // Telegram
+        const existingTg = Object.entries(config.channels).find(([, v]) => (v as any).type === 'telegram');
+        if (existingTg) {
+          const overwrite = await ask(rl, `Telegram channel "${existingTg[0]}" already exists. Replace? (y/N):`, 'N');
+          if (overwrite.toLowerCase() !== 'y') { rl.close(); return; }
+          delete config.channels[existingTg[0]];
+          config.routes = config.routes.filter(r => r.channel !== existingTg[0]);
+        }
+
+        console.log();
+        console.log(c('bright', '  📝 Quick setup — takes 30 seconds:\n'));
+        console.log(c('white', '  1.') + c('dim', ' Open Telegram and search for ') + c('cyan', '@BotFather'));
+        console.log(c('white', '  2.') + c('dim', ' Send ') + c('cyan', '/newbot'));
+        console.log(c('white', '  3.') + c('dim', ' Choose a name (e.g. "My Service Bot")'));
+        console.log(c('white', '  4.') + c('dim', ' Choose a username (e.g. "myservice_bot")'));
+        console.log(c('white', '  5.') + c('dim', ' Copy the token BotFather gives you\n'));
+
+        const openLink = await ask(rl, 'Open BotFather in browser? (Y/n):', 'Y');
+        if (openLink.toLowerCase() !== 'n') {
+          const { exec: execCmd } = await import('child_process');
+          execCmd('open "https://t.me/BotFather" 2>/dev/null || xdg-open "https://t.me/BotFather" 2>/dev/null');
+        }
+
+        console.log();
+        const token = await ask(rl, 'Paste the bot token here:');
+
+        if (!token || !token.includes(':')) {
+          console.log(c('yellow', '\n  ⚠️  That doesn\'t look like a valid token. It should look like: 123456:ABC-DEF...\n'));
+          rl.close();
+          return;
+        }
+
+        // Verify token
+        console.log(c('dim', '\n  Verifying token...'));
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+          const data = await res.json() as any;
+          if (data.ok) {
+            console.log(c('green', `  ✅ Connected to @${data.result.username} (${data.result.first_name})\n`));
+          } else {
+            console.log(c('yellow', `\n  ❌ Invalid token: ${data.description}\n`));
+            rl.close();
+            return;
+          }
+        } catch {
+          console.log(c('yellow', '\n  ⚠️  Could not verify token (no internet?). Continuing anyway.\n'));
+        }
+
+        channelName = 'telegram';
+        channelConfig = {
+          type: 'telegram',
+          bot_token: token,
+        };
+
+      } else {
+        // Email
+        console.log();
+        const address = await ask(rl, 'Email address:', 'support@myapp.com');
+        const imap = await ask(rl, 'IMAP server:', 'imap.gmail.com');
+
+        channelName = 'email';
+        channelConfig = {
+          type: 'email',
+          address,
+          imap,
+        };
+      }
+
+      // Ask for default webhook route
+      const addRoute = await ask(rl, 'Add a default route for this channel? (Y/n):', 'Y');
+      if (addRoute.toLowerCase() !== 'n') {
+        const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
+        config.routes.push({
+          channel: channelName,
+          match: '*',
+          webhook,
+        });
+      }
+
+      config.channels[channelName] = channelConfig;
+      saveConfig(configPath, config);
+
+      console.log(c('green', `\n  ✅ Channel "${channelName}" added!\n`));
+
+      if (channelName === 'whatsapp') {
+        console.log(c('dim', '  Start ChannelKit and scan the QR code to connect WhatsApp.\n'));
+      } else if (channelName === 'telegram') {
+        console.log(c('dim', '  Start ChannelKit to activate the Telegram bot.\n'));
+      }
+    } finally {
+      rl.close();
+    }
+  });
+
+channel
+  .command('remove <name>')
+  .description('Remove a channel by name')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .action(async (name, opts) => {
+    const configPath = resolve(opts.config);
+    if (!existsSync(configPath)) {
+      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n`));
+      process.exit(1);
+    }
+
+    const { loadConfig, saveConfig } = await import('./config/parser');
+    const config = loadConfig(configPath);
+
+    if (!config.channels[name]) {
+      console.error(c('yellow', `\n  ❌ Channel "${name}" not found.\n`));
+      const available = Object.keys(config.channels).join(', ');
+      if (available) console.log(c('dim', `  Available channels: ${available}\n`));
+      process.exit(1);
+    }
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      // Check for routes that use this channel
+      const affectedRoutes = config.routes.filter(r => r.channel === name);
+      if (affectedRoutes.length > 0) {
+        console.log(c('yellow', `\n  ⚠️  ${affectedRoutes.length} route(s) use this channel and will be removed too.`));
+      }
+
+      const confirm = await ask(rl, `Remove channel "${name}"? (y/N):`, 'N');
+      if (confirm.toLowerCase() !== 'y') {
+        console.log(c('dim', '\n  Cancelled.\n'));
+        rl.close();
+        return;
+      }
+
+      delete config.channels[name];
+      config.routes = config.routes.filter(r => r.channel !== name);
+      saveConfig(configPath, config);
+
+      console.log(c('green', `\n  ✅ Removed channel "${name}" and ${affectedRoutes.length} associated route(s).\n`));
+    } finally {
+      rl.close();
+    }
+  });
+
 // Provision command
 const provision = program
   .command('provision')

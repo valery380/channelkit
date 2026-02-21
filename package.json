@@ -11,7 +11,8 @@
     "start": "tsx src/cli.ts start",
     "dev": "tsx watch src/cli.ts start",
     "init": "tsx src/cli.ts init",
-    "service": "tsx src/cli.ts service"
+    "service": "tsx src/cli.ts service",
+    "channel": "tsx src/cli.ts channel"
   },
   "keywords": [
     "whatsapp",
