@@ -144,7 +144,7 @@ async function initCommand() {
 
     // Step 2: Webhook
     console.log();
-    const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000/api/chat');
+    const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000');
     routes.forEach(r => r.webhook = webhook);
 
     // Step 3: Generate config
@@ -197,12 +197,19 @@ async function initCommand() {
     console.log(c('white', '  Next steps:\n'));
     console.log(c('dim', `    1. Make sure your webhook is running at ${webhook}`));
     console.log(c('dim', '    2. Start ChannelKit:\n'));
-    console.log(c('cyan', '       npx channelkit start'));
+    console.log(c('cyan', '       npm start'));
     console.log();
     
     if (channels['whatsapp']) {
       console.log(c('dim', '    3. Scan the QR code with WhatsApp'));
       console.log(c('dim', '       (Settings → Linked Devices → Link a Device)\n'));
+    }
+
+    // Ask to set up a service
+    const setupServiceNow = await ask(rl, 'Set up a service now? (Y/n):', 'Y');
+    if (setupServiceNow.toLowerCase() !== 'n') {
+      console.log();
+      await serviceAdd({ config: fullPath }, rl);
     }
 
     // Ask to start now
@@ -236,7 +243,7 @@ async function startCommand(configPath: string) {
   const channelCount = Object.keys(config.channels).length;
   const routeCount = config.routes.length;
   console.log(c('dim', `  ${channelCount} channel(s), ${routeCount} route(s) configured\n`));
-
+  
   const kit = new ChannelKit(config);
 
   process.on('SIGINT', async () => {
@@ -251,6 +258,13 @@ async function startCommand(configPath: string) {
   console.log();
   console.log(c('green', '  🚀 ChannelKit is running!\n'));
   console.log(c('dim', '  Press Ctrl+C to stop\n'));
+
+  const webhooks = new Set(config.routes.map(r => r.webhook));
+  console.log(c('dim', '  Do not forget to run the server at:'));
+  webhooks.forEach((wh) => {
+    console.log(c('cyan', `    ${wh}`));
+  });
+  console.log(c('dim', '  For example you can run the demo server: node echo-server.js\n'));
 }
 
 // CLI setup
@@ -291,57 +305,60 @@ service
   .command('add')
   .description('Add a new service interactively')
   .option('-c, --config <path>', 'Path to config file', 'config.yaml')
-  .action(async (opts) => {
-    const configPath = resolve(opts.config);
-    if (!existsSync(configPath)) {
-      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
-      process.exit(1);
-    }
+  .action(serviceAdd);
 
-    const { loadConfig, saveConfig } = await import('./config/parser');
-    const config = loadConfig(configPath);
+async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<typeof createInterface> | undefined) {
+  const configPath = resolve(opts.config);
+  if (!existsSync(configPath)) {
+    console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
+    process.exit(1);
+  }
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const { loadConfig, saveConfig } = await import('./config/parser');
+  const config = loadConfig(configPath);
 
-    try {
-      console.log(c('cyan', '\n  📦 Add a new service\n'));
+  const closeRl = !rl;
+  if (closeRl) rl = createInterface({ input: process.stdin, output: process.stdout });
 
-      const name = await ask(rl, 'Service name:');
-      if (!name) { rl.close(); return; }
+  try {
+    console.log(c('cyan', '\n  📦 Add a new service\n'));
 
-      const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const code = await ask(rl, 'Magic code:', suggestedCode);
+    const name = await ask(rl, 'Service name:', 'Onkosto');
+    if (!name) { rl.close(); return; }
 
-      const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
+    const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const code = await ask(rl, 'Magic code:', suggestedCode);
 
-      if (!config.onboarding) config.onboarding = { codes: [] };
-      if (!config.onboarding.codes) config.onboarding.codes = [];
+    const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/expenses');
 
-      // Check for duplicate code
-      const existing = config.onboarding.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
-      if (existing) {
-        console.log(c('yellow', `\n  ⚠️  Code "${code}" already exists for service "${existing.name}"\n`));
-        rl.close();
-        return;
-      }
+    if (!config.onboarding) config.onboarding = { codes: [] };
+    if (!config.onboarding.codes) config.onboarding.codes = [];
 
-      config.onboarding.codes.push({ code: code.toUpperCase(), name, webhook });
-      saveConfig(configPath, config);
-
-      // Find WhatsApp number for share link
-      const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
-      const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
-
-      console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
-      console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
-      console.log(c('dim', `  Webhook: ${webhook}`));
-      if (number) {
-        console.log(c('cyan', `\n  📱 Share link: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}\n`));
-      }
-    } finally {
+    // Check for duplicate code
+    const existing = config.onboarding.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
+    if (existing) {
+      console.log(c('yellow', `\n  ⚠️  Code "${code}" already exists for service "${existing.name}"\n`));
       rl.close();
+      return;
     }
-  });
+
+    config.onboarding.codes.push({ code: code.toUpperCase(), name, webhook });
+    saveConfig(configPath, config);
+
+    // Find WhatsApp number for share link
+    const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
+    const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
+
+    console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
+    console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
+    console.log(c('dim', `  Webhook: ${webhook}`));
+    if (number) {
+      console.log(c('cyan', `\n  📱 Share link: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}\n`));
+    }
+  } finally {
+    if (closeRl) rl!.close();
+  }
+}
 
 service
   .command('list')
