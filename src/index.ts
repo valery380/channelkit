@@ -17,7 +17,7 @@ export class ChannelKit {
   private onboarding?: Onboarding;
 
   constructor(private config: AppConfig) {
-    this.router = new Router(config.routes);
+    this.router = new Router(config.services, config.routes);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
 
@@ -49,22 +49,53 @@ export class ChannelKit {
       }
 
       this.channels.push(channel);
-      this.channelMap.set(channelConfig.type, channel);
+      this.channelMap.set(name, channel);
+      // Register by name for API server
+      this.apiServer.registerChannel(name, channel);
+      // Also register by type for backward compat
       this.apiServer.registerChannel(channelConfig.type, channel);
+
+      const mode = this.router.getChannelMode(name);
+      console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
     }
 
-    // Set up onboarding if configured
-    if (this.config.onboarding?.codes && this.config.onboarding.codes.length > 0) {
-      this.onboarding = new Onboarding(this.config.onboarding, whatsappChannel, telegramChannel);
+    // Set up onboarding for channels in groups mode
+    // Build onboarding codes from services that have codes
+    const onboardingCodes: any[] = [];
+    if (this.config.services) {
+      for (const [svcName, svc] of Object.entries(this.config.services)) {
+        if (svc.code) {
+          onboardingCodes.push({
+            code: svc.code.toUpperCase(),
+            name: svcName,
+            webhook: svc.webhook,
+            channels: [svc.channel],
+          });
+        }
+      }
+    }
+
+    // Also support legacy onboarding config
+    if (this.config.onboarding?.codes) {
+      onboardingCodes.push(...this.config.onboarding.codes);
+    }
+
+    if (onboardingCodes.length > 0) {
+      const onboardingConfig = { codes: onboardingCodes };
+      this.onboarding = new Onboarding(onboardingConfig, whatsappChannel, telegramChannel);
       this.router.setGroupStore(this.onboarding.getGroupStore());
-      console.log(`[channelkit] Onboarding enabled with ${this.config.onboarding.codes.length} service code(s)`);
+      console.log(`[channelkit] Onboarding enabled with ${onboardingCodes.length} service code(s)`);
     }
 
     // Wire up message handlers
     for (const channel of this.channels) {
       channel.on('message', async (message: UnifiedMessage) => {
-        // Try onboarding first for DMs
-        if (this.onboarding && !message.groupId) {
+        // Attach channel name
+        message.channelName = channel.name;
+
+        // Try onboarding first for DMs (only in groups mode)
+        const mode = this.router.getChannelMode(channel.name);
+        if (this.onboarding && !message.groupId && mode === 'groups') {
           const handled = await this.onboarding.handleDirectMessage(message);
           if (handled) return;
 

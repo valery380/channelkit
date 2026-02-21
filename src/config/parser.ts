@@ -9,8 +9,23 @@ export function loadConfig(path: string): AppConfig {
   if (!config.channels || Object.keys(config.channels).length === 0) {
     throw new Error('Config must define at least one channel');
   }
-  if (!config.routes || config.routes.length === 0) {
-    throw new Error('Config must define at least one route');
+
+  // Must have either services or routes
+  const hasServices = config.services && Object.keys(config.services).length > 0;
+  const hasRoutes = config.routes && config.routes.length > 0;
+  const hasOnboarding = config.onboarding?.codes && config.onboarding.codes.length > 0;
+
+  if (!hasServices && !hasRoutes && !hasOnboarding) {
+    throw new Error('Config must define at least one service (or legacy route)');
+  }
+
+  // Validate service channel references
+  if (config.services) {
+    for (const [name, svc] of Object.entries(config.services)) {
+      if (!config.channels[svc.channel]) {
+        throw new Error(`Service "${name}" references unknown channel "${svc.channel}"`);
+      }
+    }
   }
 
   return config;
