@@ -67,7 +67,7 @@ npm run service add
 
 ### How it works
 1. User sends "ONKOSTO" to your WhatsApp number (or clicks the `wa.me` link)
-2. ChannelKit creates a group "Onkosto - Shay Sharon"
+2. ChannelKit creates a group "Onkosto - <User Name>"
 3. All messages in that group are routed to the service's webhook
 4. Each service gets its own group per user — no confusion
 

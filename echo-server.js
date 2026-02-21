@@ -1,10 +1,10 @@
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-  let body = '';
-  req.on('data', c => body += c);
+  let body = [];
+  req.on('data', c => body.push(c));
   req.on('end', () => {
-    const msg = body ? JSON.parse(body) : {};
+    const msg = body.length ? JSON.parse(body.join('')) : {};
     console.log(`\n📨 ${req.url} ← ${msg.from || '?'}: ${msg.text || '(no text)'}`);
 
     let reply;
