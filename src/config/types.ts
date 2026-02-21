@@ -13,6 +13,13 @@ export interface TelegramChannelConfig extends ChannelConfig {
   bot_token: string;
 }
 
+export interface ServiceConfig {
+  channel: string;          // references a key in channels
+  webhook: string;          // endpoint URL
+  code?: string;            // magic code for onboarding (groups mode)
+}
+
+// Legacy support
 export interface RouteConfig {
   channel: string;
   match: string;
@@ -23,7 +30,7 @@ export interface OnboardingCodeConfig {
   code: string;
   name: string;
   webhook: string;
-  channels?: string[]; // e.g. ['whatsapp', 'telegram'] — default: all
+  channels?: string[];
 }
 
 export interface OnboardingConfig {
@@ -36,7 +43,9 @@ export interface DashboardConfig {
 
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
-  routes: RouteConfig[];
+  services?: Record<string, ServiceConfig>;
+  // Legacy — still supported, converted to services internally
+  routes?: RouteConfig[];
   onboarding?: OnboardingConfig;
   apiPort?: number;
   dashboard?: DashboardConfig;

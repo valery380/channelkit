@@ -82,7 +82,8 @@ async function initCommand() {
     ]);
 
     const channels: Record<string, any> = {};
-    const routes: any[] = [];
+    const services: Record<string, any> = {};
+    let channelName = '';
 
     if (channelIdx === 0) {
       // WhatsApp
@@ -94,17 +95,11 @@ async function initCommand() {
         '🏢 Service — dedicated number, every incoming message routed',
       ]);
 
-      channels['whatsapp'] = {
+      channelName = 'whatsapp';
+      channels[channelName] = {
         type: 'whatsapp',
         number: number,
-        mode: modeIdx === 0 ? 'groups' : 'direct',
       };
-
-      routes.push({
-        channel: 'whatsapp',
-        match: '*',
-        webhook: '',
-      });
 
     } else if (channelIdx === 1) {
       // Telegram
@@ -147,16 +142,11 @@ async function initCommand() {
         console.log(c('yellow', '\n  ⚠️  Could not verify token (no internet?). Continuing anyway.\n'));
       }
 
-      channels['telegram'] = {
+      channelName = 'telegram';
+      channels[channelName] = {
         type: 'telegram',
         bot_token: token,
       };
-
-      routes.push({
-        channel: 'telegram',
-        match: '*',
-        webhook: '',
-      });
 
     } else {
       // Email
@@ -164,23 +154,18 @@ async function initCommand() {
       const address = await ask(rl, 'Email address:', 'support@myapp.com');
       const imap = await ask(rl, 'IMAP server:', 'imap.gmail.com');
 
-      channels['email'] = {
+      channelName = 'email';
+      channels[channelName] = {
         type: 'email',
         address,
         imap,
       };
-
-      routes.push({
-        channel: 'email',
-        match: '*',
-        webhook: '',
-      });
     }
 
     // Step 2: Webhook
     console.log();
     const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000/api/chat');
-    routes.forEach(r => r.webhook = webhook);
+    services['default'] = { channel: channelName, webhook };
 
     // Step 3: Generate config
     console.log();
@@ -196,11 +181,11 @@ async function initCommand() {
       }
     }
 
-    yaml += `\nroutes:\n`;
-    for (const route of routes) {
-      yaml += `  - channel: ${route.channel}\n`;
-      yaml += `    match: "${route.match}"\n`;
-      yaml += `    webhook: "${route.webhook}"\n`;
+    yaml += `\nservices:\n`;
+    for (const [name, svc] of Object.entries(services)) {
+      yaml += `  ${name}:\n`;
+      yaml += `    channel: "${(svc as any).channel}"\n`;
+      yaml += `    webhook: "${(svc as any).webhook}"\n`;
     }
 
     // Write config
@@ -269,8 +254,10 @@ async function startCommand(configPath: string) {
   }
 
   const channelCount = Object.keys(config.channels).length;
-  const routeCount = config.routes.length;
-  console.log(c('dim', `  ${channelCount} channel(s), ${routeCount} route(s) configured\n`));
+  const serviceCount = Object.keys(config.services || {}).length;
+  const routeCount = (config.routes || []).length;
+  const totalBindings = serviceCount + routeCount;
+  console.log(c('dim', `  ${channelCount} channel(s), ${totalBindings} service(s) configured\n`));
 
   const kit = new ChannelKit(config);
 
@@ -350,74 +337,76 @@ service
       const name = await ask(rl, 'Service name:');
       if (!name) { rl.close(); return; }
 
-      const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const code = await ask(rl, 'Magic code:', suggestedCode);
-
-      // Detect available channels
-      const availableChannels: string[] = [];
-      for (const ch of Object.values(config.channels)) {
-        if ((ch as any).type === 'whatsapp') availableChannels.push('whatsapp');
-        if ((ch as any).type === 'telegram') availableChannels.push('telegram');
-      }
-
-      let selectedChannels: string[] = [];
-      if (availableChannels.length === 0) {
+      // Select channel
+      const channelNames = Object.keys(config.channels);
+      if (channelNames.length === 0) {
         console.log(c('yellow', '\n  ⚠️  No channels configured. Run `channelkit init` first.\n'));
         rl.close();
         return;
-      } else if (availableChannels.length === 1) {
-        selectedChannels = availableChannels;
-        console.log(c('dim', `\n  Channel: ${availableChannels[0]}`));
+      }
+
+      let selectedChannel: string;
+      if (channelNames.length === 1) {
+        selectedChannel = channelNames[0];
+        const chType = (config.channels[selectedChannel] as any).type;
+        console.log(c('dim', `\n  Channel: ${selectedChannel} (${chType})`));
       } else {
-        const options = [
-          ...availableChannels.map(ch => ch === 'whatsapp' ? '📱 WhatsApp' : '💬 Telegram'),
-          '📱💬 Both',
-        ];
-        const chIdx = await select(rl, 'Which channel(s)?', options);
-        if (chIdx === availableChannels.length) {
-          selectedChannels = [...availableChannels]; // Both
-        } else {
-          selectedChannels = [availableChannels[chIdx]];
-        }
+        const options = channelNames.map(ch => {
+          const cfg = config.channels[ch] as any;
+          const icon = cfg.type === 'whatsapp' ? '📱' : cfg.type === 'telegram' ? '💬' : '📧';
+          return `${icon} ${ch} (${cfg.type})`;
+        });
+        const chIdx = await select(rl, 'Which channel?', options);
+        selectedChannel = channelNames[chIdx];
       }
 
       const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
 
-      if (!config.onboarding) config.onboarding = { codes: [] };
-      if (!config.onboarding.codes) config.onboarding.codes = [];
+      // Check if this channel already has other services (→ needs magic code)
+      if (!config.services) config.services = {};
+      const existingOnChannel = Object.values(config.services).filter(s => s.channel === selectedChannel);
+      
+      let code: string | undefined;
+      if (existingOnChannel.length > 0) {
+        console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → groups mode`));
+        const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        code = await ask(rl, 'Magic code for onboarding:', suggestedCode);
+        
+        // Also add codes to existing services if they don't have one
+        for (const [svcName, svc] of Object.entries(config.services)) {
+          if (svc.channel === selectedChannel && !svc.code) {
+            const existingCode = svcName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a magic code too (for groups mode)`));
+            svc.code = await ask(rl, `Magic code for "${svcName}":`, existingCode);
+          }
+        }
+      }
 
-      // Check for duplicate code
-      const existing = config.onboarding.codes.find(c => c.code.toUpperCase() === code.toUpperCase());
-      if (existing) {
-        console.log(c('yellow', `\n  ⚠️  Code "${code}" already exists for service "${existing.name}"\n`));
+      // Check for duplicate name
+      if (config.services[name]) {
+        console.log(c('yellow', `\n  ⚠️  Service "${name}" already exists.\n`));
         rl.close();
         return;
       }
 
-      config.onboarding.codes.push({ 
-        code: code.toUpperCase(), 
-        name, 
+      config.services[name] = {
+        channel: selectedChannel,
         webhook,
-        channels: selectedChannels.length === availableChannels.length ? undefined : selectedChannels,
-      });
+        ...(code ? { code: code.toUpperCase() } : {}),
+      };
       saveConfig(configPath, config);
 
-      // Show share links
-      const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
-      const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
+      // Show result
+      const chCfg = config.channels[selectedChannel] as any;
+      const number = chCfg?.number?.replace(/[^0-9]/g, '') || '';
 
       console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
-      console.log(c('dim', `  Code:     ${code.toUpperCase()}`));
-      console.log(c('dim', `  Channels: ${selectedChannels.join(', ')}`));
-      console.log(c('dim', `  Webhook:  ${webhook}`));
-      if (selectedChannels.includes('whatsapp') && number) {
-        console.log(c('cyan', `\n  📱 WhatsApp: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
-      }
-      if (selectedChannels.includes('telegram')) {
-        const tgChannel = Object.values(config.channels).find((ch: any) => ch.type === 'telegram') as any;
-        if (tgChannel?.bot_token) {
-          // We'd need the bot username — for now show generic
-          console.log(c('cyan', `  💬 Telegram: send "${code.toUpperCase()}" to your bot`));
+      console.log(c('dim', `  Channel: ${selectedChannel} (${chCfg.type})`));
+      console.log(c('dim', `  Webhook: ${webhook}`));
+      if (code) {
+        console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
+        if (chCfg.type === 'whatsapp' && number) {
+          console.log(c('cyan', `\n  📱 Share: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
         }
       }
       console.log();
@@ -439,23 +428,28 @@ service
 
     const { loadConfig } = await import('./config/parser');
     const config = loadConfig(configPath);
-    const codes = config.onboarding?.codes || [];
+    const svcs = config.services || {};
 
-    if (codes.length === 0) {
+    if (Object.keys(svcs).length === 0) {
       console.log(c('dim', '\n  No services configured. Run `channelkit service add` to add one.\n'));
       return;
     }
 
-    const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
-    const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
-
     console.log(c('cyan', '\n  📦 Configured Services\n'));
-    for (const svc of codes) {
-      console.log(c('bright', `  ${svc.name}`));
-      console.log(c('dim', `    Code:    ${svc.code}`));
+    for (const [name, svc] of Object.entries(svcs)) {
+      const chCfg = config.channels[svc.channel] as any;
+      const icon = chCfg?.type === 'whatsapp' ? '📱' : chCfg?.type === 'telegram' ? '💬' : '📧';
+      const mode = Object.values(svcs).filter(s => s.channel === svc.channel).length > 1 ? 'groups' : 'direct';
+      console.log(c('bright', `  ${icon} ${name}`));
+      console.log(c('dim', `    Channel: ${svc.channel} (${chCfg?.type || '?'})`));
       console.log(c('dim', `    Webhook: ${svc.webhook}`));
-      if (number) {
-        console.log(c('dim', `    Share:   https://wa.me/${number}?text=${encodeURIComponent(svc.code)}`));
+      console.log(c('dim', `    Mode:    ${mode}`));
+      if (svc.code) {
+        console.log(c('dim', `    Code:    ${svc.code}`));
+        const number = chCfg?.number?.replace(/[^0-9]/g, '') || '';
+        if (number) {
+          console.log(c('dim', `    Share:   https://wa.me/${number}?text=${encodeURIComponent(svc.code)}`));
+        }
       }
       console.log();
     }
@@ -474,20 +468,19 @@ service
 
     const { loadConfig, saveConfig } = await import('./config/parser');
     const config = loadConfig(configPath);
-    const codes = config.onboarding?.codes || [];
 
-    const idx = codes.findIndex(c => c.name.toLowerCase() === name.toLowerCase());
-    if (idx === -1) {
+    if (!config.services || !config.services[name]) {
       console.error(c('yellow', `\n  ❌ Service "${name}" not found.\n`));
+      const available = Object.keys(config.services || {}).join(', ');
+      if (available) console.log(c('dim', `  Available: ${available}\n`));
       process.exit(1);
     }
 
-    const removed = codes.splice(idx, 1)[0];
-    if (!config.onboarding) config.onboarding = { codes: [] };
-    config.onboarding.codes = codes;
+    const removed = config.services[name];
+    delete config.services[name];
     saveConfig(configPath, config);
 
-    console.log(c('green', `\n  ✅ Removed service "${removed.name}" (code: ${removed.code})\n`));
+    console.log(c('green', `\n  ✅ Removed service "${name}" (channel: ${removed.channel})\n`));
   });
 
 // Channel management commands
@@ -526,9 +519,10 @@ channel
       if (chCfg.bot_token) console.log(c('dim', `    Token: ${chCfg.bot_token.slice(0, 8)}...`));
       if (chCfg.address) console.log(c('dim', `    Address: ${chCfg.address}`));
 
-      // Count routes for this channel
-      const routeCount = config.routes.filter(r => r.channel === name).length;
-      console.log(c('dim', `    Routes: ${routeCount}`));
+      // Count services for this channel
+      const svcCount = Object.values(config.services || {}).filter(s => s.channel === name).length
+        + (config.routes || []).filter(r => r.channel === name).length;
+      console.log(c('dim', `    Services: ${svcCount}`));
       console.log();
     }
   });
@@ -570,7 +564,8 @@ channel
           if (overwrite.toLowerCase() !== 'y') { rl.close(); return; }
           // Remove old channel and its routes
           delete config.channels[existingWa[0]];
-          config.routes = config.routes.filter(r => r.channel !== existingWa[0]);
+          if (config.services) { for (const [k, v] of Object.entries(config.services)) { if (v.channel === existingWa[0]) delete config.services[k]; } }
+          config.routes = (config.routes || []).filter(r => r.channel !== existingWa[0]);
         }
 
         console.log();
@@ -594,7 +589,8 @@ channel
           const overwrite = await ask(rl, `Telegram channel "${existingTg[0]}" already exists. Replace? (y/N):`, 'N');
           if (overwrite.toLowerCase() !== 'y') { rl.close(); return; }
           delete config.channels[existingTg[0]];
-          config.routes = config.routes.filter(r => r.channel !== existingTg[0]);
+          if (config.services) { for (const [k, v] of Object.entries(config.services)) { if (v.channel === existingTg[0]) delete config.services[k]; } }
+          config.routes = (config.routes || []).filter(r => r.channel !== existingTg[0]);
         }
 
         console.log();
@@ -656,15 +652,16 @@ channel
         };
       }
 
-      // Ask for default webhook route
-      const addRoute = await ask(rl, 'Add a default route for this channel? (Y/n):', 'Y');
-      if (addRoute.toLowerCase() !== 'n') {
+      // Ask for default service
+      const addService = await ask(rl, 'Add a default service for this channel? (Y/n):', 'Y');
+      if (addService.toLowerCase() !== 'n') {
         const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
-        config.routes.push({
+        const svcName = await ask(rl, 'Service name:', channelName + '-default');
+        if (!config.services) config.services = {};
+        config.services[svcName] = {
           channel: channelName,
-          match: '*',
           webhook,
-        });
+        };
       }
 
       config.channels[channelName] = channelConfig;
@@ -705,10 +702,12 @@ channel
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     try {
-      // Check for routes that use this channel
-      const affectedRoutes = config.routes.filter(r => r.channel === name);
-      if (affectedRoutes.length > 0) {
-        console.log(c('yellow', `\n  ⚠️  ${affectedRoutes.length} route(s) use this channel and will be removed too.`));
+      // Check for services that use this channel
+      const affectedServices = Object.entries(config.services || {}).filter(([, v]) => v.channel === name);
+      const affectedRoutes = (config.routes || []).filter(r => r.channel === name);
+      const totalAffected = affectedServices.length + affectedRoutes.length;
+      if (totalAffected > 0) {
+        console.log(c('yellow', `\n  ⚠️  ${totalAffected} service(s) use this channel and will be removed too.`));
       }
 
       const confirm = await ask(rl, `Remove channel "${name}"? (y/N):`, 'N');
@@ -719,10 +718,11 @@ channel
       }
 
       delete config.channels[name];
-      config.routes = config.routes.filter(r => r.channel !== name);
+      if (config.services) { for (const [k, v] of Object.entries(config.services)) { if (v.channel === name) delete config.services[k]; } }
+      config.routes = (config.routes || []).filter(r => r.channel !== name);
       saveConfig(configPath, config);
 
-      console.log(c('green', `\n  ✅ Removed channel "${name}" and ${affectedRoutes.length} associated route(s).\n`));
+      console.log(c('green', `\n  ✅ Removed channel "${name}" and ${totalAffected} associated service(s).\n`));
     } finally {
       rl.close();
     }

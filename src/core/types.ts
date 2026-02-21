@@ -1,6 +1,7 @@
 export interface UnifiedMessage {
   id: string;
-  channel: string;
+  channel: string;        // channel type: 'whatsapp' | 'telegram'
+  channelName?: string;   // config key: 'main-wa', 'support-bot', etc.
   from: string;
   type: 'text' | 'image' | 'audio' | 'video' | 'document' | 'location' | 'sticker';
   text?: string;
