@@ -4,3 +4,5 @@ auth/
 config.yaml
 *.log
 .DS_Store
+groups.json
+data/
