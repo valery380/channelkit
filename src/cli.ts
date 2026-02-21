@@ -109,8 +109,43 @@ async function initCommand() {
     } else if (channelIdx === 1) {
       // Telegram
       console.log();
-      console.log(c('dim', '  Create a bot via @BotFather on Telegram and paste the token.\n'));
-      const token = await ask(rl, 'Bot token:');
+      console.log(c('bright', '  📝 Quick setup — takes 30 seconds:\n'));
+      console.log(c('white', '  1.') + c('dim', ' Open Telegram and search for ') + c('cyan', '@BotFather'));
+      console.log(c('white', '  2.') + c('dim', ' Send ') + c('cyan', '/newbot'));
+      console.log(c('white', '  3.') + c('dim', ' Choose a name (e.g. "My Service Bot")'));
+      console.log(c('white', '  4.') + c('dim', ' Choose a username (e.g. "myservice_bot")'));
+      console.log(c('white', '  5.') + c('dim', ' Copy the token BotFather gives you\n'));
+      
+      const openLink = await ask(rl, 'Open BotFather in browser? (Y/n):', 'Y');
+      if (openLink.toLowerCase() !== 'n') {
+        const { exec: execCmd } = await import('child_process');
+        execCmd('open "https://t.me/BotFather" 2>/dev/null || xdg-open "https://t.me/BotFather" 2>/dev/null');
+      }
+
+      console.log();
+      const token = await ask(rl, 'Paste the bot token here:');
+
+      if (!token || !token.includes(':')) {
+        console.log(c('yellow', '\n  ⚠️  That doesn\'t look like a valid token. It should look like: 123456:ABC-DEF...\n'));
+        rl.close();
+        return;
+      }
+
+      // Verify token by calling getMe
+      console.log(c('dim', '\n  Verifying token...'));
+      try {
+        const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        const data = await res.json() as any;
+        if (data.ok) {
+          console.log(c('green', `  ✅ Connected to @${data.result.username} (${data.result.first_name})\n`));
+        } else {
+          console.log(c('yellow', `\n  ❌ Invalid token: ${data.description}\n`));
+          rl.close();
+          return;
+        }
+      } catch {
+        console.log(c('yellow', '\n  ⚠️  Could not verify token (no internet?). Continuing anyway.\n'));
+      }
 
       channels['telegram'] = {
         type: 'telegram',
