@@ -353,6 +353,34 @@ service
       const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const code = await ask(rl, 'Magic code:', suggestedCode);
 
+      // Detect available channels
+      const availableChannels: string[] = [];
+      for (const ch of Object.values(config.channels)) {
+        if ((ch as any).type === 'whatsapp') availableChannels.push('whatsapp');
+        if ((ch as any).type === 'telegram') availableChannels.push('telegram');
+      }
+
+      let selectedChannels: string[] = [];
+      if (availableChannels.length === 0) {
+        console.log(c('yellow', '\n  ⚠️  No channels configured. Run `channelkit init` first.\n'));
+        rl.close();
+        return;
+      } else if (availableChannels.length === 1) {
+        selectedChannels = availableChannels;
+        console.log(c('dim', `\n  Channel: ${availableChannels[0]}`));
+      } else {
+        const options = [
+          ...availableChannels.map(ch => ch === 'whatsapp' ? '📱 WhatsApp' : '💬 Telegram'),
+          '📱💬 Both',
+        ];
+        const chIdx = await select(rl, 'Which channel(s)?', options);
+        if (chIdx === availableChannels.length) {
+          selectedChannels = [...availableChannels]; // Both
+        } else {
+          selectedChannels = [availableChannels[chIdx]];
+        }
+      }
+
       const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
 
       if (!config.onboarding) config.onboarding = { codes: [] };
@@ -366,19 +394,33 @@ service
         return;
       }
 
-      config.onboarding.codes.push({ code: code.toUpperCase(), name, webhook });
+      config.onboarding.codes.push({ 
+        code: code.toUpperCase(), 
+        name, 
+        webhook,
+        channels: selectedChannels.length === availableChannels.length ? undefined : selectedChannels,
+      });
       saveConfig(configPath, config);
 
-      // Find WhatsApp number for share link
+      // Show share links
       const waChannel = Object.values(config.channels).find((ch: any) => ch.type === 'whatsapp') as any;
       const number = waChannel?.number?.replace(/[^0-9]/g, '') || '';
 
       console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
-      console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
-      console.log(c('dim', `  Webhook: ${webhook}`));
-      if (number) {
-        console.log(c('cyan', `\n  📱 Share link: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}\n`));
+      console.log(c('dim', `  Code:     ${code.toUpperCase()}`));
+      console.log(c('dim', `  Channels: ${selectedChannels.join(', ')}`));
+      console.log(c('dim', `  Webhook:  ${webhook}`));
+      if (selectedChannels.includes('whatsapp') && number) {
+        console.log(c('cyan', `\n  📱 WhatsApp: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
       }
+      if (selectedChannels.includes('telegram')) {
+        const tgChannel = Object.values(config.channels).find((ch: any) => ch.type === 'telegram') as any;
+        if (tgChannel?.bot_token) {
+          // We'd need the bot username — for now show generic
+          console.log(c('cyan', `  💬 Telegram: send "${code.toUpperCase()}" to your bot`));
+        }
+      }
+      console.log();
     } finally {
       rl.close();
     }

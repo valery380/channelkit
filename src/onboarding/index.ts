@@ -1,14 +1,18 @@
 import { OnboardingConfig, OnboardingCodeConfig } from '../config/types';
 import { WhatsAppChannel } from '../channels/whatsapp';
+import { TelegramChannel } from '../channels/telegram';
 import { GroupStore } from '../core/groupStore';
 import { UnifiedMessage } from '../core/types';
 
 export class Onboarding {
   private groupStore: GroupStore;
+  // Track telegram user→service mappings (chatId → serviceName)
+  private telegramMappings: Map<string, string> = new Map();
 
   constructor(
     private config: OnboardingConfig,
-    private whatsappChannel?: WhatsAppChannel
+    private whatsappChannel?: WhatsAppChannel,
+    private telegramChannel?: TelegramChannel
   ) {
     this.groupStore = new GroupStore();
   }
@@ -18,18 +22,40 @@ export class Onboarding {
   }
 
   /**
-   * Handle a direct (non-group) message. Returns true if handled by onboarding.
+   * Handle a direct message for onboarding. Returns true if handled.
    */
   async handleDirectMessage(message: UnifiedMessage): Promise<boolean> {
-    if (!this.whatsappChannel || message.channel !== 'whatsapp') return false;
-    if (message.groupId) return false; // only handle DMs
+    if (message.groupId) return false;
 
-    const codes = this.config.codes || [];
+    if (message.channel === 'whatsapp') {
+      return this.handleWhatsApp(message);
+    }
+    if (message.channel === 'telegram') {
+      return this.handleTelegram(message);
+    }
+    return false;
+  }
+
+  /**
+   * Check if a Telegram chat has a service mapping. Returns the webhook URL if so.
+   */
+  getTelegramServiceWebhook(chatId: string): string | undefined {
+    const serviceName = this.telegramMappings.get(chatId);
+    if (!serviceName) return undefined;
+    const code = (this.config.codes || []).find(c => c.name === serviceName);
+    return code?.webhook;
+  }
+
+  // --- WhatsApp ---
+
+  private async handleWhatsApp(message: UnifiedMessage): Promise<boolean> {
+    if (!this.whatsappChannel) return false;
+
+    const codes = this.getCodesForChannel('whatsapp');
     const text = (message.text || '').trim().toUpperCase();
 
     const matched = codes.find(c => c.code.toUpperCase() === text);
     if (matched) {
-      // Skip if group already exists for this user + service
       const existing = this.groupStore.findByUserAndService(message.from, matched.name);
       if (existing) {
         await this.whatsappChannel.sendToJid(
@@ -39,14 +65,13 @@ export class Onboarding {
         return true;
       }
 
-      // Skip old messages (older than 30 seconds)
       const now = Math.floor(Date.now() / 1000);
       if (message.timestamp && now - message.timestamp > 30) {
         console.log(`[onboarding] Skipping old message from ${message.from} (${now - message.timestamp}s old)`);
         return true;
       }
 
-      await this.createServiceGroup(message.from, matched, message.senderName);
+      await this.createWhatsAppGroup(message.from, matched, message.senderName);
       return true;
     }
 
@@ -58,10 +83,10 @@ export class Onboarding {
         `Available services: send ${codeList} to connect`
       );
     }
-    return true; // handled (sent menu)
+    return true;
   }
 
-  private async createServiceGroup(userJid: string, service: OnboardingCodeConfig, senderName?: string): Promise<void> {
+  private async createWhatsAppGroup(userJid: string, service: OnboardingCodeConfig, senderName?: string): Promise<void> {
     if (!this.whatsappChannel) return;
 
     const phone = userJid.replace(/@s\.whatsapp\.net$/, '');
@@ -71,7 +96,6 @@ export class Onboarding {
       console.log(`[onboarding] Creating group "${groupName}" with participant: ${userJid}`);
       const group = await this.whatsappChannel.createGroup(groupName, [userJid]);
 
-      // Store group→service mapping
       this.groupStore.add(group.id, {
         groupId: group.id,
         serviceName: service.name,
@@ -80,7 +104,6 @@ export class Onboarding {
         createdAt: Date.now(),
       });
 
-      // Send welcome message
       await this.whatsappChannel.sendToJid(
         group.id,
         `Welcome to ${service.name}! 🎉\nAll messages in this group will be forwarded to the service.`
@@ -94,5 +117,66 @@ export class Onboarding {
         `Sorry, failed to set up ${service.name}. Please try again.`
       );
     }
+  }
+
+  // --- Telegram ---
+
+  private async handleTelegram(message: UnifiedMessage): Promise<boolean> {
+    if (!this.telegramChannel) return false;
+
+    const codes = this.getCodesForChannel('telegram');
+    // Support both plain code and /start CODE
+    let text = (message.text || '').trim().toUpperCase();
+    if (text.startsWith('/START ')) {
+      text = text.slice(7).trim();
+    }
+
+    const matched = codes.find(c => c.code.toUpperCase() === text);
+    if (matched) {
+      // Check if already connected
+      const existingService = this.telegramMappings.get(message.from);
+      if (existingService === matched.name) {
+        await this.telegramChannel.sendToChat(
+          message.from,
+          `You're already connected to ${matched.name}! Just send messages here.`
+        );
+        return true;
+      }
+
+      // Map this chat to the service
+      this.telegramMappings.set(message.from, matched.name);
+      
+      await this.telegramChannel.sendToChat(
+        message.from,
+        `Welcome to ${matched.name}! 🎉\nAll messages here will be forwarded to the service.`
+      );
+
+      console.log(`[onboarding] Telegram user ${message.senderName || message.from} connected to ${matched.name}`);
+      return true;
+    }
+
+    // If already mapped to a service, don't show menu — let it route
+    if (this.telegramMappings.has(message.from)) {
+      return false;
+    }
+
+    // No match, no mapping — send menu
+    if (codes.length > 0) {
+      const codeList = codes.map(c => `\`${c.code}\` → ${c.name}`).join('\n');
+      await this.telegramChannel.sendToChat(
+        message.from,
+        `Available services:\n${codeList}\n\nSend a code to connect.`
+      );
+    }
+    return true;
+  }
+
+  // --- Helpers ---
+
+  private getCodesForChannel(channel: string): OnboardingCodeConfig[] {
+    return (this.config.codes || []).filter(c => {
+      if (!c.channels || c.channels.length === 0) return true; // all channels
+      return c.channels.includes(channel);
+    });
   }
 }

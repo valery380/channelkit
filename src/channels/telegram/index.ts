@@ -37,6 +37,12 @@ export class TelegramChannel extends Channel {
     }
   }
 
+  async sendToChat(chatId: string, text: string): Promise<void> {
+    if (!this.bot) return;
+    const id = parseInt(chatId, 10) || chatId;
+    await this.bot.api.sendMessage(id, text);
+  }
+
   async send(to: string, response: WebhookResponse): Promise<void> {
     if (!this.bot) return;
     const chatId = parseInt(to, 10) || to;

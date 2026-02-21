@@ -23,6 +23,7 @@ export interface OnboardingCodeConfig {
   code: string;
   name: string;
   webhook: string;
+  channels?: string[]; // e.g. ['whatsapp', 'telegram'] — default: all
 }
 
 export interface OnboardingConfig {

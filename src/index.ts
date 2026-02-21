@@ -29,6 +29,7 @@ export class ChannelKit {
 
   async start(): Promise<void> {
     let whatsappChannel: WhatsAppChannel | undefined;
+    let telegramChannel: TelegramChannel | undefined;
 
     // Initialize channels
     for (const [name, channelConfig] of Object.entries(this.config.channels)) {
@@ -40,6 +41,7 @@ export class ChannelKit {
           break;
         case 'telegram':
           channel = new TelegramChannel(name, channelConfig as any);
+          telegramChannel = channel as TelegramChannel;
           break;
         default:
           console.warn(`Unknown channel type: ${channelConfig.type}`);
@@ -53,7 +55,7 @@ export class ChannelKit {
 
     // Set up onboarding if configured
     if (this.config.onboarding?.codes && this.config.onboarding.codes.length > 0) {
-      this.onboarding = new Onboarding(this.config.onboarding, whatsappChannel);
+      this.onboarding = new Onboarding(this.config.onboarding, whatsappChannel, telegramChannel);
       this.router.setGroupStore(this.onboarding.getGroupStore());
       console.log(`[channelkit] Onboarding enabled with ${this.config.onboarding.codes.length} service code(s)`);
     }
@@ -65,6 +67,21 @@ export class ChannelKit {
         if (this.onboarding && !message.groupId) {
           const handled = await this.onboarding.handleDirectMessage(message);
           if (handled) return;
+
+          // Check if Telegram user has a service mapping
+          if (message.channel === 'telegram') {
+            const webhook = this.onboarding.getTelegramServiceWebhook(message.from);
+            if (webhook) {
+              const replyTo = message.from;
+              const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
+              const { dispatchWebhook } = await import('./core/webhook');
+              const response = await dispatchWebhook(webhook, message, replyUrl);
+              if (response) {
+                await channel.send(replyTo, response);
+              }
+              return;
+            }
+          }
         }
 
         const replyTo = message.groupId || message.from;
