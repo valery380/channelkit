@@ -18,6 +18,16 @@ header h1 span{color:var(--accent)}
 .stat-value{font-size:20px;font-weight:700;color:var(--accent)}
 .stat-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px}
 
+.restart-banner{background:#9a6700;color:#fff;padding:10px 24px;font-size:13px;font-weight:500;display:none}
+
+.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:0}
+.tab{background:none;border:none;border-bottom:2px solid transparent;padding:12px 16px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:color 0.15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
 .filters{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .filters select,.filters input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px}
 .filters input{flex:1;min-width:200px}
@@ -29,9 +39,10 @@ header h1 span{color:var(--accent)}
 .table-wrap{overflow-x:auto;padding:0 24px 24px}
 table{width:100%;border-collapse:collapse;margin-top:8px}
 th{text-align:left;padding:10px 12px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
-td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top;cursor:pointer}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
 tr:hover td{background:var(--highlight)}
 tr.new-entry td{animation:fadeIn 0.5s ease}
+#log-body tr{cursor:pointer}
 @keyframes fadeIn{from{background:rgba(88,166,255,0.15)}to{background:transparent}}
 
 .channel-icon{font-size:16px}
@@ -55,12 +66,42 @@ tr.new-entry td{animation:fadeIn 0.5s ease}
 .empty{text-align:center;padding:60px 20px;color:var(--dim)}
 .empty-icon{font-size:48px;margin-bottom:12px}
 
+/* Config panel styles */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;border:none;cursor:pointer}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#0758a8}
+.btn-danger{background:none;border:1px solid var(--border);color:var(--red);font-size:12px;padding:4px 8px;border-radius:4px;cursor:pointer}
+.btn-danger:hover{background:#fff0f0}
+.btn-edit{background:none;border:1px solid var(--border);color:var(--accent);font-size:12px;padding:4px 8px;border-radius:4px;cursor:pointer}
+.btn-edit:hover{background:var(--highlight)}
+.webhook-cell{max-width:280px}
+.webhook-cell .webhook-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;color:var(--dim);font-size:12px}
+.webhook-cell input{width:100%;padding:4px 6px;border:1px solid var(--accent);border-radius:4px;font-size:12px}
+#services-body input{display:block;padding:4px 6px;border:1px solid var(--accent);border-radius:4px;font-size:12px;box-sizing:border-box}
+
+/* Add service form */
+.add-form{margin:16px 24px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+.add-form h3{font-size:14px;font-weight:600;margin-bottom:6px}
+.form-hint{font-size:12px;color:var(--dim);margin-bottom:14px}
+.form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.form-row input,.form-row select{flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)}
+.form-row input:focus,.form-row select:focus{outline:none;border-color:var(--accent)}
+
+/* Server log styles */
+.log-toolbar{padding:10px 24px;display:flex;align-items:center;gap:14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.log-toolbar button{background:none;border:1px solid var(--border);padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text)}
+.log-toolbar label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;cursor:pointer}
+.server-log{padding:12px 24px;background:#1e1e1e;color:#d4d4d4;height:calc(100vh - 220px);overflow-y:auto;font-size:12px;line-height:1.6}
+.server-log div{white-space:pre-wrap;word-break:break-all}
+.server-log .log-err{color:#f48771}
+
 @media(max-width:768px){
   header{padding:12px 16px}
   .filters{padding:8px 16px}
   .table-wrap{padding:0 8px 16px}
   td,th{padding:8px 6px;font-size:12px}
   .text-preview{max-width:150px}
+  .tabs{padding:0 8px}
 }
 </style>
 </head>
@@ -70,39 +111,132 @@ tr.new-entry td{animation:fadeIn 0.5s ease}
   <h1>📡 <span>ChannelKit</span> Dashboard</h1>
   <div class="stats">
     <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Messages</div></div>
+    <div class="stat"><div class="stat-value" id="stat-errors" style="color:var(--red)">0</div><div class="stat-label">Errors</div></div>
     <div class="stat"><div class="stat-value" id="stat-latency">0ms</div><div class="stat-label">Avg Latency</div></div>
     <div class="stat"><div class="stat-value" id="stat-uptime">0s</div><div class="stat-label">Uptime</div></div>
     <div class="stat"><span class="badge badge-live" id="ws-status">● LIVE</span></div>
   </div>
 </header>
 
-<div class="filters">
-  <select id="filter-channel">
-    <option value="">All Channels</option>
-    <option value="whatsapp">📱 WhatsApp</option>
-    <option value="telegram">💬 Telegram</option>
-  </select>
-  <input type="text" id="filter-search" placeholder="Search messages, senders, responses...">
+<div class="restart-banner" id="restart-banner">
+  ⚠️ Config changed — restart ChannelKit to apply changes
+  <button id="restart-btn" onclick="restartServer()" style="margin-left:16px;background:#fff;color:#9a6700;border:none;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">Restart Now</button>
+  <span id="restart-status" style="margin-left:10px;font-size:12px"></span>
 </div>
 
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th></th>
-        <th>From</th>
-        <th>Message</th>
-        <th>Webhook</th>
-        <th>Status</th>
-        <th>Latency</th>
-      </tr>
-    </thead>
-    <tbody id="log-body"></tbody>
-  </table>
-  <div class="empty" id="empty-state">
-    <div class="empty-icon">📭</div>
-    <div>No messages yet. Waiting for traffic...</div>
+<div class="tabs">
+  <button class="tab active" data-tab="messages">Messages</button>
+  <button class="tab" data-tab="services">Services</button>
+  <button class="tab" data-tab="channels">Channels</button>
+  <button class="tab" data-tab="serverlog">Server Log</button>
+</div>
+
+<!-- ── Messages panel ─────────────────────────────── -->
+<div class="tab-panel active" id="panel-messages">
+  <div class="filters">
+    <select id="filter-channel">
+      <option value="">All Channels</option>
+      <option value="whatsapp">📱 WhatsApp</option>
+      <option value="telegram">💬 Telegram</option>
+      <option value="sms">📟 SMS</option>
+      <option value="voice">📞 Voice</option>
+      <option value="email">📧 Email</option>
+    </select>
+    <input type="text" id="filter-search" placeholder="Search messages, senders, responses...">
+    <button onclick="clearMessages()" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--dim)">Clear</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th></th>
+          <th>From</th>
+          <th>Message</th>
+          <th>Webhook</th>
+          <th>Status</th>
+          <th>Latency</th>
+        </tr>
+      </thead>
+      <tbody id="log-body"></tbody>
+    </table>
+    <div class="empty" id="empty-state">
+      <div class="empty-icon">📭</div>
+      <div>No messages yet. Waiting for traffic...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Services panel ─────────────────────────────── -->
+<div class="tab-panel" id="panel-services">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Channel</th><th>Webhook</th><th>Code / Command</th><th style="width:130px"></th></tr>
+      </thead>
+      <tbody id="services-body"></tbody>
+    </table>
+  </div>
+  <div class="add-form">
+    <h3>Add Service</h3>
+    <p class="form-hint">Create a new service binding between a channel and a webhook URL.</p>
+    <div class="form-row">
+      <input id="svc-name" placeholder="Service name (e.g. support)">
+      <select id="svc-channel" onchange="updateServiceForm()"><option value="">Select channel…</option></select>
+      <input id="svc-webhook" placeholder="Webhook URL (e.g. http://localhost:3000/support)">
+    </div>
+    <div class="form-row" id="svc-cc-row" style="display:none">
+      <input id="svc-code" placeholder="Magic code — WhatsApp multi-service (optional)">
+      <input id="svc-command" placeholder="Slash command — Telegram, e.g. /support (optional)">
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="addService()">Add Service</button>
+      <span id="svc-mode-hint" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Channels panel ─────────────────────────────── -->
+<div class="tab-panel" id="panel-channels">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Type</th><th>Details</th><th>Services</th><th>Unmatched msgs</th><th style="width:80px"></th></tr>
+      </thead>
+      <tbody id="channels-body"></tbody>
+    </table>
+  </div>
+  <div class="add-form">
+    <h3>Add Channel</h3>
+    <p class="form-hint">Configure a new messaging channel. Changes take effect after restart.</p>
+    <div class="form-row">
+      <input id="ch-name" placeholder="Channel name (e.g. mywhatsapp)">
+      <select id="ch-type" onchange="renderChannelFields()">
+        <option value="">Select type…</option>
+        <option value="whatsapp">WhatsApp</option>
+        <option value="telegram">Telegram</option>
+        <option value="sms-twilio">SMS (Twilio)</option>
+        <option value="voice-twilio">Voice (Twilio)</option>
+        <option value="email-resend">Email (Resend)</option>
+      </select>
+    </div>
+    <div id="ch-fields"></div>
+    <div class="form-row" id="ch-submit-row" style="display:none">
+      <button class="btn btn-primary" onclick="addChannel()">Add Channel</button>
+      <span id="ch-note" style="font-size:12px;color:var(--dim)"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Server Log panel ───────────────────────────── -->
+<div class="tab-panel" id="panel-serverlog">
+  <div class="log-toolbar">
+    <button onclick="clearServerLog()">Clear</button>
+    <label><input type="checkbox" id="log-autoscroll" checked> Auto-scroll</label>
+    <span id="log-count" style="color:var(--dim);font-size:12px"></span>
+  </div>
+  <div class="server-log mono" id="server-log">
+    <div style="color:#666">Waiting for log output…</div>
   </div>
 </div>
 
@@ -110,20 +244,22 @@ tr.new-entry td{animation:fadeIn 0.5s ease}
 const API = window.location.origin;
 const WS_URL = `ws://${window.location.host}`;
 
-const logBody = document.getElementById('log-body');
-const emptyState = document.getElementById('empty-state');
-const filterChannel = document.getElementById('filter-channel');
-const filterSearch = document.getElementById('filter-search');
-const wsStatus = document.getElementById('ws-status');
+// ─── Tab switching ─────────────────────────────────
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'services' || btn.dataset.tab === 'channels') loadConfigData();
+    if (btn.dataset.tab === 'serverlog') loadServerLogs();
+  });
+});
 
-let allEntries = [];
-let expandedId = null;
-
-const channelIcons = { whatsapp: '📱', telegram: '💬', 'system (async)': '🔄' };
-
-function typeLabel(entry) {
-  if (entry.type === 'async-outbound') return '<span style="color:var(--accent);font-size:11px;font-weight:600">ASYNC ↗</span>';
-  return '';
+// ─── Shared helpers ────────────────────────────────
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function formatTime(ts) {
@@ -144,23 +280,36 @@ function formatUptime(ms) {
   return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
 }
 
-function statusIcon(status) {
-  if (status === 'success') return '<span class="status-ok">✅</span>';
-  if (status === 'error') return '<span class="status-err">❌</span>';
-  return '<span class="status-noroute">⚪</span>';
-}
-
 function truncate(str, len = 60) {
   if (!str) return '<span style="color:var(--dim)">—</span>';
-  return str.length > len ? str.slice(0, len) + '…' : str;
+  return escHtml(str.length > len ? str.slice(0, len) + '…' : str);
 }
 
 function shortUrl(url) {
   if (!url) return '—';
-  try {
-    const u = new URL(url);
-    return u.pathname;
-  } catch { return url; }
+  try { return new URL(url).pathname; } catch { return url; }
+}
+
+// ─── Messages panel ────────────────────────────────
+const logBody = document.getElementById('log-body');
+const emptyState = document.getElementById('empty-state');
+const filterChannel = document.getElementById('filter-channel');
+const filterSearch = document.getElementById('filter-search');
+const wsStatus = document.getElementById('ws-status');
+
+let allEntries = [];
+let currentChannels = {};
+const channelIcons = { whatsapp: '📱', telegram: '💬', sms: '📟', voice: '📞', email: '📧', 'system (async)': '🔄' };
+
+function typeLabel(entry) {
+  if (entry.type === 'async-outbound') return '<span style="color:var(--accent);font-size:11px;font-weight:600">ASYNC ↗</span>';
+  return '';
+}
+
+function statusIcon(status) {
+  if (status === 'success') return '<span class="status-ok">✅</span>';
+  if (status === 'error') return '<span class="status-err">❌</span>';
+  return '<span class="status-noroute">⚪</span>';
 }
 
 function renderRow(entry, isNew) {
@@ -170,26 +319,19 @@ function renderRow(entry, isNew) {
     <td class="time-cell mono">${formatTime(entry.timestamp)}</td>
     <td class="channel-icon">${entry.type === 'async-outbound' ? '🔄' : (channelIcons[entry.channel] || '📨')}</td>
     <td class="from-cell">
-      <div class="name">${entry.senderName || ''}</div>
-      <div class="number mono">${entry.from}</div>
+      <div class="name">${escHtml(entry.senderName || '')}</div>
+      <div class="number mono">${escHtml(entry.from)}</div>
     </td>
     <td class="text-preview">${typeLabel(entry)} ${truncate(entry.text)}</td>
-    <td class="route-cell mono">${shortUrl(entry.route)}</td>
+    <td class="route-cell mono">${escHtml(shortUrl(entry.route))}</td>
     <td>${statusIcon(entry.status)}</td>
     <td class="latency mono">${entry.latency != null ? entry.latency + 'ms' : '—'}</td>
   `;
 
   tr.addEventListener('click', () => {
-    // Toggle detail row
     const existing = tr.nextElementSibling;
-    if (existing && existing.classList.contains('detail-row')) {
-      existing.remove();
-      expandedId = null;
-      return;
-    }
-    // Remove other expanded
+    if (existing && existing.classList.contains('detail-row')) { existing.remove(); return; }
     document.querySelectorAll('.detail-row').forEach(el => el.remove());
-    expandedId = entry.id;
 
     const detailTr = document.createElement('tr');
     detailTr.classList.add('detail-row');
@@ -198,18 +340,18 @@ function renderRow(entry, isNew) {
     td.innerHTML = `
       <div class="detail open">
         <div class="detail-grid">
-          <div class="detail-item"><label>ID</label><p class="mono">${entry.id}</p></div>
+          <div class="detail-item"><label>ID</label><p class="mono">${escHtml(entry.id)}</p></div>
           <div class="detail-item"><label>Timestamp</label><p>${formatDate(entry.timestamp)}</p></div>
-          <div class="detail-item"><label>Channel</label><p>${entry.channel}</p></div>
-          <div class="detail-item"><label>From</label><p>${entry.senderName || ''} (${entry.from})</p></div>
-          <div class="detail-item"><label>Type</label><p>${entry.type}</p></div>
-          <div class="detail-item"><label>Group</label><p>${entry.groupName || entry.groupId || '—'}</p></div>
-          <div class="detail-item"><label>Webhook</label><p class="mono">${entry.route || '—'}</p></div>
-          <div class="detail-item"><label>Status</label><p>${entry.status}</p></div>
+          <div class="detail-item"><label>Channel</label><p>${escHtml(entry.channel)}</p></div>
+          <div class="detail-item"><label>From</label><p>${escHtml(entry.senderName || '')} (${escHtml(entry.from)})</p></div>
+          <div class="detail-item"><label>Type</label><p>${escHtml(entry.type)}</p></div>
+          <div class="detail-item"><label>Group</label><p>${escHtml(entry.groupName || entry.groupId || '—')}</p></div>
+          <div class="detail-item"><label>Webhook</label><p class="mono">${escHtml(entry.route || '—')}</p></div>
+          <div class="detail-item"><label>Status</label><p>${escHtml(entry.status)}</p></div>
           <div class="detail-item"><label>Latency</label><p>${entry.latency != null ? entry.latency + 'ms' : '—'}</p></div>
         </div>
-        <div class="detail-item" style="margin-top:12px"><label>Full Message</label><div class="detail-response">${entry.text || '—'}</div></div>
-        <div class="detail-item" style="margin-top:8px"><label>Response</label><div class="detail-response">${entry.responseText || '—'}</div></div>
+        <div class="detail-item" style="margin-top:12px"><label>Full Message</label><div class="detail-response">${escHtml(entry.text || '—')}</div></div>
+        <div class="detail-item" style="margin-top:8px"><label>Response</label><div class="detail-response">${escHtml(entry.responseText || '—')}</div></div>
       </div>
     `;
     detailTr.appendChild(td);
@@ -221,17 +363,12 @@ function renderRow(entry, isNew) {
 
 function render(entries, isNew) {
   if (isNew && entries.length === 1) {
-    // Prepend single new entry
-    const row = renderRow(entries[0], true);
-    logBody.prepend(row);
+    logBody.prepend(renderRow(entries[0], true));
     emptyState.style.display = 'none';
     return;
   }
   logBody.innerHTML = '';
-  if (entries.length === 0) {
-    emptyState.style.display = '';
-    return;
-  }
+  if (entries.length === 0) { emptyState.style.display = ''; return; }
   emptyState.style.display = 'none';
   entries.forEach(e => logBody.appendChild(renderRow(e, false)));
 }
@@ -250,10 +387,14 @@ function getFiltered() {
   return results;
 }
 
-function applyFilters() {
-  render(getFiltered(), false);
+function applyFilters() { render(getFiltered(), false); }
+async function clearMessages() {
+  if (!confirm('Clear all message logs? This cannot be undone.')) return;
+  await fetch(API + '/api/logs', { method: 'DELETE' });
+  allEntries = [];
+  render([], false);
+  updateStats();
 }
-
 filterChannel.addEventListener('change', applyFilters);
 let searchTimeout;
 filterSearch.addEventListener('input', () => {
@@ -261,23 +402,360 @@ filterSearch.addEventListener('input', () => {
   searchTimeout = setTimeout(applyFilters, 200);
 });
 
-// Stats
 function updateStats() {
   fetch(API + '/api/logs/stats').then(r => r.json()).then(s => {
     document.getElementById('stat-total').textContent = s.total;
+    document.getElementById('stat-errors').textContent = s.errorCount || 0;
     document.getElementById('stat-latency').textContent = s.avgLatency + 'ms';
     document.getElementById('stat-uptime').textContent = formatUptime(s.uptime);
   }).catch(() => {});
 }
 
-// Initial load
 fetch(API + '/api/logs').then(r => r.json()).then(entries => {
   allEntries = entries;
   render(getFiltered(), false);
   updateStats();
 }).catch(() => {});
 
-// WebSocket
+// ─── Services & Channels panels ────────────────────
+async function loadConfigData() {
+  try {
+    const data = await fetch(API + '/api/config').then(r => r.json());
+    if (data.error) return;
+    currentChannels = data.channels || {};
+    renderServices(data.services || {}, currentChannels);
+    renderChannels(currentChannels, data.services || {});
+    // Populate channel dropdown
+    const sel = document.getElementById('svc-channel');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Select channel…</option>' +
+      Object.keys(currentChannels).map(n => `<option value="${escHtml(n)}"${n === current ? ' selected' : ''}>${escHtml(n)}</option>`).join('');
+    updateServiceForm();
+  } catch {}
+}
+
+function renderServices(services, channels) {
+  const tbody = document.getElementById('services-body');
+  const entries = Object.entries(services);
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No services configured</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([name, svc]) => `
+    <tr>
+      <td style="font-weight:500">${escHtml(name)}</td>
+      <td>${escHtml(svc.channel)}</td>
+      <td class="webhook-cell" id="wh-cell-${escHtml(name)}">
+        <span class="webhook-text mono">${escHtml(svc.webhook)}</span>
+      </td>
+      <td id="cc-cell-${escHtml(name)}" data-code="${escHtml(svc.code||'')}" data-command="${escHtml(svc.command||'')}" style="color:var(--dim);font-size:12px">${escHtml(svc.code || svc.command || '—')}</td>
+      <td id="act-cell-${escHtml(name)}" style="text-align:right;white-space:nowrap">
+        <button class="btn-edit" data-name="${escHtml(name)}" onclick="editService(this.dataset.name)">Edit</button>
+        <button class="btn-danger" data-name="${escHtml(name)}" onclick="removeService(this.dataset.name)">Remove</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderChannels(channels, services) {
+  const tbody = document.getElementById('channels-body');
+  const entries = Object.entries(channels);
+  if (entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No channels configured</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([name, ch]) => {
+    const deps = Object.entries(services).filter(([, s]) => s.channel === name).map(([n]) => n);
+    const detail = ch.number || (ch.bot_token ? ch.bot_token.slice(0,12)+'…' : '') || ch.from_email || '';
+    return `<tr>
+      <td style="font-weight:500">${escHtml(name)}</td>
+      <td>${escHtml(ch.type)}</td>
+      <td class="mono" style="color:var(--dim);font-size:12px">${escHtml(detail)}</td>
+      <td style="font-size:12px;color:var(--dim)">${deps.length > 0 ? deps.map(escHtml).join(', ') : '—'}</td>
+      <td>${(ch.mode === 'groups' || deps.length > 1) ? `
+        <select data-name="${escHtml(name)}" onchange="setUnmatched(this.dataset.name, this.value)"
+          style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)">
+          <option value="" ${!ch.unmatched ? 'selected' : ''}>Ignore (default)</option>
+          <option value="list" ${ch.unmatched === 'list' ? 'selected' : ''}>List services</option>
+          <option value="ignore" ${ch.unmatched === 'ignore' ? 'selected' : ''}>Ignore</option>
+        </select>` : '<span style="color:var(--dim);font-size:12px">—</span>'}</td>
+      <td style="text-align:right"><button class="btn-danger" data-name="${escHtml(name)}" data-deps="${escHtml(JSON.stringify(deps))}" onclick="removeChannel(this.dataset.name, JSON.parse(this.dataset.deps))">Remove</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function editService(name) {
+  const whCell = document.getElementById('wh-cell-' + name);
+  const ccCell = document.getElementById('cc-cell-' + name);
+  const actCell = document.getElementById('act-cell-' + name);
+  if (!whCell || !ccCell || !actCell) return;
+
+  const currentWebhook = whCell.querySelector('.webhook-text')?.textContent || '';
+  const currentCode = ccCell.dataset.code || '';
+  const currentCommand = ccCell.dataset.command || '';
+
+  whCell.innerHTML = `<input id="edit-wh-input" value="${escHtml(currentWebhook)}" placeholder="Webhook URL" style="width:100%">`;
+
+  ccCell.innerHTML = `
+    <input id="edit-code-input" value="${escHtml(currentCode)}" placeholder="Magic code" style="width:100%;margin-bottom:4px">
+    <input id="edit-cmd-input" value="${escHtml(currentCommand)}" placeholder="Slash command" style="width:100%">`;
+
+  actCell.innerHTML = `
+    <button class="btn-edit" data-name="${escHtml(name)}" onclick="saveService(this.dataset.name)">Save</button>
+    <button style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--dim);font-size:13px" onclick="loadConfigData()">Cancel</button>`;
+
+  document.getElementById('edit-wh-input')?.focus();
+}
+
+async function saveService(name) {
+  const webhook = document.getElementById('edit-wh-input')?.value.trim();
+  const code = document.getElementById('edit-code-input')?.value.trim();
+  const command = document.getElementById('edit-cmd-input')?.value.trim();
+  if (!webhook) { alert('Webhook URL is required'); return; }
+  const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ webhook, code: code || null, command: command || null }),
+  });
+  if (!res.ok) { let m = `Save failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
+  loadConfigData();
+}
+
+async function removeService(name) {
+  if (!confirm(`Remove service "${name}"?`)) return;
+  const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (!res.ok) { let m = `Remove failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
+  loadConfigData();
+}
+
+function updateServiceForm() {
+  const chName = document.getElementById('svc-channel').value;
+  const ch = currentChannels[chName];
+  const isServiceMode = ch?.mode === 'service';
+  const ccRow = document.getElementById('svc-cc-row');
+  const hint = document.getElementById('svc-mode-hint');
+  if (ccRow) ccRow.style.display = isServiceMode ? 'none' : '';
+  if (hint) hint.textContent = isServiceMode ? 'Service mode — no code or command needed.' : '';
+}
+
+async function setUnmatched(name, value) {
+  await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unmatched: value || null }),
+  });
+}
+
+const CHANNEL_FIELDS = {
+  whatsapp: {
+    note: 'After adding, restart and run: channelkit channel add whatsapp <name> to pair via QR.',
+    fields: [],
+  },
+  telegram: {
+    note: 'Create a bot at @BotFather and paste the token here.',
+    fields: [
+      { id: 'ch-bot-token', label: 'Bot Token', placeholder: '123456:ABC-DEF1234...' },
+    ],
+  },
+  'sms-twilio': {
+    note: 'Twilio console: Account SID and Auth Token from the dashboard.',
+    fields: [
+      { id: 'ch-account-sid', label: 'Account SID', placeholder: 'ACxxxxxxx' },
+      { id: 'ch-auth-token', label: 'Auth Token', placeholder: '' },
+      { id: 'ch-number', label: 'Phone Number', placeholder: '+12025551234' },
+    ],
+  },
+  'voice-twilio': {
+    note: 'Same credentials as SMS. Voice and SMS can share credentials but need separate channels.',
+    fields: [
+      { id: 'ch-account-sid', label: 'Account SID', placeholder: 'ACxxxxxxx' },
+      { id: 'ch-auth-token', label: 'Auth Token', placeholder: '' },
+      { id: 'ch-number', label: 'Phone Number', placeholder: '+12025551234' },
+    ],
+  },
+  'email-resend': {
+    note: 'Get your API key from resend.com.',
+    fields: [
+      { id: 'ch-api-key', label: 'API Key', placeholder: 're_xxxxxxx' },
+      { id: 'ch-from-email', label: 'From Email', placeholder: 'support@yourdomain.com' },
+    ],
+  },
+};
+
+function renderChannelFields() {
+  const type = document.getElementById('ch-type').value;
+  const container = document.getElementById('ch-fields');
+  const submitRow = document.getElementById('ch-submit-row');
+  const note = document.getElementById('ch-note');
+  if (!type) { container.innerHTML = ''; submitRow.style.display = 'none'; return; }
+  const def = CHANNEL_FIELDS[type];
+  const typeFields = def.fields.map(f =>
+    `<div class="form-row"><input id="${f.id}" placeholder="${escHtml(f.label + (f.placeholder ? ' — ' + f.placeholder : ''))}" style="flex:1"></div>`
+  ).join('');
+  container.innerHTML = typeFields + `
+    <div class="form-row">
+      <select id="ch-mode" onchange="updateChannelModeFields()"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="service">Service mode — single service, no codes needed</option>
+        <option value="groups">Groups mode — multiple services via codes or commands</option>
+      </select>
+    </div>
+    <div class="form-row" id="ch-unmatched-row" style="display:none">
+      <select id="ch-unmatched"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="ignore">Unmatched messages: Ignore silently</option>
+        <option value="list">Unmatched messages: Reply with service list</option>
+      </select>
+    </div>`;
+  note.textContent = def.note;
+  submitRow.style.display = 'flex';
+}
+
+function updateChannelModeFields() {
+  const mode = document.getElementById('ch-mode')?.value;
+  const row = document.getElementById('ch-unmatched-row');
+  if (row) row.style.display = mode === 'groups' ? '' : 'none';
+}
+
+async function addChannel() {
+  const name = document.getElementById('ch-name').value.trim();
+  const typeKey = document.getElementById('ch-type').value;
+  if (!name || !typeKey) { alert('Channel name and type are required'); return; }
+
+  const body = { name };
+  if (typeKey === 'whatsapp') {
+    Object.assign(body, { type: 'whatsapp' });
+  } else if (typeKey === 'telegram') {
+    const token = document.getElementById('ch-bot-token')?.value.trim();
+    if (!token) { alert('Bot token is required'); return; }
+    Object.assign(body, { type: 'telegram', bot_token: token });
+  } else if (typeKey === 'sms-twilio') {
+    const sid = document.getElementById('ch-account-sid')?.value.trim();
+    const tok = document.getElementById('ch-auth-token')?.value.trim();
+    const num = document.getElementById('ch-number')?.value.trim();
+    if (!sid || !tok || !num) { alert('Account SID, Auth Token and Phone Number are required'); return; }
+    Object.assign(body, { type: 'sms', provider: 'twilio', account_sid: sid, auth_token: tok, number: num });
+  } else if (typeKey === 'voice-twilio') {
+    const sid = document.getElementById('ch-account-sid')?.value.trim();
+    const tok = document.getElementById('ch-auth-token')?.value.trim();
+    const num = document.getElementById('ch-number')?.value.trim();
+    if (!sid || !tok || !num) { alert('Account SID, Auth Token and Phone Number are required'); return; }
+    Object.assign(body, { type: 'voice', provider: 'twilio', account_sid: sid, auth_token: tok, number: num });
+  } else if (typeKey === 'email-resend') {
+    const key = document.getElementById('ch-api-key')?.value.trim();
+    const from = document.getElementById('ch-from-email')?.value.trim();
+    if (!key || !from) { alert('API Key and From Email are required'); return; }
+    Object.assign(body, { type: 'email', provider: 'resend', api_key: key, from_email: from });
+  }
+
+  const mode = document.getElementById('ch-mode')?.value || 'service';
+  Object.assign(body, { mode });
+  if (mode === 'groups') {
+    const unmatched = document.getElementById('ch-unmatched')?.value;
+    if (unmatched) Object.assign(body, { unmatched });
+  }
+
+  const res = await fetch(API + '/api/config/channels', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let errMsg = `Failed to add channel (${res.status})`;
+    try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
+    alert(errMsg);
+    return;
+  }
+  // Clear form
+  document.getElementById('ch-name').value = '';
+  document.getElementById('ch-type').value = '';
+  document.getElementById('ch-fields').innerHTML = '';
+  document.getElementById('ch-submit-row').style.display = 'none';
+  loadConfigData();
+}
+
+async function removeChannel(name, deps) {
+  const msg = deps.length > 0
+    ? `Remove channel "${name}"?\n\nThis will also remove these services:\n• ${deps.join('\n• ')}`
+    : `Remove channel "${name}"?`;
+  if (!confirm(msg)) return;
+  const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(name), { method: 'DELETE' });
+  if (!res.ok) { let m = `Remove failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
+  loadConfigData();
+}
+
+async function addService() {
+  const name = document.getElementById('svc-name').value.trim();
+  const channel = document.getElementById('svc-channel').value;
+  const webhook = document.getElementById('svc-webhook').value.trim();
+  const code = document.getElementById('svc-code').value.trim();
+  const command = document.getElementById('svc-command').value.trim();
+  if (!name || !channel || !webhook) { alert('Name, channel and webhook URL are required'); return; }
+  const res = await fetch(API + '/api/config/services', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, channel, webhook, ...(code && { code }), ...(command && { command }) }),
+  });
+  if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed to add service'); return; }
+  ['svc-name','svc-webhook','svc-code','svc-command'].forEach(id => { document.getElementById(id).value = ''; });
+  loadConfigData();
+}
+
+// ─── Server Log panel ──────────────────────────────
+let serverLogLines = [];
+
+async function loadServerLogs() {
+  try {
+    const lines = await fetch(API + '/api/server-logs').then(r => r.json());
+    serverLogLines = lines;
+    renderServerLog();
+  } catch {}
+}
+
+function renderServerLog() {
+  const el = document.getElementById('server-log');
+  if (serverLogLines.length === 0) {
+    el.innerHTML = '<div style="color:#666">No log output captured yet.</div>';
+  } else {
+    el.innerHTML = serverLogLines.map(l =>
+      `<div class="${l.level === 'stderr' ? 'log-err' : ''}">${escHtml(l.text)}</div>`
+    ).join('');
+  }
+  document.getElementById('log-count').textContent = serverLogLines.length + ' lines';
+  if (document.getElementById('log-autoscroll').checked) el.scrollTop = el.scrollHeight;
+}
+
+async function clearServerLog() {
+  await fetch(API + '/api/server-logs', { method: 'DELETE' });
+  serverLogLines = [];
+  renderServerLog();
+}
+
+// ─── Restart ───────────────────────────────────────
+async function restartServer() {
+  if (!confirm('Restart ChannelKit now?\n\nThe process will restart and the dashboard will reload automatically.')) return;
+  const btn = document.getElementById('restart-btn');
+  const status = document.getElementById('restart-status');
+  btn.disabled = true;
+  btn.textContent = 'Restarting…';
+  status.textContent = '';
+  try {
+    await fetch(API + '/api/restart', { method: 'POST' });
+  } catch {}
+  status.textContent = 'Waiting for server…';
+  // Poll until the server comes back, then reload
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    if (attempts > 30) { clearInterval(poll); status.textContent = 'Restart timed out — reload manually'; return; }
+    try {
+      const r = await fetch(API + '/api/health');
+      if (r.ok) { clearInterval(poll); location.reload(); }
+    } catch {}
+  }, 1000);
+}
+
+// ─── WebSocket ─────────────────────────────────────
 let ws;
 function connectWs() {
   ws = new WebSocket(WS_URL);
@@ -293,22 +771,42 @@ function connectWs() {
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
+
       if (msg.type === 'newEntry') {
         allEntries.unshift(msg.entry);
         if (allEntries.length > 1000) allEntries.pop();
-        // If entry matches filters, render it
         const filtered = getFiltered();
-        if (filtered[0] && filtered[0].id === msg.entry.id) {
-          render([msg.entry], true);
-        }
+        if (filtered[0] && filtered[0].id === msg.entry.id) render([msg.entry], true);
         updateStats();
+      }
+
+      if (msg.type === 'serverLog') {
+        serverLogLines.push(msg);
+        if (serverLogLines.length > 500) serverLogLines.shift();
+        if (document.getElementById('panel-serverlog').classList.contains('active')) {
+          const el = document.getElementById('server-log');
+          const div = document.createElement('div');
+          if (msg.level === 'stderr') div.className = 'log-err';
+          div.textContent = msg.text;
+          // Remove placeholder
+          const placeholder = el.querySelector('div[style*="color:#666"]');
+          if (placeholder) placeholder.remove();
+          el.appendChild(div);
+          document.getElementById('log-count').textContent = serverLogLines.length + ' lines';
+          if (document.getElementById('log-autoscroll').checked) el.scrollTop = el.scrollHeight;
+        }
+      }
+
+      if (msg.type === 'configChanged') {
+        document.getElementById('restart-banner').style.display = 'block';
+        const active = document.querySelector('.tab.active')?.dataset.tab;
+        if (active === 'services' || active === 'channels') loadConfigData();
       }
     } catch {}
   };
 }
 connectWs();
 
-// Refresh stats periodically
 setInterval(updateStats, 30000);
 </script>
 </body>

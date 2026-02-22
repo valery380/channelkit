@@ -110,6 +110,11 @@ export class TelegramChannel extends Channel {
       this.emitMessage(unified);
     });
 
+    // Log unhandled middleware errors
+    this.bot.catch((err) => {
+      console.error(`[telegram:${this.name}] Unhandled error:`, err.message || err);
+    });
+
     // Start polling in background (don't await — it blocks)
     this.bot.start({
       onStart: (botInfo) => {

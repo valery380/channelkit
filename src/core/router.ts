@@ -80,6 +80,17 @@ export class Router {
   }
 
   /**
+   * Get services for a channel with their names, for building service lists.
+   */
+  getNamedServicesForChannel(channelName: string): Array<{ name: string; config: ServiceConfig }> {
+    const result: Array<{ name: string; config: ServiceConfig }> = [];
+    for (const [name, svc] of this.services.entries()) {
+      if (svc.channel === channelName) result.push({ name, config: svc });
+    }
+    return result;
+  }
+
+  /**
    * Find the service config that would handle this message
    */
   findServiceConfig(message: UnifiedMessage): ServiceConfig | undefined {

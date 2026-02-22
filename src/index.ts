@@ -22,7 +22,7 @@ export class ChannelKit {
   private onboarding?: Onboarding;
   private tunnel?: TunnelManager;
 
-  constructor(private config: AppConfig) {
+  constructor(private config: AppConfig, private configPath?: string) {
     this.router = new Router(config.services, config.routes);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
@@ -36,6 +36,22 @@ export class ChannelKit {
   async start(): Promise<void> {
     let whatsappChannel: WhatsAppChannel | undefined;
     let telegramChannel: TelegramChannel | undefined;
+
+    // Detect duplicate Telegram bot tokens before connecting (causes 409 Conflict)
+    const telegramTokensSeen = new Map<string, string>(); // token → first channel name
+    for (const [name, cfg] of Object.entries(this.config.channels)) {
+      if (cfg.type === 'telegram') {
+        const token = (cfg as any).bot_token as string;
+        if (telegramTokensSeen.has(token)) {
+          console.error(
+            `[channelkit] ERROR: Channels "${telegramTokensSeen.get(token)}" and "${name}" share the same Telegram bot token. ` +
+            `Remove the duplicate from config.yaml or the dashboard before starting.`
+          );
+          process.exit(1);
+        }
+        telegramTokensSeen.set(token, name);
+      }
+    }
 
     // Initialize channels
     for (const [name, channelConfig] of Object.entries(this.config.channels)) {
@@ -135,7 +151,8 @@ export class ChannelKit {
         // Try onboarding first for DMs (only in groups mode)
         const mode = this.router.getChannelMode(channel.name);
         if (this.onboarding && !message.groupId && mode === 'groups') {
-          const handled = await this.onboarding.handleDirectMessage(message);
+          const channelUnmatched = (this.config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
+          const handled = await this.onboarding.handleDirectMessage(message, channelUnmatched);
           if (handled) {
             this.logger.log({
               id: message.id,
@@ -197,6 +214,28 @@ export class ChannelKit {
         const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
         let response = await this.router.route(message, replyUrl, { sttTranscription });
 
+        // If no service matched, check channel's unmatched policy.
+        // Only applies to DMs (no groupId) — group messages imply a pre-existing
+        // service mapping that is simply unavailable (e.g. after restart), so
+        // sending a service list there would be confusing.
+        if (!response && !message.groupId) {
+          const channelCfg = this.config.channels[channel.name];
+          if (channelCfg?.unmatched === 'list') {
+            const svcs = this.router.getNamedServicesForChannel(channel.name);
+            if (svcs.length > 0) {
+              const lines = svcs.map(({ name, config: svc }) => {
+                if (svc.command) {
+                  const cmd = svc.command.startsWith('/') ? svc.command : `/${svc.command}`;
+                  return `• ${name} — use ${cmd}`;
+                }
+                if (svc.code) return `• ${name} — send "${svc.code.toUpperCase()}" to connect`;
+                return `• ${name}`;
+              });
+              await channel.send(replyTo, { text: `Available services:\n${lines.join('\n')}` });
+            }
+          }
+        }
+
         // TTS: convert text to voice if webhook requested it
         let ttsGenerated = false;
         if (response && serviceConfig) {
@@ -241,6 +280,10 @@ export class ChannelKit {
 
     // Start API server + connect all channels
     await this.apiServer.start();
+    if (this.configPath) {
+      this.apiServer.setConfigPath(this.configPath);
+    }
+    this.apiServer.captureConsole();
 
     // Start tunnel if configured
     if (this.config.tunnel) {
@@ -258,7 +301,12 @@ export class ChannelKit {
       }
     }
 
-    await Promise.all(this.channels.map((ch) => ch.connect()));
+    const connectResults = await Promise.allSettled(this.channels.map((ch) => ch.connect()));
+    connectResults.forEach((result, i) => {
+      if (result.status === 'rejected') {
+        console.error(`[channelkit] Failed to connect channel "${this.channels[i].name}": ${result.reason?.message || result.reason}`);
+      }
+    });
     console.log('Listening for messages...');
   }
 

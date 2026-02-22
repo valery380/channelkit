@@ -1,5 +1,13 @@
 export interface ChannelConfig {
   type: string;
+  /** Explicit routing mode set at channel creation.
+   *  'service' — single service, no codes or commands needed
+   *  'groups'  — multiple services, uses magic codes / slash commands */
+  mode?: 'service' | 'groups';
+  /** What to do when a message arrives but no service is matched (groups mode only).
+   *  'list'   — reply with a list of available services
+   *  'ignore' — silently drop the message (default) */
+  unmatched?: 'list' | 'ignore';
   [key: string]: unknown;
 }
 

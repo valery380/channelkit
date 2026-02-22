@@ -23,15 +23,16 @@ export class Onboarding {
 
   /**
    * Handle a direct message for onboarding. Returns true if handled.
+   * @param unmatchedPolicy - what to do when no code matches ('list' = send menu, 'ignore' or undefined = silent)
    */
-  async handleDirectMessage(message: UnifiedMessage): Promise<boolean> {
+  async handleDirectMessage(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
     if (message.groupId) return false;
 
     if (message.channel === 'whatsapp') {
-      return this.handleWhatsApp(message);
+      return this.handleWhatsApp(message, unmatchedPolicy);
     }
     if (message.channel === 'telegram') {
-      return this.handleTelegram(message);
+      return this.handleTelegram(message, unmatchedPolicy);
     }
     return false;
   }
@@ -48,7 +49,7 @@ export class Onboarding {
 
   // --- WhatsApp ---
 
-  private async handleWhatsApp(message: UnifiedMessage): Promise<boolean> {
+  private async handleWhatsApp(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
     if (!this.whatsappChannel) return false;
 
     const codes = this.getCodesForChannel('whatsapp');
@@ -75,8 +76,8 @@ export class Onboarding {
       return true;
     }
 
-    // No match — send menu
-    if (codes.length > 0) {
+    // No match — send menu only if the channel's unmatched policy is 'list'
+    if (unmatchedPolicy === 'list' && codes.length > 0) {
       const codeList = codes.map(c => c.code).join(' or ');
       await this.whatsappChannel.sendToJid(
         message.from,
@@ -121,7 +122,7 @@ export class Onboarding {
 
   // --- Telegram ---
 
-  private async handleTelegram(message: UnifiedMessage): Promise<boolean> {
+  private async handleTelegram(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
     if (!this.telegramChannel) return false;
 
     const codes = this.getCodesForChannel('telegram');
@@ -160,8 +161,8 @@ export class Onboarding {
       return false;
     }
 
-    // No match, no mapping — send menu
-    if (codes.length > 0) {
+    // No match, no mapping — send menu only if the channel's unmatched policy is 'list'
+    if (unmatchedPolicy === 'list' && codes.length > 0) {
       const codeList = codes.map(c => `\`${c.code}\` → ${c.name}`).join('\n');
       await this.telegramChannel.sendToChat(
         message.from,

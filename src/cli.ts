@@ -382,7 +382,7 @@ async function startCommand(configPath: string, opts: { tunnel?: boolean; public
     }
   }
 
-  const kit = new ChannelKit(config);
+  const kit = new ChannelKit(config, configPath);
 
   process.on('SIGINT', () => {
     console.log(c('yellow', '\n  Shutting down...'));
@@ -692,6 +692,16 @@ service
     }
 
     const removed = config.services[name];
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const confirm = await ask(rl, `Remove service "${name}" (channel: ${removed.channel})? [y/N]`, 'N');
+    rl.close();
+
+    if (confirm.toLowerCase() !== 'y') {
+      console.log(c('dim', '\n  Cancelled.\n'));
+      process.exit(0);
+    }
+
     delete config.services[name];
     saveConfig(configPath, config);
 

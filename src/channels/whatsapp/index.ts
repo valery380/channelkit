@@ -91,10 +91,23 @@ export class WhatsAppChannel extends Channel {
 
   private sock: WASocket | null = null;
   private authDir: string;
+  private reconnectAttempts = 0;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 10;
 
   constructor(name: string, config: WhatsAppChannelConfig, authDir = './auth') {
     super(name, config);
     this.authDir = join(authDir, `whatsapp-${name}`);
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= WhatsAppChannel.MAX_RECONNECT_ATTEMPTS) {
+      console.error(`[whatsapp:${this.name}] Giving up after ${WhatsAppChannel.MAX_RECONNECT_ATTEMPTS} reconnect attempts`);
+      return;
+    }
+    const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000);
+    this.reconnectAttempts++;
+    console.log(`[whatsapp:${this.name}] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${WhatsAppChannel.MAX_RECONNECT_ATTEMPTS})...`);
+    setTimeout(() => this.connect(), delay);
   }
 
   getSocket(): WASocket | null {
@@ -115,11 +128,23 @@ export class WhatsAppChannel extends Channel {
   async connect(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
 
+    const silentLogger = {
+      level: 'silent' as const,
+      child: () => silentLogger,
+      trace: () => {},
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fatal: () => {},
+    };
+
     this.sock = makeWASocket({
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
+        keys: makeCacheableSignalKeyStore(state.keys, silentLogger as any),
       },
+      logger: silentLogger as any,
     });
 
     this.sock.ev.on('creds.update', saveCreds);
@@ -151,12 +176,12 @@ export class WhatsAppChannel extends Channel {
       if (connection === 'close') {
         const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
         if (reason !== DisconnectReason.loggedOut) {
-          console.log(`[whatsapp:${this.name}] Reconnecting...`);
-          this.connect();
+          this.scheduleReconnect();
         } else {
           console.log(`[whatsapp:${this.name}] Logged out`);
         }
       } else if (connection === 'open') {
+        this.reconnectAttempts = 0;
         console.log(`✅ WhatsApp connected: ${this.name}`);
       }
     });

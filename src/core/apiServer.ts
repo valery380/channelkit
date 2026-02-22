@@ -5,6 +5,7 @@ import { join } from 'path';
 import { readFileSync } from 'fs';
 import { Channel } from '../channels/base';
 import { Logger } from './logger';
+import { loadConfig, saveConfig } from '../config/parser';
 
 export class ApiServer {
   private app = express();
@@ -16,6 +17,8 @@ export class ApiServer {
   private logger?: Logger;
   private startTime = Date.now();
   private publicUrl: string | null = null;
+  private configPath?: string;
+  private serverLogBuffer: Array<{ level: string; text: string; ts: number }> = [];
   findVoiceConfig?: (channelName: string) => any;
 
   constructor(private port: number = 4000) {
@@ -35,6 +38,25 @@ export class ApiServer {
         }
       });
     });
+  }
+
+  setConfigPath(path: string): void {
+    this.configPath = path;
+  }
+
+  captureConsole(): void {
+    const capture = (level: string, data: any) => {
+      const text = String(data).replace(/\r?\n$/, '');
+      if (!text) return;
+      const entry = { level, text, ts: Date.now() };
+      this.serverLogBuffer.push(entry);
+      if (this.serverLogBuffer.length > 500) this.serverLogBuffer.shift();
+      this.broadcast({ type: 'serverLog', ...entry });
+    };
+    const origOut = process.stdout.write.bind(process.stdout);
+    const origErr = process.stderr.write.bind(process.stderr);
+    (process.stdout as any).write = (d: any, ...a: any[]) => { capture('stdout', d); return origOut(d, ...a); };
+    (process.stderr as any).write = (d: any, ...a: any[]) => { capture('stderr', d); return origErr(d, ...a); };
   }
 
   private broadcast(msg: any): void {
@@ -92,7 +114,7 @@ export class ApiServer {
       try {
         await channel.send(decodeURIComponent(jid), { text, media });
         console.log(`[api] Sent async message via ${channelName} to ${jid}`);
-        
+
         // Log async message
         if (this.logger) {
           this.logger.log({
@@ -109,11 +131,11 @@ export class ApiServer {
             latency: Date.now() - start,
           });
         }
-        
+
         res.json({ ok: true });
       } catch (err: any) {
         console.error(`[api] Failed to send:`, err);
-        
+
         if (this.logger) {
           this.logger.log({
             id: `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -129,7 +151,7 @@ export class ApiServer {
             latency: Date.now() - start,
           });
         }
-        
+
         res.status(500).json({ error: err.message });
       }
     });
@@ -306,6 +328,225 @@ export class ApiServer {
         uptime: Date.now() - this.startTime,
         channels: [...this.channels.keys()],
       });
+    });
+
+    // DELETE /api/logs — clear all log entries from the database
+    this.app.delete('/api/logs', (_req, res) => {
+      if (!this.logger) { res.json({ ok: true }); return; }
+      this.logger.clear();
+      res.json({ ok: true });
+    });
+
+    // GET /api/server-logs — return captured stdout/stderr buffer
+    this.app.get('/api/server-logs', (_req, res) => {
+      res.json(this.serverLogBuffer);
+    });
+
+    // DELETE /api/server-logs — clear the server log buffer
+    this.app.delete('/api/server-logs', (_req, res) => {
+      this.serverLogBuffer = [];
+      res.json({ ok: true });
+    });
+
+    // GET /api/config — return channels and services from config file
+    this.app.get('/api/config', (_req, res) => {
+      if (!this.configPath) {
+        res.status(503).json({ error: 'Config path not set' });
+        return;
+      }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        res.json({ channels: config.channels, services: config.services || {} });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/config/services — add a new service
+    this.app.post('/api/config/services', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name, channel, webhook, code, command } = req.body;
+      if (!name || !channel || !webhook) {
+        res.status(400).json({ error: 'name, channel, and webhook are required' });
+        return;
+      }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.services) config.services = {};
+        if (config.services[name]) {
+          res.status(409).json({ error: `Service "${name}" already exists` });
+          return;
+        }
+        if (!config.channels[channel]) {
+          res.status(400).json({ error: `Channel "${channel}" does not exist` });
+          return;
+        }
+        config.services[name] = { channel, webhook, ...(code && { code }), ...(command && { command }) };
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/config/services/:name — update service fields (webhook, code, command)
+    this.app.put('/api/config/services/:name', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      const { webhook, code, command } = req.body;
+      if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.services?.[name]) {
+          res.status(404).json({ error: `Service "${name}" not found` });
+          return;
+        }
+        config.services[name].webhook = webhook;
+        if (code) { config.services[name].code = code; } else { delete config.services[name].code; }
+        if (command) { config.services[name].command = command; } else { delete config.services[name].command; }
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // DELETE /api/config/services/:name — remove a service
+    this.app.delete('/api/config/services/:name', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.services?.[name]) {
+          res.status(404).json({ error: `Service "${name}" not found` });
+          return;
+        }
+        delete config.services![name];
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/config/channels — add a new channel
+    this.app.post('/api/config/channels', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name, ...fields } = req.body;
+      if (!name || !fields.type) {
+        res.status(400).json({ error: 'name and type are required' });
+        return;
+      }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (config.channels[name]) {
+          res.status(409).json({ error: `Channel "${name}" already exists` });
+          return;
+        }
+        config.channels[name] = fields;
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/config/channels/:name — update channel settings (unmatched policy)
+    this.app.put('/api/config/channels/:name', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      const { unmatched } = req.body;
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.channels[name]) {
+          res.status(404).json({ error: `Channel "${name}" not found` });
+          return;
+        }
+        if (unmatched) {
+          config.channels[name].unmatched = unmatched;
+        } else {
+          delete config.channels[name].unmatched;
+        }
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // DELETE /api/config/channels/:name — remove a channel and its dependent services
+    this.app.delete('/api/config/channels/:name', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.channels[name]) {
+          res.status(404).json({ error: `Channel "${name}" not found` });
+          return;
+        }
+        delete config.channels[name];
+        // Remove all services that reference this channel
+        if (config.services) {
+          for (const [svcName, svc] of Object.entries(config.services)) {
+            if (svc.channel === name) delete config.services[svcName];
+          }
+        }
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/restart — restart the ChannelKit process
+    this.app.post('/api/restart', (_req, res) => {
+      res.json({ ok: true });
+      setTimeout(async () => {
+        const { spawn } = await import('child_process');
+        const { join } = await import('path');
+        const { existsSync } = await import('fs');
+        // tsx strips itself from process.argv, so argv[1] is the .ts entry
+        // file (not the tsx binary). Detect this and re-spawn via tsx so its
+        // ESM hooks are registered; otherwise Node will reject .ts extensions.
+        const argv1 = process.argv[1] || '';
+        const tsxBin = join(process.cwd(), 'node_modules', '.bin', 'tsx');
+        const tsxCmd = existsSync(tsxBin) ? tsxBin : 'tsx';
+        let cmd: string;
+        let args: string[];
+        if (argv1.endsWith('.ts')) {
+          // tsx stripped itself: argv = [node, src/cli.ts, start, ...]
+          cmd = tsxCmd;
+          args = process.argv.slice(1); // ['src/cli.ts', 'start', ...]
+        } else if (argv1.includes('tsx')) {
+          // tsx present as argv[1]: argv = [node, /path/tsx, src/cli.ts, ...]
+          cmd = tsxCmd;
+          args = process.argv.slice(2); // ['src/cli.ts', 'start', ...]
+        } else {
+          // Compiled JS — spawn node directly
+          cmd = process.execPath;
+          args = process.argv.slice(1);
+        }
+        // Gracefully disconnect all channels before spawning the new process.
+        // This is critical for Telegram (grammY) — if getUpdates is still active
+        // when the new process starts polling with the same token, Telegram
+        // returns 409 Conflict. Awaiting disconnect() lets grammY finish cleanly.
+        await Promise.allSettled([...this.channels.values()].map(ch => ch.disconnect()));
+
+        const child = spawn(cmd, args, {
+          detached: true,
+          stdio: 'inherit',
+          env: process.env,
+          cwd: process.cwd(),
+        });
+        child.unref();
+        process.exit(0);
+      }, 300);
     });
 
     // GET /dashboard — serve the HTML dashboard

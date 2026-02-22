@@ -99,6 +99,10 @@ export class Logger extends EventEmitter {
     this.emit('entry', entry);
   }
 
+  clear(): void {
+    this.db.prepare('DELETE FROM logs').run();
+  }
+
   getAll(): LogEntry[] {
     return this.db.prepare(
       'SELECT * FROM logs ORDER BY timestamp DESC LIMIT 1000'
@@ -131,9 +135,9 @@ export class Logger extends EventEmitter {
     ).all(...params, limit).map(this.rowToEntry);
   }
 
-  getStats(): { total: number; byChannel: Record<string, number>; avgLatency: number } {
+  getStats(): { total: number; byChannel: Record<string, number>; avgLatency: number; errorCount: number } {
     const total = (this.db.prepare('SELECT COUNT(*) as count FROM logs').get() as any).count;
-    
+
     const channels = this.db.prepare(
       'SELECT channel, COUNT(*) as count FROM logs GROUP BY channel'
     ).all() as any[];
@@ -146,10 +150,15 @@ export class Logger extends EventEmitter {
       'SELECT AVG(latency_ms) as avg FROM logs WHERE latency_ms IS NOT NULL'
     ).get() as any).avg;
 
+    const errorCount = (this.db.prepare(
+      "SELECT COUNT(*) as count FROM logs WHERE status = 'error'"
+    ).get() as any).count;
+
     return {
       total,
       byChannel,
       avgLatency: Math.round(avg || 0),
+      errorCount,
     };
   }
 
