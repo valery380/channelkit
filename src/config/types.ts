@@ -33,6 +33,15 @@ export interface ResendChannelConfig extends ChannelConfig {
 
 export type EmailChannelConfig = GmailChannelConfig | ResendChannelConfig;
 
+export interface TwilioSMSChannelConfig extends ChannelConfig {
+  type: 'sms';
+  provider: 'twilio';
+  account_sid: string;
+  auth_token: string;
+  number: string;             // Twilio phone number (e.g. +12025551234)
+  poll_interval?: number;     // seconds — if set, poll for inbound SMS (no public URL needed)
+}
+
 export interface STTServiceConfig {
   provider: 'google' | 'whisper' | 'deepgram';
   language?: string;                // e.g. 'he-IL', 'en-US' — primary language
@@ -76,6 +85,11 @@ export interface DashboardConfig {
   enabled?: boolean;
 }
 
+export interface TunnelConfig {
+  provider?: 'cloudflared';
+  public_url?: string;
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -84,4 +98,5 @@ export interface AppConfig {
   onboarding?: OnboardingConfig;
   apiPort?: number;
   dashboard?: DashboardConfig;
+  tunnel?: TunnelConfig;
 }

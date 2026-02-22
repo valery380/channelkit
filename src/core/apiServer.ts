@@ -14,6 +14,7 @@ export class ApiServer {
   private channels: Map<string, Channel> = new Map();
   private logger?: Logger;
   private startTime = Date.now();
+  private publicUrl: string | null = null;
 
   constructor(private port: number = 4000) {
     this.app.use(express.json());
@@ -38,8 +39,12 @@ export class ApiServer {
     this.channels.set(name, channel);
   }
 
+  setPublicUrl(url: string): void {
+    this.publicUrl = url.replace(/\/$/, '');
+  }
+
   getBaseUrl(): string {
-    return `http://localhost:${this.port}`;
+    return this.publicUrl || `http://localhost:${this.port}`;
   }
 
   getReplyUrl(channelName: string, jid: string): string {
@@ -106,6 +111,24 @@ export class ApiServer {
         }
         
         res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /inbound/twilio/:channel — Twilio SMS inbound webhook
+    this.app.post('/inbound/twilio/:channel', express.urlencoded({ extended: false }), (req, res) => {
+      const channelName = req.params.channel;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).handleInbound) {
+        res.status(404).send('<Response></Response>');
+        return;
+      }
+      try {
+        (channel as any).handleInbound(req.body);
+        // Twilio expects TwiML response — empty response means no auto-reply
+        res.type('text/xml').send('<Response></Response>');
+      } catch (err: any) {
+        console.error(`[twilio-inbound] Error:`, err);
+        res.type('text/xml').send('<Response></Response>');
       }
     });
 

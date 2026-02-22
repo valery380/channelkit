@@ -79,6 +79,7 @@ async function initCommand() {
       '📱 WhatsApp — connect with your phone number',
       '💬 Telegram — create a bot',
       '📧 Email — Gmail or Resend',
+      '📲 SMS — Twilio',
     ]);
 
     const channels: Record<string, any> = {};
@@ -190,6 +191,26 @@ async function initCommand() {
           from_email: fromEmail,
         };
       }
+    } else if (channelIdx === 3) {
+      // SMS (Twilio)
+      console.log(c('bright', '\n  📝 Twilio SMS Setup:\n'));
+      console.log(c('dim', '  You need a Twilio account with a phone number.'));
+      console.log(c('dim', '  Get credentials at: https://console.twilio.com\n'));
+
+      const accountSid = await ask(rl, 'Account SID:');
+      const authToken = await ask(rl, 'Auth Token:');
+      const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
+      const pollInterval = await ask(rl, 'Poll interval in seconds (0 = webhook mode):', '10');
+
+      channelName = 'sms';
+      channels[channelName] = {
+        type: 'sms',
+        provider: 'twilio',
+        account_sid: accountSid,
+        auth_token: authToken,
+        number,
+        ...(parseInt(pollInterval) > 0 ? { poll_interval: parseInt(pollInterval) } : {}),
+      };
     }
 
     // Step 2: Generate config
@@ -276,7 +297,7 @@ async function initCommand() {
   }
 }
 
-async function startCommand(configPath: string) {
+async function startCommand(configPath: string, opts: { tunnel?: boolean; publicUrl?: string } = {}) {
   banner();
 
   console.log(c('dim', `  Loading config from ${configPath}\n`));
@@ -289,11 +310,29 @@ async function startCommand(configPath: string) {
     process.exit(1);
   }
 
+  // Apply CLI tunnel overrides
+  if (opts.tunnel) {
+    config.tunnel = { ...config.tunnel, provider: 'cloudflared' };
+  }
+  if (opts.publicUrl) {
+    config.tunnel = { ...config.tunnel, public_url: opts.publicUrl };
+  }
+
   const channelCount = Object.keys(config.channels).length;
   const serviceCount = Object.keys(config.services || {}).length;
   const routeCount = (config.routes || []).length;
   const totalBindings = serviceCount + routeCount;
   console.log(c('dim', `  ${channelCount} channel(s), ${totalBindings} service(s) configured\n`));
+
+  const port = config.apiPort || 4000;
+
+  if (config.tunnel) {
+    if (config.tunnel.public_url) {
+      console.log(c('magenta', `  📡 Using public URL: ${config.tunnel.public_url}\n`));
+    } else if (config.tunnel.provider === 'cloudflared') {
+      console.log(c('blue', `  💡 Your API port is ${port}. Point your tunnel to http://localhost:${port}\n`));
+    }
+  }
 
   const kit = new ChannelKit(config);
 
@@ -350,9 +389,11 @@ program
   .command('start')
   .description('Start ChannelKit')
   .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .option('--tunnel', 'Start a cloudflared tunnel automatically')
+  .option('--public-url <url>', 'Use a manual public URL')
   .action(async (opts) => {
     const configPath = resolve(opts.config);
-    await startCommand(configPath);
+    await startCommand(configPath, { tunnel: opts.tunnel, publicUrl: opts.publicUrl });
   });
 
 // Service management commands

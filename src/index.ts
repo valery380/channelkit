@@ -5,10 +5,12 @@ import { Channel } from './channels/base';
 import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
 import { GmailChannel, ResendChannel } from './channels/email';
+import { TwilioSMSChannel } from './channels/sms';
 import { Onboarding } from './onboarding';
 import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
 import { processInbound, processOutbound } from './media/processor';
+import { TunnelManager } from './core/tunnel';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -17,6 +19,7 @@ export class ChannelKit {
   private apiServer: ApiServer;
   private logger: Logger;
   private onboarding?: Onboarding;
+  private tunnel?: TunnelManager;
 
   constructor(private config: AppConfig) {
     this.router = new Router(config.services, config.routes);
@@ -55,6 +58,10 @@ export class ChannelKit {
             console.warn(`Unknown email provider: ${emailConfig.provider}`);
             continue;
           }
+          break;
+        }
+        case 'sms': {
+          channel = new TwilioSMSChannel(name, channelConfig as any);
           break;
         }
         default:
@@ -217,11 +224,61 @@ export class ChannelKit {
 
     // Start API server + connect all channels
     await this.apiServer.start();
+
+    // Start tunnel if configured
+    if (this.config.tunnel) {
+      const port = this.config.apiPort || 4000;
+      this.tunnel = new TunnelManager(this.config.tunnel, port);
+      try {
+        await this.tunnel.start();
+        const publicUrl = this.tunnel.getPublicUrl();
+        if (publicUrl) {
+          this.apiServer.setPublicUrl(publicUrl);
+          await this.autoConfigureWebhooks(publicUrl);
+        }
+      } catch (err: any) {
+        console.error(`[tunnel] Failed to start tunnel: ${err.message}`);
+      }
+    }
+
     await Promise.all(this.channels.map((ch) => ch.connect()));
     console.log('Listening for messages...');
   }
 
+  private async autoConfigureWebhooks(publicUrl: string): Promise<void> {
+    for (const [name, channelConfig] of Object.entries(this.config.channels)) {
+      // Auto-configure Twilio webhook for SMS channels
+      if (channelConfig.type === 'sms' || (channelConfig as any).account_sid) {
+        try {
+          const twilioConfig = channelConfig as any;
+          if (twilioConfig.account_sid && twilioConfig.auth_token && twilioConfig.number_sid) {
+            const { TwilioProvisioner } = await import('./provisioning/twilio');
+            const twilio = new TwilioProvisioner({
+              accountSid: twilioConfig.account_sid,
+              authToken: twilioConfig.auth_token,
+            });
+            const webhookUrl = `${publicUrl}/inbound/twilio/${name}`;
+            await (twilio as any).client.incomingPhoneNumbers(twilioConfig.number_sid).update({
+              smsUrl: webhookUrl,
+            });
+            console.log(`📱 Updated Twilio webhook for ${twilioConfig.phone_number || name}`);
+          }
+        } catch (err: any) {
+          console.error(`[tunnel] Failed to update Twilio webhook for ${name}: ${err.message}`);
+        }
+      }
+
+      // Print Resend inbound webhook info
+      if (channelConfig.type === 'email' && (channelConfig as any).provider === 'resend') {
+        console.log(`📬 Resend inbound webhook: ${publicUrl}/inbound/resend/${name}`);
+      }
+    }
+  }
+
   async stop(): Promise<void> {
+    if (this.tunnel) {
+      await this.tunnel.stop();
+    }
     await this.apiServer.stop();
     await Promise.all(this.channels.map((ch) => ch.disconnect()));
   }
