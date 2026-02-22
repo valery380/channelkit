@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 import { Command } from 'commander';
-import { resolve, join } from 'path';
-import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { resolve, join, dirname } from 'path';
+import { existsSync, writeFileSync, readFileSync, appendFileSync, mkdirSync } from 'fs';
 import { createInterface } from 'readline';
 import { loadConfig } from './config/parser';
 import { ChannelKit } from './index';
@@ -61,6 +62,69 @@ async function select(rl: ReturnType<typeof createInterface>, question: string, 
     const num = parseInt(answer);
     if (num >= 1 && num <= options.length) return num - 1;
     console.log(c('yellow', '    Please enter a valid number'));
+  }
+}
+
+// --- .env helper ---
+const API_KEY_INFO: Record<string, { envVar: string; hint: string }> = {
+  google:     { envVar: 'GOOGLE_API_KEY',     hint: 'Get one at https://console.cloud.google.com/apis/credentials' },
+  whisper:    { envVar: 'OPENAI_API_KEY',     hint: 'Get one at https://platform.openai.com/api-keys' },
+  deepgram:   { envVar: 'DEEPGRAM_API_KEY',   hint: 'Get one at https://console.deepgram.com' },
+  elevenlabs: { envVar: 'ELEVENLABS_API_KEY', hint: 'Get one at https://elevenlabs.io/api' },
+  openai:     { envVar: 'OPENAI_API_KEY',     hint: 'Get one at https://platform.openai.com/api-keys' },
+};
+
+function readEnvFile(envPath: string): Record<string, string> {
+  if (!existsSync(envPath)) return {};
+  const content = readFileSync(envPath, 'utf-8');
+  const vars: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    vars[key] = val;
+  }
+  return vars;
+}
+
+function saveEnvVar(envPath: string, key: string, value: string): void {
+  const existing = readEnvFile(envPath);
+  if (existing[key]) return; // already set
+  const line = `${key}=${value}\n`;
+  appendFileSync(envPath, line);
+}
+
+async function promptApiKey(
+  rl: ReturnType<typeof createInterface>,
+  provider: string,
+  configPath: string,
+): Promise<void> {
+  const info = API_KEY_INFO[provider];
+  if (!info) return;
+
+  const envPath = join(dirname(resolve(configPath)), '.env');
+  const envVars = readEnvFile(envPath);
+
+  // Already set in process.env or .env file
+  if (process.env[info.envVar] || envVars[info.envVar]) {
+    console.log(c('dim', `\n  ✓ ${info.envVar} already set`));
+    return;
+  }
+
+  console.log(c('dim', `\n  ${info.hint}`));
+  const value = await ask(rl, `${info.envVar}:`);
+  if (value) {
+    saveEnvVar(envPath, info.envVar, value);
+    process.env[info.envVar] = value;
+    console.log(c('green', `  ✓ Saved to .env`));
+    console.log(c('yellow', `  💡 Make sure .env is in your .gitignore`));
   }
 }
 
@@ -553,7 +617,7 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       const sttProvider = ['google', 'whisper', 'deepgram'][sttProviderIdx];
       const sttLanguage = await ask(rl, 'Primary language (e.g. en-US, he-IL):', 'en-US');
       stt = { provider: sttProvider, language: sttLanguage };
-      console.log(c('dim', `\n  💡 Set ${sttProvider.toUpperCase()}_API_KEY env var before starting.\n`));
+      await promptApiKey(rl, sttProvider, opts.config);
     }
 
     const enableTts = await ask(rl, 'Enable text-to-speech for responses? (y/N):', 'N');
@@ -566,7 +630,7 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       const ttsProvider = ['google', 'elevenlabs', 'openai'][ttsProviderIdx];
       const ttsVoice = await ask(rl, 'Voice ID (optional, press Enter to skip):');
       tts = { provider: ttsProvider, ...(ttsVoice ? { voice: ttsVoice } : {}) };
-      console.log(c('dim', `\n  💡 Set ${ttsProvider.toUpperCase()}_API_KEY env var before starting.\n`));
+      await promptApiKey(rl, ttsProvider, opts.config);
     }
 
     // Voice-specific config
