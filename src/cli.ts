@@ -1279,4 +1279,32 @@ provision
     }
   });
 
+program
+  .command('demo')
+  .description('Run the built-in echo/demo server')
+  .option('-p, --port <port>', 'Port to listen on', '3000')
+  .action(async (opts) => {
+    const port = parseInt(opts.port, 10);
+    const { resolve } = await import('path');
+    const { fork } = await import('child_process');
+
+    // Find echo-server.js relative to the package
+    const candidates = [
+      resolve(__dirname, '..', 'echo-server.js'),
+      resolve(process.cwd(), 'echo-server.js'),
+    ];
+
+    const { existsSync } = await import('fs');
+    const echoPath = candidates.find(p => existsSync(p));
+
+    if (!echoPath) {
+      console.error('  ❌ echo-server.js not found');
+      process.exit(1);
+    }
+
+    console.log(`\n  🔗 Starting demo echo server on port ${port}...\n`);
+    const child = fork(echoPath, [], { env: { ...process.env, PORT: String(port) }, stdio: 'inherit' });
+    child.on('exit', (code) => process.exit(code || 0));
+  });
+
 program.parse();
