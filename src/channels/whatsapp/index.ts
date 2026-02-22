@@ -13,6 +13,61 @@ import { WhatsAppChannelConfig } from '../../config/types';
 import { UnifiedMessage, WebhookResponse } from '../../core/types';
 
 export class WhatsAppChannel extends Channel {
+  /**
+   * Pair a new WhatsApp device by showing a QR code.
+   * Creates a temporary Baileys connection, waits for successful pairing, then disconnects.
+   * Auth state is persisted to authDir for later use by connect().
+   */
+  static async pair(authDir: string): Promise<void> {
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+
+    const sock = makeWASocket({
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
+      },
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    return new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        sock.end(undefined);
+        reject(new Error('QR pairing timed out after 60s'));
+      }, 60000);
+
+      sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          import('qrcode-terminal').then(({ default: qrcode }) => {
+            qrcode.generate(qr, { small: true }, (output: string) => {
+              const indented = output.split('\n').map(line => '     ' + line).join('\n');
+              console.log(indented);
+            });
+          }).catch(() => {
+            console.log(`\n  📱 QR Code: ${qr}\n`);
+          });
+        }
+
+        if (connection === 'open') {
+          clearTimeout(timeout);
+          sock.end(undefined);
+          resolve();
+        }
+
+        if (connection === 'close') {
+          const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
+          if (reason === DisconnectReason.loggedOut) {
+            clearTimeout(timeout);
+            sock.end(undefined);
+            reject(new Error('WhatsApp logged out during pairing'));
+          }
+        }
+      });
+    });
+  }
+
   private sock: WASocket | null = null;
   private authDir: string;
 
@@ -104,10 +159,6 @@ export class WhatsAppChannel extends Channel {
             const mimetype = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
             const seconds = msg.message.audioMessage.seconds || 0;
             console.log(`[whatsapp:${this.name}] Downloaded audio: ${(buffer as Buffer).length} bytes, ${seconds}s, ${mimetype}`);
-            // Debug: save audio to temp file
-            const fs = await import('fs');
-            fs.writeFileSync('/tmp/channelkit-debug-audio.ogg', buffer as Buffer);
-            console.log(`[whatsapp:${this.name}] Saved debug audio to /tmp/channelkit-debug-audio.ogg`);
             unified.media = { buffer: buffer as Buffer, mimetype };
           } catch (err) {
             console.error(`[whatsapp:${this.name}] Failed to download audio:`, err);

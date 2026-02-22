@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
 import { existsSync, writeFileSync, mkdirSync } from 'fs';
 import { createInterface } from 'readline';
 import { loadConfig } from './config/parser';
@@ -310,8 +310,17 @@ async function initCommand() {
     console.log();
     
     if (channels['whatsapp']) {
-      console.log(c('dim', '    3. Scan the QR code with WhatsApp'));
-      console.log(c('dim', '       (Settings → Linked Devices → Link a Device)\n'));
+      console.log(c('bright', '  Let\'s connect your WhatsApp now. Scan the QR code:\n'));
+      console.log(c('dim', '  Open WhatsApp → Settings → Linked Devices → Link a Device\n'));
+      try {
+        const { WhatsAppChannel } = await import('./channels/whatsapp');
+        const authPath = join('.', 'auth', `whatsapp-whatsapp`);
+        await WhatsAppChannel.pair(authPath);
+        console.log(c('green', '\n  ✅ WhatsApp connected!\n'));
+      } catch (err: any) {
+        console.log(c('yellow', `\n  ⚠️  Pairing failed: ${err.message}`));
+        console.log(c('dim', '  You can scan the QR code later when you start ChannelKit.\n'));
+      }
     }
 
     // Ask to set up a service
@@ -959,8 +968,18 @@ channel
 
       console.log(c('green', `\n  ✅ Channel "${channelName}" added!\n`));
 
-      if (channelName === 'whatsapp') {
-        console.log(c('dim', '  Start ChannelKit and scan the QR code to connect WhatsApp.\n'));
+      if (channelConfig.type === 'whatsapp') {
+        console.log(c('bright', '  Let\'s connect your WhatsApp now. Scan the QR code:\n'));
+        console.log(c('dim', '  Open WhatsApp → Settings → Linked Devices → Link a Device\n'));
+        try {
+          const { WhatsAppChannel } = await import('./channels/whatsapp');
+          const authPath = join('.', 'auth', `whatsapp-${channelName}`);
+          await WhatsAppChannel.pair(authPath);
+          console.log(c('green', '\n  ✅ WhatsApp connected!\n'));
+        } catch (err: any) {
+          console.log(c('yellow', `\n  ⚠️  Pairing failed: ${err.message}`));
+          console.log(c('dim', '  You can scan the QR code later when you start ChannelKit.\n'));
+        }
       } else if (channelName === 'telegram') {
         console.log(c('dim', '  Start ChannelKit to activate the Telegram bot.\n'));
       }
