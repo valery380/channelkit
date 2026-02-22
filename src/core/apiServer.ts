@@ -15,6 +15,7 @@ export class ApiServer {
   private logger?: Logger;
   private startTime = Date.now();
   private publicUrl: string | null = null;
+  findVoiceConfig?: (channelName: string) => any;
 
   constructor(private port: number = 4000) {
     this.app.use(express.json());
@@ -111,6 +112,61 @@ export class ApiServer {
         }
         
         res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /inbound/voice/:channel — Twilio Voice incoming call
+    this.app.post('/inbound/voice/:channel', express.urlencoded({ extended: false }), (req, res) => {
+      const channelName = req.params.channel;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).handleIncomingCall) {
+        res.type('text/xml').send('<Response><Say>Service unavailable.</Say><Hangup/></Response>');
+        return;
+      }
+      try {
+        // Find voice config from service
+        const voiceConfig = this.findVoiceConfig?.(channelName);
+        const twiml = (channel as any).handleIncomingCall(req.body, voiceConfig);
+        res.type('text/xml').send(twiml);
+      } catch (err: any) {
+        console.error(`[voice-inbound] Error:`, err);
+        res.type('text/xml').send('<Response><Say>An error occurred.</Say><Hangup/></Response>');
+      }
+    });
+
+    // POST /inbound/voice/:channel/recording — Twilio Voice recording callback
+    this.app.post('/inbound/voice/:channel/recording', express.urlencoded({ extended: false }), async (req, res) => {
+      const channelName = req.params.channel;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).handleRecording) {
+        res.type('text/xml').send('<Response><Hangup/></Response>');
+        return;
+      }
+      try {
+        const voiceConfig = this.findVoiceConfig?.(channelName);
+        const twiml = await (channel as any).handleRecording(req.body, voiceConfig);
+        res.type('text/xml').send(twiml);
+      } catch (err: any) {
+        console.error(`[voice-recording] Error:`, err);
+        res.type('text/xml').send('<Response><Say>An error occurred.</Say><Hangup/></Response>');
+      }
+    });
+
+    // POST /inbound/voice/:channel/respond/:callSid — Twilio Voice response redirect
+    this.app.post('/inbound/voice/:channel/respond/:callSid', express.urlencoded({ extended: false }), (req, res) => {
+      const { channel: channelName, callSid } = req.params;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).handleRespond) {
+        res.type('text/xml').send('<Response><Hangup/></Response>');
+        return;
+      }
+      try {
+        const voiceConfig = this.findVoiceConfig?.(channelName);
+        const twiml = (channel as any).handleRespond(callSid, voiceConfig);
+        res.type('text/xml').send(twiml);
+      } catch (err: any) {
+        console.error(`[voice-respond] Error:`, err);
+        res.type('text/xml').send('<Response><Hangup/></Response>');
       }
     });
 

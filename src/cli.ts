@@ -80,6 +80,7 @@ async function initCommand() {
       '💬 Telegram — create a bot',
       '📧 Email — Gmail or Resend',
       '📲 SMS — Twilio',
+      '📞 Voice — Twilio',
     ]);
 
     const channels: Record<string, any> = {};
@@ -212,6 +213,25 @@ async function initCommand() {
         number,
         ...(parseInt(pollInterval) > 0 ? { poll_interval: parseInt(pollInterval) } : {}),
       };
+    } else if (channelIdx === 4) {
+      // Voice (Twilio)
+      console.log(c('bright', '\n  📝 Twilio Voice Setup:\n'));
+      console.log(c('dim', '  Same Twilio account as SMS — uses a phone number for voice calls.\n'));
+
+      const accountSid = await ask(rl, 'Account SID:');
+      const authToken = await ask(rl, 'Auth Token:');
+      const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
+
+      channelName = 'voice';
+      channels[channelName] = {
+        type: 'voice',
+        provider: 'twilio',
+        account_sid: accountSid,
+        auth_token: authToken,
+        number,
+      };
+
+      console.log(c('yellow', '\n  ⚠️  Voice requires a public URL. Use --tunnel or --public-url when starting.\n'));
     }
 
     // Step 2: Generate config
@@ -697,6 +717,7 @@ channel
         '💬 Telegram — create a bot',
         '📧 Email — Gmail or Resend',
         '📲 SMS — Twilio',
+        '📞 Voice — Twilio',
       ]);
 
       let channelName: string = '';
@@ -853,6 +874,25 @@ channel
           number,
           ...(parseInt(pollInterval) > 0 ? { poll_interval: parseInt(pollInterval) } : {}),
         };
+
+      } else if (channelIdx === 4) {
+        // Voice (Twilio)
+        console.log(c('bright', '\n  📝 Twilio Voice Setup:\n'));
+
+        const accountSid = await ask(rl, 'Account SID:');
+        const authToken = await ask(rl, 'Auth Token:');
+        const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
+
+        channelName = await ask(rl, 'Channel name:', 'voice');
+        channelConfig = {
+          type: 'voice',
+          provider: 'twilio',
+          account_sid: accountSid,
+          auth_token: authToken,
+          number,
+        };
+
+        console.log(c('yellow', '\n  ⚠️  Voice requires a public URL. Use --tunnel or --public-url when starting.\n'));
       }
 
       config.channels[channelName] = channelConfig;

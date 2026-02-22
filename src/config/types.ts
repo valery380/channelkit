@@ -42,6 +42,14 @@ export interface TwilioSMSChannelConfig extends ChannelConfig {
   poll_interval?: number;     // seconds — if set, poll for inbound SMS (no public URL needed)
 }
 
+export interface TwilioVoiceChannelConfig extends ChannelConfig {
+  type: 'voice';
+  provider: 'twilio';
+  account_sid: string;
+  auth_token: string;
+  number: string;             // Twilio phone number
+}
+
 export interface STTServiceConfig {
   provider: 'google' | 'whisper' | 'deepgram';
   language?: string;                // e.g. 'he-IL', 'en-US' — primary language
@@ -54,6 +62,16 @@ export interface TTSServiceConfig {
   language?: string;        // e.g. 'he-IL' (for Google TTS)
 }
 
+export interface VoiceServiceConfig {
+  greeting?: string;        // what to say when answering (e.g. "Hi, how can I help?")
+  hold_message?: string;    // what to say while waiting for webhook response
+  hold_music?: string;      // URL to hold music (instead of hold_message)
+  max_record_seconds?: number; // max recording length, default 30
+  language?: string;        // TwiML <Say> language (e.g. 'he-IL')
+  voice_name?: string;      // TwiML <Say> voice (e.g. 'Polly.Joanna')
+  conversational?: boolean; // true = loop (record→respond→record), false = single exchange + hangup
+}
+
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
@@ -61,6 +79,7 @@ export interface ServiceConfig {
   command?: string;         // slash command for Telegram multi-service (e.g. 'support')
   stt?: STTServiceConfig;   // speech-to-text config
   tts?: TTSServiceConfig;   // text-to-speech config
+  voice?: VoiceServiceConfig; // voice call settings
 }
 
 // Legacy support
