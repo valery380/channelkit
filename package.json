@@ -12,7 +12,8 @@
     "dev": "NODE_NO_WARNINGS=1 tsx watch src/cli.ts start",
     "init": "NODE_NO_WARNINGS=1 tsx src/cli.ts init",
     "service": "NODE_NO_WARNINGS=1 tsx src/cli.ts service",
-    "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel"
+    "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel",
+    "demo": "NODE_NO_WARNINGS=1 tsx src/cli.ts demo"
   },
   "keywords": [
     "whatsapp",
