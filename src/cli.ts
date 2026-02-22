@@ -164,7 +164,7 @@ async function initCommand() {
 
     // Step 2: Webhook
     console.log();
-    const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000/api/chat');
+    const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000');
     services['default'] = { channel: channelName, webhook };
 
     // Step 3: Generate config
@@ -217,12 +217,19 @@ async function initCommand() {
     console.log(c('white', '  Next steps:\n'));
     console.log(c('dim', `    1. Make sure your webhook is running at ${webhook}`));
     console.log(c('dim', '    2. Start ChannelKit:\n'));
-    console.log(c('cyan', '       npx channelkit start'));
+    console.log(c('cyan', '       npm start'));
     console.log();
     
     if (channels['whatsapp']) {
       console.log(c('dim', '    3. Scan the QR code with WhatsApp'));
       console.log(c('dim', '       (Settings → Linked Devices → Link a Device)\n'));
+    }
+
+    // Ask to set up a service
+    const setupServiceNow = await ask(rl, 'Set up a service now? (Y/n):', 'Y');
+    if (setupServiceNow.toLowerCase() !== 'n') {
+      console.log();
+      await serviceAdd({ config: fullPath }, rl);
     }
 
     // Ask to start now
@@ -279,6 +286,15 @@ async function startCommand(configPath: string) {
   console.log();
   console.log(c('green', '  🚀 ChannelKit is running!\n'));
   console.log(c('dim', '  Press Ctrl+C to stop\n'));
+
+  const serviceWebhooks = Object.values(config.services || {}).map((s: any) => s.webhook);
+  const routeWebhooks = (config.routes || []).map((r: any) => r.webhook);
+  const webhooks = new Set([...serviceWebhooks, ...routeWebhooks].filter(Boolean));
+  console.log(c('dim', '  Do not forget to run the server at:'));
+  webhooks.forEach((wh) => {
+    console.log(c('cyan', `    ${wh}`));
+  });
+  console.log(c('dim', '  For example you can run the demo server: node echo-server.js\n'));
 }
 
 // CLI setup
@@ -319,101 +335,104 @@ service
   .command('add')
   .description('Add a new service interactively')
   .option('-c, --config <path>', 'Path to config file', 'config.yaml')
-  .action(async (opts) => {
-    const configPath = resolve(opts.config);
-    if (!existsSync(configPath)) {
-      console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
-      process.exit(1);
+  .action(serviceAdd);
+
+async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<typeof createInterface> | undefined) {
+  const configPath = resolve(opts.config);
+  if (!existsSync(configPath)) {
+    console.error(c('yellow', `\n  ❌ Config file not found: ${configPath}\n  Run 'channelkit init' first.\n`));
+    process.exit(1);
+  }
+
+  const { loadConfig, saveConfig } = await import('./config/parser');
+  const config = loadConfig(configPath);
+
+  const closeRl = !rl;
+  if (!rl) rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  try {
+    console.log(c('cyan', '\n  📦 Add a new service\n'));
+
+    const name = await ask(rl, 'Service name:', 'Onkosto');
+    if (!name) { if (closeRl) rl!.close(); return; }
+
+    // Select channel
+    const channelNames = Object.keys(config.channels);
+    if (channelNames.length === 0) {
+      console.log(c('yellow', '\n  ⚠️  No channels configured. Run `channelkit init` first.\n'));
+      if (closeRl) rl!.close();
+      return;
     }
 
-    const { loadConfig, saveConfig } = await import('./config/parser');
-    const config = loadConfig(configPath);
+    let selectedChannel: string;
+    if (channelNames.length === 1) {
+      selectedChannel = channelNames[0];
+      const chType = (config.channels[selectedChannel] as any).type;
+      console.log(c('dim', `\n  Channel: ${selectedChannel} (${chType})`));
+    } else {
+      const options = channelNames.map(ch => {
+        const cfg = config.channels[ch] as any;
+        const icon = cfg.type === 'whatsapp' ? '📱' : cfg.type === 'telegram' ? '💬' : '📧';
+        return `${icon} ${ch} (${cfg.type})`;
+      });
+      const chIdx = await select(rl, 'Which channel?', options);
+      selectedChannel = channelNames[chIdx];
+    }
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000');
 
-    try {
-      console.log(c('cyan', '\n  📦 Add a new service\n'));
-
-      const name = await ask(rl, 'Service name:');
-      if (!name) { rl.close(); return; }
-
-      // Select channel
-      const channelNames = Object.keys(config.channels);
-      if (channelNames.length === 0) {
-        console.log(c('yellow', '\n  ⚠️  No channels configured. Run `channelkit init` first.\n'));
-        rl.close();
-        return;
-      }
-
-      let selectedChannel: string;
-      if (channelNames.length === 1) {
-        selectedChannel = channelNames[0];
-        const chType = (config.channels[selectedChannel] as any).type;
-        console.log(c('dim', `\n  Channel: ${selectedChannel} (${chType})`));
-      } else {
-        const options = channelNames.map(ch => {
-          const cfg = config.channels[ch] as any;
-          const icon = cfg.type === 'whatsapp' ? '📱' : cfg.type === 'telegram' ? '💬' : '📧';
-          return `${icon} ${ch} (${cfg.type})`;
-        });
-        const chIdx = await select(rl, 'Which channel?', options);
-        selectedChannel = channelNames[chIdx];
-      }
-
-      const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
-
-      // Check if this channel already has other services (→ needs magic code)
-      if (!config.services) config.services = {};
-      const existingOnChannel = Object.values(config.services).filter(s => s.channel === selectedChannel);
+    // Check if this channel already has other services (→ needs magic code)
+    if (!config.services) config.services = {};
+    const existingOnChannel = Object.values(config.services).filter(s => s.channel === selectedChannel);
+    
+    let code: string | undefined;
+    if (existingOnChannel.length > 0) {
+      console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → groups mode`));
+      const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      code = await ask(rl, 'Magic code for onboarding:', suggestedCode);
       
-      let code: string | undefined;
-      if (existingOnChannel.length > 0) {
-        console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → groups mode`));
-        const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        code = await ask(rl, 'Magic code for onboarding:', suggestedCode);
-        
-        // Also add codes to existing services if they don't have one
-        for (const [svcName, svc] of Object.entries(config.services)) {
-          if (svc.channel === selectedChannel && !svc.code) {
-            const existingCode = svcName.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a magic code too (for groups mode)`));
-            svc.code = await ask(rl, `Magic code for "${svcName}":`, existingCode);
-          }
+      // Also add codes to existing services if they don't have one
+      for (const [svcName, svc] of Object.entries(config.services)) {
+        if (svc.channel === selectedChannel && !svc.code) {
+          const existingCode = svcName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+          console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a magic code too (for groups mode)`));
+          svc.code = await ask(rl, `Magic code for "${svcName}":`, existingCode);
         }
       }
-
-      // Check for duplicate name
-      if (config.services[name]) {
-        console.log(c('yellow', `\n  ⚠️  Service "${name}" already exists.\n`));
-        rl.close();
-        return;
-      }
-
-      config.services[name] = {
-        channel: selectedChannel,
-        webhook,
-        ...(code ? { code: code.toUpperCase() } : {}),
-      };
-      saveConfig(configPath, config);
-
-      // Show result
-      const chCfg = config.channels[selectedChannel] as any;
-      const number = chCfg?.number?.replace(/[^0-9]/g, '') || '';
-
-      console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
-      console.log(c('dim', `  Channel: ${selectedChannel} (${chCfg.type})`));
-      console.log(c('dim', `  Webhook: ${webhook}`));
-      if (code) {
-        console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
-        if (chCfg.type === 'whatsapp' && number) {
-          console.log(c('cyan', `\n  📱 Share: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
-        }
-      }
-      console.log();
-    } finally {
-      rl.close();
     }
-  });
+
+    // Check for duplicate name
+    if (config.services[name]) {
+      console.log(c('yellow', `\n  ⚠️  Service "${name}" already exists.\n`));
+      if (closeRl) rl!.close();
+      return;
+    }
+
+    config.services[name] = {
+      channel: selectedChannel,
+      webhook,
+      ...(code ? { code: code.toUpperCase() } : {}),
+    };
+    saveConfig(configPath, config);
+
+    // Show result
+    const chCfg = config.channels[selectedChannel] as any;
+    const number = chCfg?.number?.replace(/[^0-9]/g, '') || '';
+
+    console.log(c('green', `\n  ✅ Service "${name}" added!\n`));
+    console.log(c('dim', `  Channel: ${selectedChannel} (${chCfg.type})`));
+    console.log(c('dim', `  Webhook: ${webhook}`));
+    if (code) {
+      console.log(c('dim', `  Code:    ${code.toUpperCase()}`));
+      if (chCfg.type === 'whatsapp' && number) {
+        console.log(c('cyan', `\n  📱 Share: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
+      }
+    }
+    console.log();
+  } finally {
+    if (closeRl) rl!.close();
+  }
+}
 
 service
   .command('list')
