@@ -21,11 +21,27 @@ export class WhatsAppChannel extends Channel {
   static async pair(authDir: string): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
+    // Check if already paired (has registered creds)
+    const alreadyPaired = state.creds.registered;
+
+    // Silent logger to suppress Baileys noise during pairing
+    const silentLogger = {
+      level: 'silent' as const,
+      child: () => silentLogger,
+      trace: () => {},
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      fatal: () => {},
+    };
+
     const sock = makeWASocket({
       auth: {
         creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, undefined as any),
+        keys: makeCacheableSignalKeyStore(state.keys, silentLogger as any),
       },
+      logger: silentLogger as any,
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -62,6 +78,11 @@ export class WhatsAppChannel extends Channel {
             clearTimeout(timeout);
             sock.end(undefined);
             reject(new Error('WhatsApp logged out during pairing'));
+          }
+          // If already paired and connection closed normally, that's fine
+          if (alreadyPaired) {
+            clearTimeout(timeout);
+            resolve();
           }
         }
       });
