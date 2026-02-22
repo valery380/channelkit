@@ -137,7 +137,7 @@ export class Router {
     return undefined;
   }
 
-  async route(message: UnifiedMessage, replyUrl?: string): Promise<WebhookResponse | null> {
+  async route(message: UnifiedMessage, replyUrl?: string, extra?: { sttTranscription?: string; ttsGenerated?: boolean }): Promise<WebhookResponse | null> {
     const webhook = this.findWebhook(message);
     const startTime = Date.now();
 
@@ -155,6 +155,7 @@ export class Router {
           groupId: message.groupId,
           groupName: message.groupName,
           status: 'no-route',
+          sttTranscription: extra?.sttTranscription,
         });
       }
       return null;
@@ -179,6 +180,7 @@ export class Router {
         responseText: response?.text,
         status: response ? 'success' : 'error',
         latency,
+        sttTranscription: extra?.sttTranscription,
       });
     }
 

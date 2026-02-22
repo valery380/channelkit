@@ -117,26 +117,65 @@ export class GmailChannel extends Channel {
   // --- OAuth Flow ---
 
   private async startOAuthFlow(): Promise<void> {
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(this.cfg.client_id)}` +
-      `&redirect_uri=${encodeURIComponent('urn:ietf:wg:oauth:2.0:oob')}` +
-      `&response_type=code` +
-      `&scope=${encodeURIComponent('https://www.googleapis.com/auth/gmail.modify')}` +
-      `&access_type=offline` +
-      `&prompt=consent`;
+    const http = await import('http');
+    const { exec: execCmd } = await import('child_process');
 
-    console.log(`\n  📧 Gmail OAuth required for channel "${this.name}"`);
-    console.log(`\n  Open this URL in your browser:\n`);
-    console.log(`  ${authUrl}\n`);
-    console.log(`  Then paste the authorization code below.\n`);
+    // Start a temporary HTTP server on a random port to receive the OAuth callback
+    const { code, redirectUri } = await new Promise<{ code: string; redirectUri: string }>((resolve, reject) => {
+      const server = http.createServer((req, res) => {
+        const url = new URL(req.url || '/', `http://localhost`);
+        const authCode = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
 
-    // Read code from stdin
-    const code = await new Promise<string>((resolve) => {
-      const readline = require('readline');
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      rl.question('  Authorization code: ', (answer: string) => {
-        rl.close();
-        resolve(answer.trim());
+        if (error) {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end('<html><body><h2>❌ Authorization failed</h2><p>You can close this tab.</p></body></html>');
+          server.close();
+          reject(new Error(`OAuth error: ${error}`));
+          return;
+        }
+
+        if (authCode) {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end('<html><body><h2>✅ Authorization successful!</h2><p>You can close this tab and return to the terminal.</p></body></html>');
+          server.close();
+          resolve({ code: authCode, redirectUri: localRedirectUri });
+        } else {
+          res.writeHead(400, { 'Content-Type': 'text/plain' });
+          res.end('Missing code parameter');
+        }
+      });
+
+      let localRedirectUri = '';
+
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address() as { port: number };
+        localRedirectUri = `http://localhost:${addr.port}`;
+
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${encodeURIComponent(this.cfg.client_id)}` +
+          `&redirect_uri=${encodeURIComponent(localRedirectUri)}` +
+          `&response_type=code` +
+          `&scope=${encodeURIComponent('https://www.googleapis.com/auth/gmail.modify')}` +
+          `&access_type=offline` +
+          `&prompt=consent`;
+
+        console.log(`\n  📧 Gmail OAuth required for channel "${this.name}"`);
+        console.log(`\n  Opening browser for authorization...\n`);
+
+        // Try to open browser automatically
+        execCmd(`open "${authUrl}" 2>/dev/null || xdg-open "${authUrl}" 2>/dev/null`, (err) => {
+          if (err) {
+            console.log(`  Could not open browser automatically. Open this URL:\n`);
+            console.log(`  ${authUrl}\n`);
+          }
+        });
+
+        // Timeout after 2 minutes
+        setTimeout(() => {
+          server.close();
+          reject(new Error('OAuth timeout — no callback received within 2 minutes'));
+        }, 120000);
       });
     });
 
@@ -148,7 +187,7 @@ export class GmailChannel extends Channel {
         code,
         client_id: this.cfg.client_id,
         client_secret: this.cfg.client_secret,
-        redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+        redirect_uri: redirectUri,
         grant_type: 'authorization_code',
       }),
     });

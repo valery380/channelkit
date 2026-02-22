@@ -172,17 +172,41 @@ export class ChannelKit {
 
         // STT: transcribe audio if configured for this service
         const serviceConfig = this.router.findServiceConfig(message);
+        let sttTranscription: string | undefined;
         if (serviceConfig) {
+          const originalText = message.text;
           await processInbound(message, serviceConfig);
+          if (message.type === 'audio' && message.text && message.text !== originalText) {
+            sttTranscription = message.text;
+          }
         }
 
         const replyTo = message.groupId || message.from;
         const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
-        let response = await this.router.route(message, replyUrl);
+        let response = await this.router.route(message, replyUrl, { sttTranscription });
 
         // TTS: convert text to voice if webhook requested it
+        let ttsGenerated = false;
         if (response && serviceConfig) {
+          const hadVoice = response.voice;
           response = await processOutbound(response, serviceConfig);
+          if (hadVoice && response.media) {
+            ttsGenerated = true;
+          }
+        }
+
+        // Update log with TTS info if needed
+        if (ttsGenerated) {
+          this.logger.log({
+            id: message.id + '_tts',
+            timestamp: Date.now(),
+            channel: message.channel,
+            from: message.from,
+            type: 'tts',
+            text: response?.text,
+            status: 'success',
+            ttsGenerated: true,
+          });
         }
 
         if (response) {

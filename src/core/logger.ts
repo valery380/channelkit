@@ -17,6 +17,8 @@ export interface LogEntry {
   responseText?: string;
   status: 'success' | 'error' | 'no-route';
   latency?: number;
+  sttTranscription?: string;
+  ttsGenerated?: boolean;
 }
 
 const RETENTION_DAYS = 30;
@@ -52,11 +54,17 @@ export class Logger extends EventEmitter {
         response_text TEXT,
         status TEXT NOT NULL,
         latency_ms INTEGER,
+        stt_transcription TEXT,
+        tts_generated INTEGER,
         created_at INTEGER DEFAULT (unixepoch())
       );
       CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
       CREATE INDEX IF NOT EXISTS idx_logs_channel ON logs(channel);
     `);
+
+    // Migration: add columns if they don't exist (for existing databases)
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN stt_transcription TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN tts_generated INTEGER'); } catch {}
   }
 
   private cleanup(): void {
@@ -69,8 +77,8 @@ export class Logger extends EventEmitter {
 
   log(entry: LogEntry): void {
     this.db.prepare(`
-      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms, stt_transcription, tts_generated)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.id,
       entry.timestamp,
@@ -84,7 +92,9 @@ export class Logger extends EventEmitter {
       entry.route || null,
       entry.responseText || null,
       entry.status,
-      entry.latency ?? null
+      entry.latency ?? null,
+      entry.sttTranscription || null,
+      entry.ttsGenerated ? 1 : null
     );
     this.emit('entry', entry);
   }
@@ -158,6 +168,8 @@ export class Logger extends EventEmitter {
       responseText: row.response_text || undefined,
       status: row.status,
       latency: row.latency_ms ?? undefined,
+      sttTranscription: row.stt_transcription || undefined,
+      ttsGenerated: row.tts_generated ? true : undefined,
     };
   }
 }

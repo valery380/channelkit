@@ -450,6 +450,36 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       }
     }
 
+    // STT/TTS configuration
+    let stt: any = undefined;
+    let tts: any = undefined;
+
+    const enableStt = await ask(rl, 'Enable speech-to-text for voice messages? (y/N):', 'N');
+    if (enableStt.toLowerCase() === 'y') {
+      const sttProviderIdx = await select(rl, 'STT provider:', [
+        '🔵 Google Cloud Speech-to-Text',
+        '🟢 OpenAI Whisper',
+        '🟣 Deepgram',
+      ]);
+      const sttProvider = ['google', 'whisper', 'deepgram'][sttProviderIdx];
+      const sttLanguage = await ask(rl, 'Primary language (e.g. en-US, he-IL):', 'en-US');
+      stt = { provider: sttProvider, language: sttLanguage };
+      console.log(c('dim', `\n  💡 Set ${sttProvider.toUpperCase()}_API_KEY env var before starting.\n`));
+    }
+
+    const enableTts = await ask(rl, 'Enable text-to-speech for responses? (y/N):', 'N');
+    if (enableTts.toLowerCase() === 'y') {
+      const ttsProviderIdx = await select(rl, 'TTS provider:', [
+        '🔵 Google Cloud Text-to-Speech',
+        '🟡 ElevenLabs',
+        '🟢 OpenAI TTS',
+      ]);
+      const ttsProvider = ['google', 'elevenlabs', 'openai'][ttsProviderIdx];
+      const ttsVoice = await ask(rl, 'Voice ID (optional, press Enter to skip):');
+      tts = { provider: ttsProvider, ...(ttsVoice ? { voice: ttsVoice } : {}) };
+      console.log(c('dim', `\n  💡 Set ${ttsProvider.toUpperCase()}_API_KEY env var before starting.\n`));
+    }
+
     // Check for duplicate name
     if (config.services[name]) {
       console.log(c('yellow', `\n  ⚠️  Service "${name}" already exists.\n`));
@@ -462,6 +492,8 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       webhook,
       ...(code ? { code: code.toUpperCase() } : {}),
       ...(command ? { command: command.toLowerCase().replace(/^\//, '') } : {}),
+      ...(stt ? { stt } : {}),
+      ...(tts ? { tts } : {}),
     };
     saveConfig(configPath, config);
 
