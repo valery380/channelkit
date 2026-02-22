@@ -23,13 +23,97 @@ function getApiKey(provider: string): string {
 }
 
 /**
- * Google Cloud Speech-to-Text (REST API, no SDK needed)
+ * Google Cloud Speech-to-Text (REST API)
+ * Supports both API key and Application Default Credentials (ADC).
+ * Priority: GOOGLE_STT_API_KEY > GOOGLE_API_KEY > ADC (gcloud auth)
  */
 class GoogleSTT implements STTProvider {
-  private apiKey: string;
+  private apiKey: string | null;
 
   constructor(private sttConfig: STTConfig) {
-    this.apiKey = getApiKey('google');
+    // API key is optional — fall back to ADC
+    this.apiKey = process.env.GOOGLE_STT_API_KEY
+      || process.env.GOOGLE_API_KEY
+      || null;
+  }
+
+  /**
+   * Get an access token from ADC (Application Default Credentials).
+   * Works when `gcloud auth application-default login` has been run,
+   * or when GOOGLE_APPLICATION_CREDENTIALS points to a service account JSON.
+   */
+  private async getAccessToken(): Promise<string> {
+    const fs = await import('fs');
+    const home = process.env.HOME || '~';
+    const candidates = [
+      process.env.GOOGLE_APPLICATION_CREDENTIALS,
+      `${home}/.config/google/stt-credentials.json`,
+      `${home}/.config/gcloud/application_default_credentials.json`,
+    ].filter(Boolean) as string[];
+    
+    const credPath = candidates.find(p => fs.existsSync(p));
+    
+    if (!credPath) {
+      throw new Error(
+        `Google STT: No API key and no ADC found. Either set GOOGLE_STT_API_KEY / GOOGLE_API_KEY, ` +
+        `or run "gcloud auth application-default login".`
+      );
+    }
+
+    const fsSync = await import('fs');
+    const creds = JSON.parse(fsSync.readFileSync(credPath, 'utf-8'));
+
+    // Service account JSON
+    if (creds.type === 'service_account') {
+      const jwt = await this.createServiceAccountJWT(creds);
+      return jwt;
+    }
+
+    // User credentials (from gcloud auth)
+    if (creds.type === 'authorized_user') {
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: creds.client_id,
+          client_secret: creds.client_secret,
+          refresh_token: creds.refresh_token,
+          grant_type: 'refresh_token',
+        }),
+      });
+      if (!res.ok) throw new Error(`Failed to refresh Google token: ${res.status}`);
+      const data = await res.json() as any;
+      return data.access_token;
+    }
+
+    throw new Error(`Unsupported Google credential type: ${creds.type}`);
+  }
+
+  private async createServiceAccountJWT(creds: any): Promise<string> {
+    const crypto = await import('crypto');
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      iss: creds.client_email,
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    })).toString('base64url');
+    const signature = crypto.sign('RSA-SHA256', Buffer.from(`${header}.${payload}`), creds.private_key);
+    const jwt = `${header}.${payload}.${signature.toString('base64url')}`;
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt,
+      }),
+    });
+    if (!res.ok) throw new Error(`Failed to get service account token: ${res.status}`);
+    const data = await res.json() as any;
+    return data.access_token;
   }
 
   async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
@@ -54,14 +138,23 @@ class GoogleSTT implements STTProvider {
       },
     };
 
-    const res = await fetch(
-      `https://speech.googleapis.com/v1/speech:recognize?key=${this.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    );
+    // Use API key if available, otherwise ADC
+    let url: string;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    if (this.apiKey) {
+      url = `https://speech.googleapis.com/v1/speech:recognize?key=${this.apiKey}`;
+    } else {
+      const token = await this.getAccessToken();
+      url = 'https://speech.googleapis.com/v1/speech:recognize';
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
 
     if (!res.ok) {
       const err = await res.text();
@@ -70,6 +163,9 @@ class GoogleSTT implements STTProvider {
 
     const data = await res.json() as any;
     const results = data.results || [];
+    if (!results.length) {
+      console.log(`[stt:google] No results returned. Response: ${JSON.stringify(data).slice(0, 500)}`);
+    }
     return results
       .map((r: any) => r.alternatives?.[0]?.transcript || '')
       .join(' ')

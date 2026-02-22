@@ -98,8 +98,16 @@ export class WhatsAppChannel extends Channel {
         // Download media for audio/voice messages
         if (unified.type === 'audio' && msg.message?.audioMessage) {
           try {
+            const am = msg.message.audioMessage;
+            console.log(`[whatsapp:${this.name}] audioMessage: fileLength=${am.fileLength}, seconds=${am.seconds}, url=${am.url ? 'yes' : 'no'}, directPath=${am.directPath ? 'yes' : 'no'}, mediaKey=${am.mediaKey ? 'yes' : 'no'}`);
             const buffer = await downloadMediaMessage(msg, 'buffer', {});
             const mimetype = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
+            const seconds = msg.message.audioMessage.seconds || 0;
+            console.log(`[whatsapp:${this.name}] Downloaded audio: ${(buffer as Buffer).length} bytes, ${seconds}s, ${mimetype}`);
+            // Debug: save audio to temp file
+            const fs = await import('fs');
+            fs.writeFileSync('/tmp/channelkit-debug-audio.ogg', buffer as Buffer);
+            console.log(`[whatsapp:${this.name}] Saved debug audio to /tmp/channelkit-debug-audio.ogg`);
             unified.media = { buffer: buffer as Buffer, mimetype };
           } catch (err) {
             console.error(`[whatsapp:${this.name}] Failed to download audio:`, err);

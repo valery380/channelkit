@@ -93,8 +93,8 @@ async function initCommand() {
       const number = await ask(rl, 'Your WhatsApp phone number (with country code):', '+972...');
       
       const modeIdx = await select(rl, 'How will you use this channel?', [
-        '👤 Personal — route messages from groups on your number',
-        '🏢 Service — dedicated number, every incoming message routed',
+        '👥 Groups mode — one number for multiple services',
+        '📱 Service mode — one number for one service',
       ]);
 
       channelName = 'whatsapp';
@@ -779,8 +779,8 @@ channel
         console.log();
         const number = await ask(rl, 'Your WhatsApp phone number (with country code):', '+972...');
         const modeIdx = await select(rl, 'How will you use this channel?', [
-          '👤 Personal — route messages from groups on your number',
-          '🏢 Service — dedicated number, every incoming message routed',
+          '👥 Groups mode — one number for multiple services',
+          '📱 Service mode — one number for one service',
         ]);
 
         channelName = 'whatsapp';
