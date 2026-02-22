@@ -6,6 +6,7 @@ import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
 import { GmailChannel, ResendChannel } from './channels/email';
 import { TwilioSMSChannel } from './channels/sms';
+import { TwilioVoiceChannel } from './channels/voice';
 import { Onboarding } from './onboarding';
 import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
@@ -62,6 +63,10 @@ export class ChannelKit {
         }
         case 'sms': {
           channel = new TwilioSMSChannel(name, channelConfig as any);
+          break;
+        }
+        case 'voice': {
+          channel = new TwilioVoiceChannel(name, channelConfig as any);
           break;
         }
         default:
@@ -217,10 +222,22 @@ export class ChannelKit {
         }
 
         if (response) {
-          await channel.send(replyTo, response);
+          // Voice calls: route response to TwiML redirect flow
+          if (message.channel === 'voice' && (message as any)._callSid && channel instanceof TwilioVoiceChannel) {
+            channel.setCallResponse((message as any)._callSid, response);
+          } else {
+            await channel.send(replyTo, response);
+          }
         }
       });
     }
+
+    // Wire up voice config lookup for API server
+    this.apiServer.findVoiceConfig = (channelName: string) => {
+      if (!this.config.services) return undefined;
+      const svc = Object.values(this.config.services).find(s => s.channel === channelName);
+      return svc?.voice;
+    };
 
     // Start API server + connect all channels
     await this.apiServer.start();
@@ -271,6 +288,16 @@ export class ChannelKit {
       // Print Resend inbound webhook info
       if (channelConfig.type === 'email' && (channelConfig as any).provider === 'resend') {
         console.log(`📬 Resend inbound webhook: ${publicUrl}/inbound/resend/${name}`);
+      }
+
+      // Auto-configure Twilio voice webhook
+      if (channelConfig.type === 'voice') {
+        const voiceChannel = this.channelMap.get(name);
+        if (voiceChannel && voiceChannel instanceof TwilioVoiceChannel) {
+          voiceChannel.setPublicUrl(publicUrl);
+          const webhookUrl = `${publicUrl}/inbound/voice/${name}`;
+          await voiceChannel.setWebhookUrl(webhookUrl);
+        }
       }
     }
   }
