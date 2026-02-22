@@ -380,22 +380,42 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
 
     const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000');
 
-    // Check if this channel already has other services (→ needs magic code)
+    // Check if this channel already has other services (→ multi-service mode)
     if (!config.services) config.services = {};
     const existingOnChannel = Object.values(config.services).filter(s => s.channel === selectedChannel);
+    const chType = (config.channels[selectedChannel] as any).type;
     
     let code: string | undefined;
+    let command: string | undefined;
+
     if (existingOnChannel.length > 0) {
-      console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → groups mode`));
-      const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      code = await ask(rl, 'Magic code for onboarding:', suggestedCode);
-      
-      // Also add codes to existing services if they don't have one
-      for (const [svcName, svc] of Object.entries(config.services)) {
-        if (svc.channel === selectedChannel && !svc.code) {
-          const existingCode = svcName.toUpperCase().replace(/[^A-Z0-9]/g, '');
-          console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a magic code too (for groups mode)`));
-          svc.code = await ask(rl, `Magic code for "${svcName}":`, existingCode);
+      if (chType === 'telegram') {
+        // Telegram multi-service → slash commands
+        console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → slash command mode`));
+        const suggestedCmd = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+        command = await ask(rl, 'Slash command (without /):', suggestedCmd);
+        
+        // Also add commands to existing services if they don't have one
+        for (const [svcName, svc] of Object.entries(config.services)) {
+          if (svc.channel === selectedChannel && !svc.command) {
+            const existingCmd = svcName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a slash command too`));
+            svc.command = await ask(rl, `Slash command for "${svcName}" (without /):`, existingCmd);
+          }
+        }
+      } else {
+        // WhatsApp multi-service → magic codes + groups
+        console.log(c('dim', `\n  This channel already has ${existingOnChannel.length} service(s) → groups mode`));
+        const suggestedCode = name.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        code = await ask(rl, 'Magic code for onboarding:', suggestedCode);
+        
+        // Also add codes to existing services if they don't have one
+        for (const [svcName, svc] of Object.entries(config.services)) {
+          if (svc.channel === selectedChannel && !svc.code) {
+            const existingCode = svcName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            console.log(c('yellow', `\n  ⚠️  Existing service "${svcName}" needs a magic code too (for groups mode)`));
+            svc.code = await ask(rl, `Magic code for "${svcName}":`, existingCode);
+          }
         }
       }
     }
@@ -411,6 +431,7 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       channel: selectedChannel,
       webhook,
       ...(code ? { code: code.toUpperCase() } : {}),
+      ...(command ? { command: command.toLowerCase().replace(/^\//, '') } : {}),
     };
     saveConfig(configPath, config);
 
@@ -426,6 +447,9 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       if (chCfg.type === 'whatsapp' && number) {
         console.log(c('cyan', `\n  📱 Share: https://wa.me/${number}?text=${encodeURIComponent(code.toUpperCase())}`));
       }
+    }
+    if (command) {
+      console.log(c('dim', `  Command: /${command}`));
     }
     console.log();
   } finally {
@@ -696,7 +720,7 @@ channel
       // Ask about service setup
       const modeOptions = [
         '📦 Single service — one webhook for all messages',
-        '📦 Multiple services — route to different webhooks (uses magic codes)',
+        '📦 Multiple services — route to different webhooks (WhatsApp: magic codes, Telegram: slash commands)',
       ];
       const modeIdx = await select(rl, 'How will this channel be used?', modeOptions);
 

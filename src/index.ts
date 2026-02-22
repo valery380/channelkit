@@ -59,6 +59,19 @@ export class ChannelKit {
       console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
     }
 
+    // Set up Telegram slash commands for multi-service channels
+    for (const [name, channel] of this.channelMap.entries()) {
+      if (channel instanceof TelegramChannel) {
+        const services = this.router.getServicesForChannel(name);
+        if (services.length > 1) {
+          const svcEntries = Object.entries(this.config.services || {})
+            .filter(([_, svc]) => svc.channel === name)
+            .map(([svcName, svc]) => ({ name: svcName, config: svc }));
+          (channel as TelegramChannel).setSlashCommands(svcEntries);
+        }
+      }
+    }
+
     // Set up onboarding for channels in groups mode
     // Build onboarding codes from services that have codes
     const onboardingCodes: any[] = [];

@@ -82,6 +82,11 @@ export class Router {
   private findWebhook(message: UnifiedMessage): string | undefined {
     const channelName = message.channelName || message.channel;
 
+    // Check for pre-resolved webhook (e.g. Telegram slash commands)
+    if ((message as any)._resolvedWebhook) {
+      return (message as any)._resolvedWebhook;
+    }
+
     // Check group→service mapping first (groups mode)
     if (message.groupId && this.groupStore) {
       const mapping = this.groupStore.get(message.groupId);

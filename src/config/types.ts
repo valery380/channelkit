@@ -16,7 +16,8 @@ export interface TelegramChannelConfig extends ChannelConfig {
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
-  code?: string;            // magic code for onboarding (groups mode)
+  code?: string;            // magic code for onboarding (groups mode, WhatsApp)
+  command?: string;         // slash command for Telegram multi-service (e.g. 'support')
 }
 
 // Legacy support

@@ -1,10 +1,19 @@
-import { Bot, Context, InputFile } from 'grammy';
+import { Bot, Context } from 'grammy';
 import { Channel } from '../base';
-import { TelegramChannelConfig } from '../../config/types';
+import { TelegramChannelConfig, ServiceConfig } from '../../config/types';
 import { UnifiedMessage, WebhookResponse } from '../../core/types';
+
+interface SlashCommandService {
+  command: string;       // without /
+  serviceName: string;
+  webhook: string;
+}
 
 export class TelegramChannel extends Channel {
   private bot: Bot | null = null;
+  private slashCommands: SlashCommandService[] = [];
+  // userId → active service webhook (for multi-service routing)
+  private activeService: Map<string, string> = new Map();
 
   constructor(name: string, config: TelegramChannelConfig) {
     super(name, config);
@@ -14,12 +23,74 @@ export class TelegramChannel extends Channel {
     return (this.config as TelegramChannelConfig).bot_token;
   }
 
+  /**
+   * Register slash commands for multi-service mode.
+   * Called by ChannelKit after router is set up.
+   */
+  setSlashCommands(services: { name: string; config: ServiceConfig }[]): void {
+    this.slashCommands = services
+      .filter(s => s.config.command)
+      .map(s => ({
+        command: s.config.command!.replace(/^\//, ''),
+        serviceName: s.name,
+        webhook: s.config.webhook,
+      }));
+  }
+
   async connect(): Promise<void> {
     this.bot = new Bot(this.token);
 
+    // Register slash commands with Telegram if we have any
+    if (this.slashCommands.length > 0) {
+      await this.bot.api.setMyCommands(
+        this.slashCommands.map(sc => ({
+          command: sc.command,
+          description: sc.serviceName,
+        }))
+      );
+      console.log(`  📋 Registered ${this.slashCommands.length} slash command(s): ${this.slashCommands.map(sc => '/' + sc.command).join(', ')}`);
+    }
+
     this.bot.on('message', (ctx) => {
+      const text = ctx.message?.text || '';
+
+      // Check if it's a slash command for service switching
+      if (text.startsWith('/') && this.slashCommands.length > 0) {
+        const cmd = text.split(/[@\s]/)[0].slice(1).toLowerCase();
+        const match = this.slashCommands.find(sc => sc.command.toLowerCase() === cmd);
+        if (match) {
+          const userId = ctx.message!.from!.id.toString();
+          this.activeService.set(userId, match.webhook);
+          ctx.reply(`✅ Switched to ${match.serviceName}. Send your messages now.`);
+          console.log(`[telegram] User ${userId} switched to service: ${match.serviceName}`);
+          return;
+        }
+        // /start command — show available services
+        if (cmd === 'start' && this.slashCommands.length > 0) {
+          const lines = this.slashCommands.map(sc => `/${sc.command} — ${sc.serviceName}`);
+          ctx.reply(`Available services:\n\n${lines.join('\n')}\n\nTap a command to get started.`);
+          return;
+        }
+      }
+
       const unified = this.toUnified(ctx);
-      if (unified) this.emitMessage(unified);
+      if (!unified) return;
+
+      // In multi-service mode, attach the active webhook so router can use it
+      if (this.slashCommands.length > 0) {
+        const userId = ctx.message!.from!.id.toString();
+        const activeWebhook = this.activeService.get(userId);
+        if (activeWebhook) {
+          (unified as any)._resolvedWebhook = activeWebhook;
+        } else {
+          // No active service — prompt user to pick one
+          const lines = this.slashCommands.map(sc => `/${sc.command} — ${sc.serviceName}`);
+          ctx.reply(`Please choose a service first:\n\n${lines.join('\n')}`);
+          return;
+        }
+      }
+
+      this.emitMessage(unified);
     });
 
     // Start polling in background (don't await — it blocks)
