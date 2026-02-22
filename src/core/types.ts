@@ -20,8 +20,10 @@ export interface UnifiedMessage {
 
 export interface WebhookResponse {
   text?: string;
+  voice?: boolean;          // if true + TTS configured → convert text to voice message
   media?: {
     url?: string;
+    buffer?: Buffer;
     mimetype?: string;
   };
 }

@@ -79,6 +79,39 @@ export class Router {
     return this.services;
   }
 
+  /**
+   * Find the service config that would handle this message
+   */
+  findServiceConfig(message: UnifiedMessage): ServiceConfig | undefined {
+    const channelName = message.channelName || message.channel;
+
+    // Pre-resolved webhook (Telegram slash commands)
+    if ((message as any)._resolvedWebhook) {
+      for (const svc of this.services.values()) {
+        if (svc.webhook === (message as any)._resolvedWebhook) return svc;
+      }
+    }
+
+    // Group mapping
+    if (message.groupId && this.groupStore) {
+      const mapping = this.groupStore.get(message.groupId);
+      if (mapping) {
+        for (const svc of this.services.values()) {
+          if (svc.webhook === mapping.webhook) return svc;
+        }
+      }
+    }
+
+    // Direct mode
+    const services = this.servicesByChannel.get(channelName) || [];
+    if (services.length === 1) return services[0];
+
+    const byType = this.servicesByChannel.get(message.channel) || [];
+    if (byType.length === 1) return byType[0];
+
+    return undefined;
+  }
+
   private findWebhook(message: UnifiedMessage): string | undefined {
     const channelName = message.channelName || message.channel;
 

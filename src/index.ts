@@ -7,6 +7,7 @@ import { TelegramChannel } from './channels/telegram';
 import { Onboarding } from './onboarding';
 import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
+import { processInbound, processOutbound } from './media/processor';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -156,9 +157,21 @@ export class ChannelKit {
           }
         }
 
+        // STT: transcribe audio if configured for this service
+        const serviceConfig = this.router.findServiceConfig(message);
+        if (serviceConfig) {
+          await processInbound(message, serviceConfig);
+        }
+
         const replyTo = message.groupId || message.from;
         const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
-        const response = await this.router.route(message, replyUrl);
+        let response = await this.router.route(message, replyUrl);
+
+        // TTS: convert text to voice if webhook requested it
+        if (response && serviceConfig) {
+          response = await processOutbound(response, serviceConfig);
+        }
+
         if (response) {
           await channel.send(replyTo, response);
         }

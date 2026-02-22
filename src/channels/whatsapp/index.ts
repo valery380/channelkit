@@ -4,6 +4,7 @@ import makeWASocket, {
   WASocket,
   proto,
   makeCacheableSignalKeyStore,
+  downloadMediaMessage,
 } from '@whiskeysockets/baileys';
 import { Boom } from '@hapi/boom';
 import { join } from 'path';
@@ -81,7 +82,7 @@ export class WhatsAppChannel extends Channel {
       }
     });
 
-    this.sock.ev.on('messages.upsert', ({ messages }) => {
+    this.sock.ev.on('messages.upsert', async ({ messages }) => {
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
         // Resolve LID to regular JID
@@ -89,7 +90,20 @@ export class WhatsAppChannel extends Channel {
           msg.key.remoteJid = (msg.key as any).remoteJidAlt;
         }
         const unified = this.toUnified(msg, (msg as any).pushName);
-        if (unified) this.emitMessage(unified);
+        if (!unified) continue;
+
+        // Download media for audio/voice messages
+        if (unified.type === 'audio' && msg.message?.audioMessage) {
+          try {
+            const buffer = await downloadMediaMessage(msg, 'buffer', {});
+            const mimetype = msg.message.audioMessage.mimetype || 'audio/ogg; codecs=opus';
+            unified.media = { buffer: buffer as Buffer, mimetype };
+          } catch (err) {
+            console.error(`[whatsapp:${this.name}] Failed to download audio:`, err);
+          }
+        }
+
+        this.emitMessage(unified);
       }
     });
   }
@@ -101,6 +115,18 @@ export class WhatsAppChannel extends Channel {
 
   async send(to: string, response: WebhookResponse): Promise<void> {
     if (!this.sock) return;
+
+    // Voice message from buffer (TTS output)
+    if (response.media?.buffer && response.media.mimetype?.includes('audio')) {
+      await this.sock.sendMessage(to, {
+        audio: response.media.buffer,
+        mimetype: response.media.mimetype,
+        ptt: true, // sends as voice note
+      } as any);
+      // If there was also text, don't send it separately (voice replaces text)
+      return;
+    }
+
     if (response.text) {
       await this.sock.sendMessage(to, { text: response.text });
     }

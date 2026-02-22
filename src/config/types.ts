@@ -13,11 +13,24 @@ export interface TelegramChannelConfig extends ChannelConfig {
   bot_token: string;
 }
 
+export interface STTServiceConfig {
+  provider: 'google' | 'whisper' | 'deepgram';
+  language?: string;        // e.g. 'he-IL', 'en-US'
+}
+
+export interface TTSServiceConfig {
+  provider: 'google' | 'elevenlabs' | 'openai';
+  voice?: string;           // voice ID or name
+  language?: string;        // e.g. 'he-IL' (for Google TTS)
+}
+
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
   code?: string;            // magic code for onboarding (groups mode, WhatsApp)
   command?: string;         // slash command for Telegram multi-service (e.g. 'support')
+  stt?: STTServiceConfig;   // speech-to-text config
+  tts?: TTSServiceConfig;   // text-to-speech config
 }
 
 // Legacy support

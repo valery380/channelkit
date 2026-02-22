@@ -1,4 +1,4 @@
-import { Bot, Context } from 'grammy';
+import { Bot, Context, InputFile } from 'grammy';
 import { Channel } from '../base';
 import { TelegramChannelConfig, ServiceConfig } from '../../config/types';
 import { UnifiedMessage, WebhookResponse } from '../../core/types';
@@ -51,7 +51,7 @@ export class TelegramChannel extends Channel {
       console.log(`  📋 Registered ${this.slashCommands.length} slash command(s): ${this.slashCommands.map(sc => '/' + sc.command).join(', ')}`);
     }
 
-    this.bot.on('message', (ctx) => {
+    this.bot.on('message', async (ctx) => {
       const text = ctx.message?.text || '';
 
       // Check if it's a slash command for service switching
@@ -75,6 +75,23 @@ export class TelegramChannel extends Channel {
 
       const unified = this.toUnified(ctx);
       if (!unified) return;
+
+      // Download audio/voice for STT
+      if (unified.type === 'audio' && (ctx.message?.voice || ctx.message?.audio)) {
+        try {
+          const fileId = ctx.message.voice?.file_id || ctx.message.audio?.file_id;
+          if (fileId) {
+            const file = await ctx.api.getFile(fileId);
+            const url = `https://api.telegram.org/file/bot${this.token}/${file.file_path}`;
+            const res = await fetch(url);
+            const buffer = Buffer.from(await res.arrayBuffer());
+            const mimetype = ctx.message.voice?.mime_type || ctx.message.audio?.mime_type || 'audio/ogg';
+            unified.media = { buffer, mimetype };
+          }
+        } catch (err) {
+          console.error(`[telegram:${this.name}] Failed to download audio:`, err);
+        }
+      }
 
       // In multi-service mode, attach the active webhook so router can use it
       if (this.slashCommands.length > 0) {
@@ -117,6 +134,12 @@ export class TelegramChannel extends Channel {
   async send(to: string, response: WebhookResponse): Promise<void> {
     if (!this.bot) return;
     const chatId = parseInt(to, 10) || to;
+
+    // Voice message from buffer (TTS output)
+    if (response.media?.buffer && response.media.mimetype?.includes('audio')) {
+      await this.bot.api.sendVoice(chatId, new InputFile(response.media.buffer, 'voice.ogg'));
+      return;
+    }
 
     if (response.text) {
       await this.bot.api.sendMessage(chatId, response.text);
