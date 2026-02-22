@@ -162,12 +162,7 @@ async function initCommand() {
       };
     }
 
-    // Step 2: Webhook
-    console.log();
-    const webhook = await ask(rl, 'Where should messages be sent? (webhook URL):', 'http://localhost:3000');
-    services['default'] = { channel: channelName, webhook };
-
-    // Step 3: Generate config
+    // Step 2: Generate config
     console.log();
     const configPath = await ask(rl, 'Config file path:', 'config.yaml');
 
@@ -181,11 +176,15 @@ async function initCommand() {
       }
     }
 
-    yaml += `\nservices:\n`;
-    for (const [name, svc] of Object.entries(services)) {
-      yaml += `  ${name}:\n`;
-      yaml += `    channel: "${(svc as any).channel}"\n`;
-      yaml += `    webhook: "${(svc as any).webhook}"\n`;
+    if (Object.keys(services).length > 0) {
+      yaml += `\nservices:\n`;
+      for (const [name, svc] of Object.entries(services)) {
+        yaml += `  ${name}:\n`;
+        yaml += `    channel: "${(svc as any).channel}"\n`;
+        yaml += `    webhook: "${(svc as any).webhook}"\n`;
+      }
+    } else {
+      yaml += `\nservices: {}\n`;
     }
 
     // Write config
@@ -215,7 +214,7 @@ async function initCommand() {
     console.log(c('green', '  ╚═══════════════════════════════════════╝'));
     console.log();
     console.log(c('white', '  Next steps:\n'));
-    console.log(c('dim', `    1. Make sure your webhook is running at ${webhook}`));
+    console.log(c('dim', '    1. Set up a service (webhook binding)'));
     console.log(c('dim', '    2. Start ChannelKit:\n'));
     console.log(c('cyan', '       npm start'));
     console.log();
@@ -692,6 +691,26 @@ channel
         console.log(c('dim', '  Start ChannelKit and scan the QR code to connect WhatsApp.\n'));
       } else if (channelName === 'telegram') {
         console.log(c('dim', '  Start ChannelKit to activate the Telegram bot.\n'));
+      }
+
+      // Ask about service setup
+      const modeOptions = [
+        '📦 Single service — one webhook for all messages',
+        '📦 Multiple services — route to different webhooks (uses magic codes)',
+      ];
+      const modeIdx = await select(rl, 'How will this channel be used?', modeOptions);
+
+      if (modeIdx === 0) {
+        // Single service — ask webhook and create it
+        const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000');
+        if (!config.services) config.services = {};
+        const svcName = channelName;
+        config.services[svcName] = { channel: channelName, webhook };
+        saveConfig(configPath, config);
+        console.log(c('green', `\n  ✅ Service "${svcName}" created → ${webhook}\n`));
+      } else {
+        // Multiple services — tell user to add services
+        console.log(c('dim', '\n  Run `channelkit service add` to add services to this channel.\n'));
       }
     } finally {
       rl.close();
