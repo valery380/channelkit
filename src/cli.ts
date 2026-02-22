@@ -149,7 +149,7 @@ async function initCommand() {
         bot_token: token,
       };
 
-    } else {
+    } else if (channelIdx === 2) {
       // Email
       console.log();
       const emailProviderIdx = await select(rl, 'Which email provider?', [
@@ -191,6 +191,7 @@ async function initCommand() {
           from_email: fromEmail,
         };
       }
+
     } else if (channelIdx === 3) {
       // SMS (Twilio)
       console.log(c('bright', '\n  📝 Twilio SMS Setup:\n'));
@@ -695,10 +696,11 @@ channel
         '📱 WhatsApp — connect with your phone number',
         '💬 Telegram — create a bot',
         '📧 Email — Gmail or Resend',
+        '📲 SMS — Twilio',
       ]);
 
-      let channelName: string;
-      let channelConfig: any;
+      let channelName: string = '';
+      let channelConfig: any = {};
 
       if (channelIdx === 0) {
         // WhatsApp
@@ -783,7 +785,7 @@ channel
           bot_token: token,
         };
 
-      } else {
+      } else if (channelIdx === 2) {
         // Email
         console.log();
         const providerIdx = await select(rl, 'Which email provider?', [
@@ -830,6 +832,27 @@ channel
           console.log(c('dim', `\n  📬 Configure Resend inbound webhook to:`));
           console.log(c('cyan', `     <your-public-url>/inbound/resend/${channelName}\n`));
         }
+
+      } else if (channelIdx === 3) {
+        // SMS (Twilio)
+        console.log(c('bright', '\n  📝 Twilio SMS Setup:\n'));
+        console.log(c('dim', '  You need a Twilio account with a phone number.'));
+        console.log(c('dim', '  Get credentials at: https://console.twilio.com\n'));
+
+        const accountSid = await ask(rl, 'Account SID:');
+        const authToken = await ask(rl, 'Auth Token:');
+        const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
+        const pollInterval = await ask(rl, 'Poll interval in seconds (0 = webhook mode):', '10');
+
+        channelName = await ask(rl, 'Channel name:', 'sms');
+        channelConfig = {
+          type: 'sms',
+          provider: 'twilio',
+          account_sid: accountSid,
+          auth_token: authToken,
+          number,
+          ...(parseInt(pollInterval) > 0 ? { poll_interval: parseInt(pollInterval) } : {}),
+        };
       }
 
       config.channels[channelName] = channelConfig;
