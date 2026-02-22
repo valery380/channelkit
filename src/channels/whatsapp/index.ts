@@ -52,6 +52,9 @@ export class WhatsAppChannel extends Channel {
       const { connection, lastDisconnect, qr } = update;
       
       if (qr) {
+        // Emit QR event for dashboard/API
+        this.emit('qr', qr);
+
         // Dynamic import to handle optional dependency
         import('qrcode-terminal').then(({ default: qrcode }) => {
           console.log(`\n  📱 Scan this QR code with WhatsApp:\n`);

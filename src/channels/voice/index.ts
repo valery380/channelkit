@@ -9,6 +9,7 @@
  * 5. If conversational: loop back to record
  */
 
+import { randomUUID } from 'crypto';
 import Twilio from 'twilio';
 import { Channel } from '../base';
 import { TwilioVoiceChannelConfig, ServiceConfig, VoiceServiceConfig } from '../../config/types';
@@ -21,10 +22,18 @@ interface PendingCall {
   serviceConfig?: ServiceConfig;
 }
 
+// In-memory audio cache entry
+interface AudioCacheEntry {
+  buffer: Buffer;
+  mimetype: string;
+  createdAt: number;
+}
+
 export class TwilioVoiceChannel extends Channel {
   private client: ReturnType<typeof Twilio>;
   private pendingCalls: Map<string, PendingCall> = new Map();
   private publicUrl: string | null = null;
+  private audioCache: Map<string, AudioCacheEntry> = new Map();
 
   constructor(name: string, config: TwilioVoiceChannelConfig) {
     super(name, config);
@@ -37,6 +46,26 @@ export class TwilioVoiceChannel extends Channel {
 
   setPublicUrl(url: string): void {
     this.publicUrl = url;
+  }
+
+  /**
+   * Store an audio buffer in cache and return its ID
+   */
+  storeAudio(buffer: Buffer, mimetype: string): string {
+    const id = randomUUID();
+    this.audioCache.set(id, { buffer, mimetype, createdAt: Date.now() });
+    // Auto-cleanup after 60s
+    setTimeout(() => this.audioCache.delete(id), 60_000);
+    return id;
+  }
+
+  /**
+   * Retrieve and remove an audio buffer from cache
+   */
+  getAudio(id: string): AudioCacheEntry | undefined {
+    const entry = this.audioCache.get(id);
+    if (entry) this.audioCache.delete(id);
+    return entry;
   }
 
   async connect(): Promise<void> {
@@ -236,11 +265,13 @@ export class TwilioVoiceChannel extends Channel {
     this.callResponses.delete(callSid);
 
     if (response.media?.buffer && response.media.mimetype?.includes('audio')) {
-      // TTS audio — need to serve it somehow
-      // For now, fall back to text via <Say>
-      if (response.text) {
-        twiml.say(sayOpts, response.text);
-      }
+      // TTS audio — store in cache and play via URL
+      const audioId = this.storeAudio(
+        Buffer.isBuffer(response.media.buffer) ? response.media.buffer : Buffer.from(response.media.buffer),
+        response.media.mimetype || 'audio/mpeg'
+      );
+      const audioUrl = `${this.publicUrl}/inbound/voice/${this.name}/audio/${audioId}`;
+      twiml.play(audioUrl);
     } else if (response.text) {
       twiml.say(sayOpts, response.text);
     }

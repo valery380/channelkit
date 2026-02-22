@@ -18,6 +18,8 @@ Your app receives every message in a **unified JSON format**, regardless of sour
 - **Telegram** (grammY) — bot token setup, slash commands for multi-service
 - **Email** — Gmail (OAuth2 + polling) and Resend (API + polling/webhook)
 - **Services model** — single or multiple services per channel, each with its own webhook
+- **SMS** (Twilio) — inbound/outbound SMS via polling or webhooks
+- **Voice** (Twilio) — inbound voice calls with STT, webhook, and TTS/Say responses
 - **Speech-to-Text** — automatic transcription of voice messages (Google, Whisper, Deepgram)
 - **Text-to-Speech** — voice responses when your webhook returns `voice: true` (Google, ElevenLabs, OpenAI)
 - **Auto language detection** — STT supports multiple languages with automatic detection
@@ -129,6 +131,54 @@ services:
 - Google: `GOOGLE_TTS_API_KEY` or `GOOGLE_API_KEY`
 - ElevenLabs: `ELEVENLABS_TTS_API_KEY` or `ELEVENLABS_API_KEY`
 - OpenAI: `OPENAI_TTS_API_KEY` or `OPENAI_API_KEY`
+
+## Voice Channel (Twilio)
+
+ChannelKit supports inbound voice calls via Twilio. The flow:
+
+1. Caller dials your Twilio number → ChannelKit answers with a greeting
+2. Caller speaks → recording is captured and transcribed (STT)
+3. Transcribed text is sent to your webhook
+4. Your webhook responds with text → ChannelKit speaks it back via TTS or `<Say>`
+5. In **conversational mode**, the loop repeats; otherwise the call ends
+
+### Setup
+
+```bash
+channelkit channel add    # choose Voice (Twilio)
+channelkit service add    # configure webhook + voice settings
+```
+
+Voice requires a **public URL** — use `--tunnel` or `--public-url` when starting:
+
+```bash
+channelkit start --public-url https://your-domain.com
+```
+
+### Voice service config
+
+```yaml
+services:
+  support:
+    channel: voice
+    webhook: "http://localhost:3000/support"
+    stt:
+      provider: google
+      language: en-US
+    tts:
+      provider: elevenlabs
+    voice:
+      greeting: "Hello! Please speak after the beep."
+      hold_message: "One moment please..."
+      language: en-US
+      voice_name: Polly.Joanna
+      conversational: true
+      max_record_seconds: 30
+```
+
+### TTS Audio Serving
+
+When your webhook returns `{ "voice": true }` and TTS is configured, ChannelKit synthesizes audio and plays it to the caller via `<Play>`. Audio clips are cached in memory and served via a one-time URL that expires after 60 seconds.
 
 ## Config
 
@@ -256,6 +306,8 @@ Runs on port 3000 and echoes back any message it receives.
 | Telegram (grammY) | ✅ Working | Slash commands |
 | Email — Gmail | ✅ Working | — |
 | Email — Resend | ✅ Working | — |
+| SMS (Twilio) | ✅ Working | — |
+| Voice (Twilio) | ✅ Working | — |
 
 ## Development
 

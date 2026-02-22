@@ -8,6 +8,7 @@ import { Logger } from './logger';
 
 export class ApiServer {
   private app = express();
+  private latestQR: string | null = null;
   private httpServer = createServer(this.app);
   private wss: WebSocketServer;
   private server: ReturnType<typeof this.httpServer.listen> | null = null;
@@ -36,8 +37,26 @@ export class ApiServer {
     });
   }
 
+  private broadcast(msg: any): void {
+    const data = JSON.stringify(msg);
+    this.wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(data);
+      }
+    });
+  }
+
   registerChannel(name: string, channel: Channel): void {
     this.channels.set(name, channel);
+    // Listen for QR events from WhatsApp channels
+    channel.on('qr', (qr: string) => {
+      this.latestQR = qr;
+      // Notify WebSocket clients
+      this.broadcast({ type: 'qr', data: qr });
+    });
+    channel.on('connection', () => {
+      this.latestQR = null; // clear QR once connected
+    });
   }
 
   setPublicUrl(url: string): void {
@@ -170,6 +189,24 @@ export class ApiServer {
       }
     });
 
+    // GET /inbound/voice/:channel/audio/:id — serve cached TTS audio
+    this.app.get('/inbound/voice/:channel/audio/:id', (req, res) => {
+      const { channel: channelName, id } = req.params;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).getAudio) {
+        res.status(404).send('Not found');
+        return;
+      }
+      const entry = (channel as any).getAudio(id);
+      if (!entry) {
+        res.status(404).send('Audio not found or expired');
+        return;
+      }
+      res.set('Content-Type', entry.mimetype);
+      res.set('Content-Length', String(entry.buffer.length));
+      res.send(entry.buffer);
+    });
+
     // POST /inbound/twilio/:channel — Twilio SMS inbound webhook
     this.app.post('/inbound/twilio/:channel', express.urlencoded({ extended: false }), (req, res) => {
       const channelName = req.params.channel;
@@ -202,6 +239,38 @@ export class ApiServer {
       } catch (err: any) {
         console.error(`[resend-inbound] Error:`, err);
         res.status(500).json({ error: err.message });
+      }
+    });
+
+    // GET /qr — WhatsApp QR code page
+    this.app.get('/qr', async (_req, res) => {
+      if (!this.latestQR) {
+        res.send(`
+          <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#111;color:#fff">
+            <div style="text-align:center">
+              <h2>No QR code available</h2>
+              <p>WhatsApp is either already connected or not configured.</p>
+              <script>setTimeout(() => location.reload(), 3000)</script>
+            </div>
+          </body></html>
+        `);
+        return;
+      }
+      try {
+        const QRCode = await import('qrcode');
+        const dataUrl = await QRCode.toDataURL(this.latestQR, { width: 400, margin: 2 });
+        res.send(`
+          <html><body style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#111;color:#fff">
+            <div style="text-align:center">
+              <h2>📱 Scan with WhatsApp</h2>
+              <img src="${dataUrl}" style="border-radius:12px;margin:20px 0"/>
+              <p style="color:#888">Settings → Linked Devices → Link a Device</p>
+              <script>setTimeout(() => location.reload(), 15000)</script>
+            </div>
+          </body></html>
+        `);
+      } catch {
+        res.send(`<html><body><pre>${this.latestQR}</pre></body></html>`);
       }
     });
 

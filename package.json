@@ -37,11 +37,15 @@
     "commander": "^14.0.3",
     "express": "^5.2.1",
     "grammy": "^1.40.0",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "tsx": "^4.21.0",
     "twilio": "^5.12.2",
     "typescript": "^5.9.3",
     "ws": "^8.19.0",
     "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }

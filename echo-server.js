@@ -29,6 +29,9 @@ const server = http.createServer((req, res) => {
         text: `Thanks for your email!`,
         email: { subject: `Re: ${msg.email?.subject || "Your message"}` },
       };
+    } else if (channel === "voice") {
+      // Voice: respond with text (will be spoken back via TTS or <Say>)
+      reply = { text: `You said: ${text}`, voice: true };
     } else {
       reply = { text: `Echo [${channel}]: ${text}` };
     }
@@ -46,6 +49,7 @@ server.listen(3000, () => {
   console.log("   /home     → Smart Home (text reply)");
   console.log("   /support  → Support (voice reply — TTS)");
   console.log("   /email    → Email (reply with subject)");
-  console.log("   /*        → Generic echo\n");
+  console.log("   /*        → Generic echo");
+  console.log("   voice     → Echo with TTS 🔊\n");
   console.log("   Supports: WhatsApp, Telegram, Gmail, Resend, SMS, Voice\n");
 });

@@ -1,0 +1,15 @@
+# ChannelKit Test Config
+channels:
+  whatsapp:
+    type: "whatsapp"
+
+services:
+  default:
+    channel: "whatsapp"
+    webhook: "http://localhost:3000"
+
+tunnel:
+  provider: cloudflared
+
+dashboard:
+  enabled: true

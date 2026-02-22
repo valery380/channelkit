@@ -218,8 +218,26 @@ async function initCommand() {
       console.log(c('bright', '\n  📝 Twilio Voice Setup:\n'));
       console.log(c('dim', '  Same Twilio account as SMS — uses a phone number for voice calls.\n'));
 
-      const accountSid = await ask(rl, 'Account SID:');
-      const authToken = await ask(rl, 'Auth Token:');
+      // Check if SMS channel exists and offer to reuse credentials
+      const existingSms = Object.values(channels).find((ch: any) => ch.type === 'sms' && ch.provider === 'twilio') as any;
+      let accountSid: string;
+      let authToken: string;
+
+      if (existingSms) {
+        const reuse = await ask(rl, `Reuse Twilio credentials from SMS channel? (Y/n):`, 'Y');
+        if (reuse.toLowerCase() !== 'n') {
+          accountSid = existingSms.account_sid;
+          authToken = existingSms.auth_token;
+          console.log(c('dim', '  Using existing Twilio credentials.\n'));
+        } else {
+          accountSid = await ask(rl, 'Account SID:');
+          authToken = await ask(rl, 'Auth Token:');
+        }
+      } else {
+        accountSid = await ask(rl, 'Account SID:');
+        authToken = await ask(rl, 'Auth Token:');
+      }
+
       const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
 
       channelName = 'voice';
@@ -542,6 +560,27 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       console.log(c('dim', `\n  💡 Set ${ttsProvider.toUpperCase()}_API_KEY env var before starting.\n`));
     }
 
+    // Voice-specific config
+    let voice: any = undefined;
+    if (chType === 'voice') {
+      console.log(c('cyan', '\n  📞 Voice call settings\n'));
+      const greeting = await ask(rl!, 'Greeting message:', 'Hello. Please speak after the beep.');
+      const holdMessage = await ask(rl!, 'Hold message (while processing, optional):');
+      const language = await ask(rl!, 'Language (e.g. en-US, he-IL):', 'en-US');
+      const voiceName = await ask(rl!, 'Voice name (e.g. Polly.Joanna, optional):');
+      const conversational = await ask(rl!, 'Conversational mode (loop record→respond)? (y/N):', 'N');
+      const maxRecord = await ask(rl!, 'Max recording seconds:', '30');
+
+      voice = {
+        greeting,
+        ...(holdMessage ? { hold_message: holdMessage } : {}),
+        language,
+        ...(voiceName ? { voice_name: voiceName } : {}),
+        conversational: conversational.toLowerCase() === 'y',
+        max_record_seconds: parseInt(maxRecord) || 30,
+      };
+    }
+
     // Check for duplicate name
     if (config.services[name]) {
       console.log(c('yellow', `\n  ⚠️  Service "${name}" already exists.\n`));
@@ -556,6 +595,7 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
       ...(command ? { command: command.toLowerCase().replace(/^\//, '') } : {}),
       ...(stt ? { stt } : {}),
       ...(tts ? { tts } : {}),
+      ...(voice ? { voice } : {}),
     };
     saveConfig(configPath, config);
 
@@ -879,8 +919,27 @@ channel
         // Voice (Twilio)
         console.log(c('bright', '\n  📝 Twilio Voice Setup:\n'));
 
-        const accountSid = await ask(rl, 'Account SID:');
-        const authToken = await ask(rl, 'Auth Token:');
+        // Check if there's an existing SMS (Twilio) channel to reuse credentials
+        const existingSms = Object.entries(config.channels).find(([, v]) => (v as any).type === 'sms' && (v as any).provider === 'twilio');
+        let accountSid: string;
+        let authToken: string;
+
+        if (existingSms) {
+          const smsCfg = existingSms[1] as any;
+          const reuse = await ask(rl, `Reuse Twilio credentials from "${existingSms[0]}" channel? (Y/n):`, 'Y');
+          if (reuse.toLowerCase() !== 'n') {
+            accountSid = smsCfg.account_sid;
+            authToken = smsCfg.auth_token;
+            console.log(c('dim', '  Using existing Twilio credentials.\n'));
+          } else {
+            accountSid = await ask(rl, 'Account SID:');
+            authToken = await ask(rl, 'Auth Token:');
+          }
+        } else {
+          accountSid = await ask(rl, 'Account SID:');
+          authToken = await ask(rl, 'Auth Token:');
+        }
+
         const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
 
         channelName = await ask(rl, 'Channel name:', 'voice');
