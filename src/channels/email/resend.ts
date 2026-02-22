@@ -12,6 +12,9 @@ import { ResendChannelConfig } from '../../config/types';
 import { UnifiedMessage, WebhookResponse } from '../../core/types';
 
 export class ResendChannel extends Channel {
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastSeenId: string | null = null;
+
   constructor(name: string, config: ResendChannelConfig) {
     super(name, config);
   }
@@ -21,13 +24,25 @@ export class ResendChannel extends Channel {
   }
 
   async connect(): Promise<void> {
-    // Resend inbound is handled via webhook — registered in ApiServer
     console.log(`✅ Resend email connected: ${this.name} (from: ${this.cfg.from_email})`);
-    console.log(`  📬 Configure Resend inbound webhook to point to your ChannelKit API endpoint`);
+
+    if (this.cfg.poll_interval) {
+      // Polling mode — no public URL needed
+      const interval = this.cfg.poll_interval * 1000;
+      console.log(`  📬 Polling for inbound emails every ${this.cfg.poll_interval}s`);
+      this.poll(); // initial poll
+      this.pollTimer = setInterval(() => this.poll(), interval);
+    } else {
+      // Webhook mode
+      console.log(`  📬 Configure Resend inbound webhook to point to your ChannelKit API endpoint`);
+    }
   }
 
   async disconnect(): Promise<void> {
-    // Nothing to disconnect
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   }
 
   async send(to: string, response: WebhookResponse): Promise<void> {
@@ -70,6 +85,52 @@ export class ResendChannel extends Channel {
     if (unified) {
       this.emitMessage(unified);
     }
+  }
+
+  // --- Polling ---
+
+  private async poll(): Promise<void> {
+    try {
+      const params = new URLSearchParams({ limit: '20' });
+      if (this.lastSeenId) params.set('after', this.lastSeenId);
+
+      const res = await fetch(`https://api.resend.com/emails/received?${params}`, {
+        headers: { 'Authorization': `Bearer ${this.cfg.api_key}` },
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        console.error(`[resend:${this.name}] Poll error: ${res.status} ${err}`);
+        return;
+      }
+
+      const data = await res.json() as any;
+      const emails = data.data || [];
+
+      if (emails.length === 0) return;
+
+      // Process from oldest to newest
+      for (const email of emails.reverse()) {
+        this.lastSeenId = email.id;
+
+        // Fetch full email content
+        const detail = await this.fetchEmail(email.id);
+        if (detail) {
+          const unified = this.toUnified(detail);
+          if (unified) this.emitMessage(unified);
+        }
+      }
+    } catch (err) {
+      console.error(`[resend:${this.name}] Poll error:`, err);
+    }
+  }
+
+  private async fetchEmail(id: string): Promise<any> {
+    const res = await fetch(`https://api.resend.com/emails/received/${id}`, {
+      headers: { 'Authorization': `Bearer ${this.cfg.api_key}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
   }
 
   private toUnified(payload: any): UnifiedMessage | null {
