@@ -463,7 +463,7 @@ async function serviceAdd(opts = { config: 'config.yaml' }, rl : ReturnType<type
   }
 
   const { loadConfig, saveConfig } = await import('./config/parser');
-  const config = loadConfig(configPath);
+  const config = loadConfig(configPath, { validate: false });
 
   const closeRl = !rl;
   if (!rl) rl = createInterface({ input: process.stdin, output: process.stdout });
