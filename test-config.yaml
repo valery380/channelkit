@@ -7,6 +7,9 @@ services:
   default:
     channel: "whatsapp"
     webhook: "http://localhost:3000"
+    stt:
+      provider: "google"
+      language: "he-IL"
 
 tunnel:
   provider: cloudflared
