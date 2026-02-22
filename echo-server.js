@@ -42,8 +42,9 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(3000, () => {
-  console.log("🔗 Echo server listening on port 3000\n");
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`🔗 Echo server listening on port ${PORT}\n`);
   console.log("   Routes:");
   console.log("   /expenses → Onkosto (text reply)");
   console.log("   /home     → Smart Home (text reply)");
