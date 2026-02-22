@@ -15,7 +15,8 @@ export interface TelegramChannelConfig extends ChannelConfig {
 
 export interface STTServiceConfig {
   provider: 'google' | 'whisper' | 'deepgram';
-  language?: string;        // e.g. 'he-IL', 'en-US'
+  language?: string;                // e.g. 'he-IL', 'en-US' — primary language
+  alternative_languages?: string[]; // Google: auto-detect from these + primary
 }
 
 export interface TTSServiceConfig {

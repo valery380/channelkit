@@ -8,7 +8,8 @@ export interface STTProvider {
 
 export interface STTConfig {
   provider: 'google' | 'whisper' | 'deepgram';
-  language?: string;  // e.g. 'he-IL', 'en-US'
+  language?: string;            // e.g. 'he-IL', 'en-US' — primary language
+  alternative_languages?: string[];  // e.g. ['en-US', 'ar-IL'] — auto-detect from these + primary
 }
 
 // Env var convention: <PROVIDER>_STT_API_KEY
@@ -27,20 +28,27 @@ function getApiKey(provider: string): string {
 class GoogleSTT implements STTProvider {
   private apiKey: string;
 
-  constructor() {
+  constructor(private sttConfig: STTConfig) {
     this.apiKey = getApiKey('google');
   }
 
   async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
     const encoding = this.getEncoding(mimetype);
+    const config: any = {
+      encoding,
+      sampleRateHertz: encoding === 'OGG_OPUS' ? 48000 : 16000,
+      languageCode: language || this.sttConfig.language || 'en-US',
+      model: 'default',
+      enableAutomaticPunctuation: true,
+    };
+
+    // Auto language detection: add alternative languages
+    if (this.sttConfig.alternative_languages?.length) {
+      config.alternativeLanguageCodes = this.sttConfig.alternative_languages;
+    }
+
     const body = {
-      config: {
-        encoding,
-        sampleRateHertz: encoding === 'OGG_OPUS' ? 48000 : 16000,
-        languageCode: language || 'en-US',
-        model: 'default',
-        enableAutomaticPunctuation: true,
-      },
+      config,
       audio: {
         content: audio.toString('base64'),
       },
@@ -138,7 +146,11 @@ class DeepgramSTT implements STTProvider {
       model: 'nova-2',
       punctuate: 'true',
     });
-    if (language) params.set('language', language.split('-')[0]);
+    if (language) {
+      params.set('language', language.split('-')[0]);
+    } else {
+      params.set('detect_language', 'true');
+    }
 
     const res = await fetch(
       `https://api.deepgram.com/v1/listen?${params}`,
@@ -168,7 +180,7 @@ class DeepgramSTT implements STTProvider {
 export function createSTTProvider(config: STTConfig): STTProvider {
   switch (config.provider) {
     case 'google':
-      return new GoogleSTT();
+      return new GoogleSTT(config);
     case 'whisper':
       return new WhisperSTT();
     case 'deepgram':
