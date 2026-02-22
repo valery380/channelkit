@@ -109,6 +109,23 @@ export class ApiServer {
       }
     });
 
+    // POST /inbound/resend/:channel — Resend inbound email webhook
+    this.app.post('/inbound/resend/:channel', (req, res) => {
+      const channelName = req.params.channel;
+      const channel = this.channels.get(channelName);
+      if (!channel || !(channel as any).handleInbound) {
+        res.status(404).json({ error: `Channel "${channelName}" not found or not a Resend channel` });
+        return;
+      }
+      try {
+        (channel as any).handleInbound(req.body);
+        res.json({ ok: true });
+      } catch (err: any) {
+        console.error(`[resend-inbound] Error:`, err);
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // GET /api/health
     this.app.get('/api/health', (_req, res) => {
       res.json({ status: 'ok', channels: [...this.channels.keys()] });

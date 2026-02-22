@@ -13,6 +13,25 @@ export interface TelegramChannelConfig extends ChannelConfig {
   bot_token: string;
 }
 
+export interface GmailChannelConfig extends ChannelConfig {
+  type: 'email';
+  provider: 'gmail';
+  client_id: string;
+  client_secret: string;
+  poll_interval?: number;    // seconds, default 30
+  labels?: string[];         // Gmail labels to watch, default ['INBOX']
+}
+
+export interface ResendChannelConfig extends ChannelConfig {
+  type: 'email';
+  provider: 'resend';
+  api_key: string;
+  from_email: string;        // verified sender, e.g. support@yourdomain.com
+  webhook_secret?: string;   // for verifying inbound webhooks
+}
+
+export type EmailChannelConfig = GmailChannelConfig | ResendChannelConfig;
+
 export interface STTServiceConfig {
   provider: 'google' | 'whisper' | 'deepgram';
   language?: string;                // e.g. 'he-IL', 'en-US' — primary language

@@ -4,6 +4,7 @@ import { ApiServer } from './core/apiServer';
 import { Channel } from './channels/base';
 import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
+import { GmailChannel, ResendChannel } from './channels/email';
 import { Onboarding } from './onboarding';
 import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
@@ -44,6 +45,18 @@ export class ChannelKit {
           channel = new TelegramChannel(name, channelConfig as any);
           telegramChannel = channel as TelegramChannel;
           break;
+        case 'email': {
+          const emailConfig = channelConfig as any;
+          if (emailConfig.provider === 'gmail') {
+            channel = new GmailChannel(name, emailConfig);
+          } else if (emailConfig.provider === 'resend') {
+            channel = new ResendChannel(name, emailConfig);
+          } else {
+            console.warn(`Unknown email provider: ${emailConfig.provider}`);
+            continue;
+          }
+          break;
+        }
         default:
           console.warn(`Unknown channel type: ${channelConfig.type}`);
           continue;

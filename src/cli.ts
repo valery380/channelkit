@@ -78,7 +78,7 @@ async function initCommand() {
     const channelIdx = await select(rl, 'Which channel do you want to connect?', [
       '📱 WhatsApp — connect with your phone number',
       '💬 Telegram — create a bot',
-      '📧 Email — connect IMAP/SMTP',
+      '📧 Email — Gmail or Resend',
     ]);
 
     const channels: Record<string, any> = {};
@@ -151,15 +151,45 @@ async function initCommand() {
     } else {
       // Email
       console.log();
-      const address = await ask(rl, 'Email address:', 'support@myapp.com');
-      const imap = await ask(rl, 'IMAP server:', 'imap.gmail.com');
+      const emailProviderIdx = await select(rl, 'Which email provider?', [
+        '📧 Gmail — OAuth2, polling (no public URL needed)',
+        '📨 Resend — API + inbound webhooks (needs public URL)',
+      ]);
 
-      channelName = 'email';
-      channels[channelName] = {
-        type: 'email',
-        address,
-        imap,
-      };
+      if (emailProviderIdx === 0) {
+        console.log(c('bright', '\n  📝 Gmail OAuth Setup:\n'));
+        console.log(c('dim', '  You need a Google Cloud project with Gmail API enabled.'));
+        console.log(c('dim', '  Create OAuth2 credentials (Desktop app) at:'));
+        console.log(c('cyan', '  https://console.cloud.google.com/apis/credentials\n'));
+
+        const clientId = await ask(rl, 'OAuth Client ID:');
+        const clientSecret = await ask(rl, 'OAuth Client Secret:');
+        const pollInterval = await ask(rl, 'Poll interval (seconds):', '30');
+
+        channelName = 'gmail';
+        channels[channelName] = {
+          type: 'email',
+          provider: 'gmail',
+          client_id: clientId,
+          client_secret: clientSecret,
+          poll_interval: parseInt(pollInterval) || 30,
+        };
+      } else {
+        console.log(c('bright', '\n  📝 Resend Setup:\n'));
+        console.log(c('dim', '  You need a Resend account with a verified domain.'));
+        console.log(c('dim', '  Get your API key at: https://resend.com/api-keys\n'));
+
+        const apiKey = await ask(rl, 'Resend API Key:');
+        const fromEmail = await ask(rl, 'Sender email (verified domain):', 'noreply@yourdomain.com');
+
+        channelName = 'resend';
+        channels[channelName] = {
+          type: 'email',
+          provider: 'resend',
+          api_key: apiKey,
+          from_email: fromEmail,
+        };
+      }
     }
 
     // Step 2: Generate config
@@ -591,7 +621,7 @@ channel
       const channelIdx = await select(rl, 'Which channel do you want to add?', [
         '📱 WhatsApp — connect with your phone number',
         '💬 Telegram — create a bot',
-        '📧 Email — connect IMAP/SMTP',
+        '📧 Email — Gmail or Resend',
       ]);
 
       let channelName: string;
@@ -683,27 +713,50 @@ channel
       } else {
         // Email
         console.log();
-        const address = await ask(rl, 'Email address:', 'support@myapp.com');
-        const imap = await ask(rl, 'IMAP server:', 'imap.gmail.com');
+        const providerIdx = await select(rl, 'Which email provider?', [
+          '📧 Gmail — OAuth2, polling (no public URL needed)',
+          '📨 Resend — API + inbound webhooks (needs public URL)',
+        ]);
 
-        channelName = 'email';
-        channelConfig = {
-          type: 'email',
-          address,
-          imap,
-        };
-      }
+        if (providerIdx === 0) {
+          // Gmail
+          console.log(c('bright', '\n  📝 Gmail OAuth Setup:\n'));
+          console.log(c('dim', '  You need a Google Cloud project with Gmail API enabled.'));
+          console.log(c('dim', '  Create OAuth2 credentials (Desktop app) at:'));
+          console.log(c('cyan', '  https://console.cloud.google.com/apis/credentials\n'));
 
-      // Ask for default service
-      const addService = await ask(rl, 'Add a default service for this channel? (Y/n):', 'Y');
-      if (addService.toLowerCase() !== 'n') {
-        const webhook = await ask(rl, 'Webhook URL:', 'http://localhost:3000/api/chat');
-        const svcName = await ask(rl, 'Service name:', channelName + '-default');
-        if (!config.services) config.services = {};
-        config.services[svcName] = {
-          channel: channelName,
-          webhook,
-        };
+          const clientId = await ask(rl, 'OAuth Client ID:');
+          const clientSecret = await ask(rl, 'OAuth Client Secret:');
+          const pollInterval = await ask(rl, 'Poll interval (seconds):', '30');
+
+          channelName = await ask(rl, 'Channel name:', 'gmail');
+          channelConfig = {
+            type: 'email',
+            provider: 'gmail',
+            client_id: clientId,
+            client_secret: clientSecret,
+            poll_interval: parseInt(pollInterval) || 30,
+          };
+        } else {
+          // Resend
+          console.log(c('bright', '\n  📝 Resend Setup:\n'));
+          console.log(c('dim', '  You need a Resend account with a verified domain.'));
+          console.log(c('dim', '  Get your API key at: https://resend.com/api-keys\n'));
+
+          const apiKey = await ask(rl, 'Resend API Key:');
+          const fromEmail = await ask(rl, 'Sender email (verified domain):', 'noreply@yourdomain.com');
+
+          channelName = await ask(rl, 'Channel name:', 'resend');
+          channelConfig = {
+            type: 'email',
+            provider: 'resend',
+            api_key: apiKey,
+            from_email: fromEmail,
+          };
+
+          console.log(c('dim', `\n  📬 Configure Resend inbound webhook to:`));
+          console.log(c('cyan', `     <your-public-url>/inbound/resend/${channelName}\n`));
+        }
       }
 
       config.channels[channelName] = channelConfig;
