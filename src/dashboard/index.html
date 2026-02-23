@@ -2972,6 +2972,38 @@
             console.error("Failed to update SMS settings:", e);
           }
         }
+        // For Resend email channels, register webhook via email-settings endpoint
+        if (typeKey === "email-resend") {
+          const emailInbound =
+            document.getElementById("ch-email-inbound")?.value || "webhook";
+          try {
+            const emailRes = await fetch(
+              API +
+                "/api/config/channels/" +
+                encodeURIComponent(name) +
+                "/email-settings",
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  inbound_mode: emailInbound,
+                  ...(emailInbound === "polling" && {
+                    poll_interval:
+                      parseInt(
+                        document.getElementById("ch-email-poll-interval")?.value,
+                      ) || 30,
+                  }),
+                }),
+              },
+            );
+            if (!emailRes.ok) {
+              const d = await emailRes.json().catch(() => ({}));
+              console.warn("Email settings update:", d.error || "failed");
+            }
+          } catch (e) {
+            console.error("Failed to update email settings:", e);
+          }
+        }
         // For WhatsApp channels, start QR pairing immediately
         if (typeKey === "whatsapp") {
           backToChannelPicker();

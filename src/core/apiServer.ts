@@ -828,6 +828,91 @@ export class ApiServer {
       }
     });
 
+    // PUT /api/config/channels/:name/email-settings — update Resend inbound mode and register/remove webhook
+    this.app.put('/api/config/channels/:name/email-settings', async (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      const { inbound_mode, poll_interval } = req.body;
+
+      if (!inbound_mode || !['polling', 'webhook'].includes(inbound_mode)) {
+        res.status(400).json({ error: 'inbound_mode must be "polling" or "webhook"' });
+        return;
+      }
+
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        const ch = config.channels[name];
+        if (!ch) {
+          res.status(404).json({ error: `Channel "${name}" not found` });
+          return;
+        }
+        if (ch.type !== 'email' || (ch as any).provider !== 'resend') {
+          res.status(400).json({ error: 'Not a Resend email channel' });
+          return;
+        }
+
+        if (inbound_mode === 'webhook' && !this.publicUrl) {
+          res.status(400).json({ error: 'Service is not externalized. Please externalize first.' });
+          return;
+        }
+
+        const apiKey = (ch as any).api_key as string;
+
+        if (inbound_mode === 'webhook') {
+          // Delete existing webhook if switching from polling
+          if ((ch as any).webhook_id) {
+            try {
+              await fetch(`https://api.resend.com/webhooks/${(ch as any).webhook_id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${apiKey}` },
+              });
+            } catch (_) { /* ignore — may already be gone */ }
+          }
+
+          const webhookUrl = `${this.publicUrl}/inbound/resend/${name}`;
+          const createRes = await fetch('https://api.resend.com/webhooks', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: webhookUrl, events: ['email.received'] }),
+          });
+
+          if (!createRes.ok) {
+            const err = await createRes.text();
+            res.status(502).json({ error: `Resend webhook creation failed: ${err}` });
+            return;
+          }
+
+          const result = await createRes.json() as { id: string; signing_secret?: string };
+          (ch as any).webhook_id = result.id;
+          if (result.signing_secret) (ch as any).webhook_secret = result.signing_secret;
+          delete ch.poll_interval;
+          console.log(`📬 Registered Resend inbound webhook for "${name}" → ${webhookUrl}`);
+        } else {
+          // Polling mode — remove webhook from Resend if one exists
+          if ((ch as any).webhook_id) {
+            try {
+              await fetch(`https://api.resend.com/webhooks/${(ch as any).webhook_id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${apiKey}` },
+              });
+              console.log(`📬 Removed Resend webhook for "${name}"`);
+            } catch (e: any) {
+              console.error(`[email-settings] Failed to delete Resend webhook: ${e.message}`);
+            }
+            delete (ch as any).webhook_id;
+            delete (ch as any).webhook_secret;
+          }
+          ch.poll_interval = parseInt(poll_interval) || 30;
+        }
+
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // DELETE /api/config/channels/:name — remove a channel and its dependent services
     this.app.delete('/api/config/channels/:name', (req, res) => {
       if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
