@@ -36,6 +36,7 @@ export interface ResendChannelConfig extends ChannelConfig {
   api_key: string;
   from_email: string;        // verified sender, e.g. support@yourdomain.com
   webhook_secret?: string;   // for verifying inbound webhooks
+  webhook_id?: string;       // Resend webhook ID (auto-registered)
   poll_interval?: number;    // seconds — if set, poll instead of webhook
 }
 

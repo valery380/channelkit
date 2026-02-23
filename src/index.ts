@@ -12,7 +12,7 @@ import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
 import { processInbound, processOutbound } from './media/processor';
 import { TunnelManager } from './core/tunnel';
-import { loadConfig } from './config/parser';
+import { loadConfig, saveConfig } from './config/parser';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -429,9 +429,51 @@ export class ChannelKit {
         }
       }
 
-      // Print Resend inbound webhook info
-      if (channelConfig.type === 'email' && (channelConfig as any).provider === 'resend') {
-        console.log(`📬 Resend inbound webhook: ${publicUrl}/inbound/resend/${name}`);
+      // Auto-configure Resend inbound webhook
+      if (channelConfig.type === 'email' && (channelConfig as any).provider === 'resend' && !(channelConfig as any).poll_interval) {
+        try {
+          const apiKey = (channelConfig as any).api_key as string;
+          const webhookUrl = `${publicUrl}/inbound/resend/${name}`;
+
+          // Check if a webhook already points to our endpoint
+          const listRes = await fetch('https://api.resend.com/webhooks', {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          let existingId: string | null = null;
+          if (listRes.ok) {
+            const list = await listRes.json() as { data?: { id: string; endpoint: string }[] };
+            const match = list.data?.find((w) => w.endpoint === webhookUrl);
+            if (match) existingId = match.id;
+          }
+
+          if (!existingId) {
+            // Register new webhook
+            const createRes = await fetch('https://api.resend.com/webhooks', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ endpoint: webhookUrl, events: ['email.received'] }),
+            });
+            if (createRes.ok) {
+              const result = await createRes.json() as { id: string; signing_secret?: string };
+              (channelConfig as any).webhook_id = result.id;
+              if (result.signing_secret) (channelConfig as any).webhook_secret = result.signing_secret;
+              if (this.configPath) saveConfig(this.configPath, this.config);
+              console.log(`📬 Registered Resend inbound webhook for "${name}" → ${webhookUrl}`);
+            } else {
+              console.error(`[resend] Failed to register webhook: ${await createRes.text()}`);
+              console.log(`📬 Resend inbound webhook (manual): ${webhookUrl}`);
+            }
+          } else {
+            // Already registered — store the ID if missing
+            if (!(channelConfig as any).webhook_id) {
+              (channelConfig as any).webhook_id = existingId;
+              if (this.configPath) saveConfig(this.configPath, this.config);
+            }
+            console.log(`📬 Resend inbound webhook already registered for "${name}" → ${webhookUrl}`);
+          }
+        } catch (err: any) {
+          console.error(`[tunnel] Failed to register Resend webhook for ${name}: ${err.message}`);
+        }
       }
 
       // Auto-configure Twilio voice webhook
