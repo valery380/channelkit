@@ -126,6 +126,7 @@ export class Onboarding {
     if (!this.telegramChannel) return false;
 
     const codes = this.getCodesForChannel('telegram');
+    if (codes.length === 0) return false;
     // Support both plain code and /start CODE
     let text = (message.text || '').trim().toUpperCase();
     if (text.startsWith('/START ')) {
