@@ -19,12 +19,38 @@ export class ApiServer {
   private publicUrl: string | null = null;
   private configPath?: string;
   private serverLogBuffer: Array<{ level: string; text: string; ts: number }> = [];
+  private exposeDashboard = false;
   findVoiceConfig?: (channelName: string) => any;
+  tunnelStart?: () => Promise<{ url: string }>;
+  tunnelStop?: () => Promise<void>;
+  tunnelStatus?: () => { active: boolean; url: string | null };
 
   constructor(private port: number = 4000) {
     this.app.use(express.json());
+    // Block dashboard/management routes for external (tunneled) requests unless allowed
+    this.app.use((req, res, next) => {
+      if (!this.publicUrl || this.exposeDashboard) { next(); return; }
+      // Requests through cloudflared have a Cf-Connecting-Ip header
+      const isExternal = req.headers['cf-connecting-ip'] ||
+        (req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1'));
+      if (!isExternal) { next(); return; }
+      // Allow webhook inbound routes, async send, and health check
+      const p = req.path;
+      if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
+        next(); return;
+      }
+      res.status(403).send('Dashboard access is disabled for external requests.');
+    });
     this.wss = new WebSocketServer({ server: this.httpServer });
     this.setupRoutes();
+  }
+
+  setExposeDashboard(value: boolean): void {
+    this.exposeDashboard = value;
+  }
+
+  getExposeDashboard(): boolean {
+    return this.exposeDashboard;
   }
 
   setLogger(logger: Logger): void {
@@ -83,6 +109,10 @@ export class ApiServer {
 
   setPublicUrl(url: string): void {
     this.publicUrl = url.replace(/\/$/, '');
+  }
+
+  clearPublicUrl(): void {
+    this.publicUrl = null;
   }
 
   getBaseUrl(): string {
@@ -348,6 +378,144 @@ export class ApiServer {
       res.json({ ok: true });
     });
 
+    // GET /api/tunnel/status — return current tunnel state
+    this.app.get('/api/tunnel/status', (_req, res) => {
+      if (!this.tunnelStatus) {
+        res.json({ active: false, url: null });
+        return;
+      }
+      res.json(this.tunnelStatus());
+    });
+
+    // POST /api/tunnel/start — start cloudflared tunnel
+    this.app.post('/api/tunnel/start', async (_req, res) => {
+      if (!this.tunnelStart) {
+        res.status(503).json({ error: 'Tunnel not available' });
+        return;
+      }
+      try {
+        const result = await this.tunnelStart();
+        this.broadcast({ type: 'tunnelStatus', active: true, url: result.url });
+        res.json({ ok: true, url: result.url });
+      } catch (err: any) {
+        this.broadcast({ type: 'tunnelStatus', active: false, url: null, error: err.message });
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/tunnel/stop — stop cloudflared tunnel
+    this.app.post('/api/tunnel/stop', async (_req, res) => {
+      if (!this.tunnelStop) {
+        res.status(503).json({ error: 'Tunnel not available' });
+        return;
+      }
+      try {
+        await this.tunnelStop();
+        this.broadcast({ type: 'tunnelStatus', active: false, url: null });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/tunnel/config — save tunnel token + hostname to config
+    this.app.put('/api/tunnel/config', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { token, public_url } = req.body;
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.tunnel) config.tunnel = {};
+        if (token) {
+          config.tunnel.token = token;
+        } else {
+          delete config.tunnel.token;
+        }
+        if (public_url) {
+          config.tunnel.public_url = public_url;
+        } else {
+          delete config.tunnel.public_url;
+        }
+        if (!config.tunnel.provider) config.tunnel.provider = 'cloudflared';
+        saveConfig(this.configPath, config);
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // GET /api/tunnel/config — get current tunnel token/hostname from config
+    this.app.get('/api/tunnel/config', (_req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        res.json({
+          token: config.tunnel?.token || null,
+          public_url: config.tunnel?.public_url || null,
+          expose_dashboard: this.exposeDashboard,
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/tunnel/update-webhooks — re-point all SMS webhook-mode channels to current public URL
+    this.app.post('/api/tunnel/update-webhooks', async (_req, res) => {
+      if (!this.publicUrl) {
+        res.status(400).json({ error: 'No public URL — externalize first' });
+        return;
+      }
+      if (!this.configPath) {
+        res.status(503).json({ error: 'Config path not set' });
+        return;
+      }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        const updated: string[] = [];
+        const errors: Array<{ name: string; error: string }> = [];
+
+        for (const [name, ch] of Object.entries(config.channels)) {
+          if (ch.type !== 'sms') continue;
+          if ((ch as any).poll_interval) continue; // polling mode — skip
+          try {
+            const Twilio = (await import('twilio')).default;
+            const client = Twilio((ch as any).account_sid as string, (ch as any).auth_token as string);
+            const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: (ch as any).number as string, limit: 1 });
+            if (numbers.length > 0) {
+              const webhookUrl = `${this.publicUrl}/inbound/twilio/${name}`;
+              await client.incomingPhoneNumbers(numbers[0].sid).update({ smsUrl: webhookUrl, smsMethod: 'POST' });
+              console.log(`📱 Updated Twilio SMS webhook for "${name}" → ${webhookUrl}`);
+              updated.push(name);
+            } else {
+              errors.push({ name, error: `Phone number ${(ch as any).number} not found in Twilio` });
+            }
+          } catch (err: any) {
+            errors.push({ name, error: err.message });
+          }
+        }
+
+        res.json({ ok: true, updated, errors });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/tunnel/expose-dashboard — toggle dashboard access via tunnel
+    this.app.put('/api/tunnel/expose-dashboard', (req, res) => {
+      const { enabled } = req.body;
+      this.exposeDashboard = !!enabled;
+      // Persist to config
+      if (this.configPath) {
+        try {
+          const config = loadConfig(this.configPath, { validate: false });
+          if (!config.tunnel) config.tunnel = {};
+          config.tunnel.expose_dashboard = this.exposeDashboard;
+          saveConfig(this.configPath, config);
+        } catch {}
+      }
+      this.broadcast({ type: 'tunnelStatus', active: !!this.publicUrl, url: this.publicUrl, exposeDashboard: this.exposeDashboard });
+      res.json({ ok: true, expose_dashboard: this.exposeDashboard });
+    });
+
     // GET /api/config — return channels and services from config file
     this.app.get('/api/config', (_req, res) => {
       if (!this.configPath) {
@@ -472,6 +640,73 @@ export class ApiServer {
           delete config.channels[name].unmatched;
         }
         saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/config/channels/:name/sms-settings — update SMS inbound mode and Twilio webhook
+    this.app.put('/api/config/channels/:name/sms-settings', async (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      const { inbound_mode, poll_interval } = req.body;
+
+      if (!inbound_mode || !['polling', 'webhook'].includes(inbound_mode)) {
+        res.status(400).json({ error: 'inbound_mode must be "polling" or "webhook"' });
+        return;
+      }
+
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        const ch = config.channels[name];
+        if (!ch) {
+          res.status(404).json({ error: `Channel "${name}" not found` });
+          return;
+        }
+        if (ch.type !== 'sms') {
+          res.status(400).json({ error: 'Not an SMS channel' });
+          return;
+        }
+
+        // Validate tunnel is active for webhook mode
+        if (inbound_mode === 'webhook' && !this.publicUrl) {
+          res.status(400).json({ error: 'Service is not externalized. Please externalize first.' });
+          return;
+        }
+
+        // Update config
+        if (inbound_mode === 'polling') {
+          ch.poll_interval = parseInt(poll_interval) || 60;
+        } else {
+          delete ch.poll_interval;
+        }
+
+        saveConfig(this.configPath, config);
+
+        // Update Twilio webhook
+        try {
+          const Twilio = (await import('twilio')).default;
+          const client = Twilio(ch.account_sid as string, ch.auth_token as string);
+          const numbers = await client.incomingPhoneNumbers.list({ phoneNumber: ch.number as string, limit: 1 });
+          if (numbers.length > 0) {
+            const numberSid = numbers[0].sid;
+            if (inbound_mode === 'webhook') {
+              const webhookUrl = `${this.publicUrl}/inbound/twilio/${name}`;
+              await client.incomingPhoneNumbers(numberSid).update({ smsUrl: webhookUrl, smsMethod: 'POST' });
+              console.log(`📱 Updated Twilio SMS webhook to ${webhookUrl}`);
+            } else {
+              await client.incomingPhoneNumbers(numberSid).update({ smsUrl: 'https://api.vapi.ai/twilio/sms', smsMethod: 'POST' });
+              console.log(`📱 Reverted Twilio SMS webhook to default`);
+            }
+          } else {
+            console.warn(`⚠️ Twilio number ${ch.number} not found — webhook not updated`);
+          }
+        } catch (twilioErr: any) {
+          console.error(`[sms-settings] Twilio webhook update failed: ${twilioErr.message}`);
+        }
+
         this.broadcast({ type: 'configChanged' });
         res.json({ ok: true });
       } catch (err: any) {

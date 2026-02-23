@@ -148,53 +148,18 @@ export class Router {
     return undefined;
   }
 
-  async route(message: UnifiedMessage, replyUrl?: string, extra?: { sttTranscription?: string; ttsGenerated?: boolean }): Promise<WebhookResponse | null> {
+  async route(message: UnifiedMessage, replyUrl?: string): Promise<{ response: WebhookResponse | null; webhook?: string; latency: number }> {
     const webhook = this.findWebhook(message);
     const startTime = Date.now();
 
     if (!webhook) {
       console.log(`[router] No service matched for message ${message.id} on ${message.channelName || message.channel}`);
-      if (this.logger) {
-        this.logger.log({
-          id: message.id,
-          timestamp: Date.now(),
-          channel: message.channel,
-          from: message.from,
-          senderName: message.senderName,
-          text: message.text,
-          type: message.type,
-          groupId: message.groupId,
-          groupName: message.groupName,
-          status: 'no-route',
-          sttTranscription: extra?.sttTranscription,
-        });
-      }
-      return null;
+      return { response: null, webhook: undefined, latency: 0 };
     }
 
     console.log(`[router] Routing ${message.id} → ${webhook}`);
     const response = await dispatchWebhook(webhook, message, replyUrl);
     const latency = Date.now() - startTime;
-
-    if (this.logger) {
-      this.logger.log({
-        id: message.id,
-        timestamp: Date.now(),
-        channel: message.channel,
-        from: message.from,
-        senderName: message.senderName,
-        text: message.text,
-        type: message.type,
-        groupId: message.groupId,
-        groupName: message.groupName,
-        route: webhook,
-        responseText: response?.text,
-        status: response ? 'success' : 'error',
-        latency,
-        sttTranscription: extra?.sttTranscription,
-      });
-    }
-
-    return response;
+    return { response, webhook, latency };
   }
 }

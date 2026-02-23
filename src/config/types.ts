@@ -115,6 +115,8 @@ export interface DashboardConfig {
 export interface TunnelConfig {
   provider?: 'cloudflared';
   public_url?: string;
+  token?: string;              // Cloudflare Tunnel token for stable URLs
+  expose_dashboard?: boolean;  // allow dashboard access via tunnel (default: false)
 }
 
 export interface AppConfig {
