@@ -148,9 +148,10 @@ export class ChannelKit {
         // Attach channel name
         message.channelName = channel.name;
 
-        // Try onboarding first for DMs (only in groups mode)
+        // Try onboarding first for DMs (only in groups mode).
+        // Skip if the channel already pre-resolved a webhook (e.g. Telegram slash commands).
         const mode = this.router.getChannelMode(channel.name);
-        if (this.onboarding && !message.groupId && mode === 'groups') {
+        if (this.onboarding && !message.groupId && mode === 'groups' && !(message as any)._resolvedWebhook) {
           const channelUnmatched = (this.config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
           const handled = await this.onboarding.handleDirectMessage(message, channelUnmatched);
           if (handled) {
