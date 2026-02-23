@@ -1,4 +1,4 @@
-import { AppConfig } from './config/types';
+import { AppConfig, TunnelConfig } from './config/types';
 import { Router } from './core/router';
 import { ApiServer } from './core/apiServer';
 import { Channel } from './channels/base';
@@ -12,6 +12,7 @@ import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
 import { processInbound, processOutbound } from './media/processor';
 import { TunnelManager } from './core/tunnel';
+import { loadConfig } from './config/parser';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -21,6 +22,7 @@ export class ChannelKit {
   private logger: Logger;
   private onboarding?: Onboarding;
   private tunnel?: TunnelManager;
+  private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
 
   constructor(private config: AppConfig, private configPath?: string) {
     this.router = new Router(config.services, config.routes);
@@ -213,7 +215,8 @@ export class ChannelKit {
 
         const replyTo = message.groupId || message.from;
         const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
-        let response = await this.router.route(message, replyUrl, { sttTranscription });
+        const { response: routedResponse, webhook: routedWebhook, latency } = await this.router.route(message, replyUrl);
+        let response = routedResponse;
 
         // If no service matched, check channel's unmatched policy.
         // Only applies to DMs (no groupId) — group messages imply a pre-existing
@@ -247,28 +250,42 @@ export class ChannelKit {
           }
         }
 
-        // Update log with TTS info if needed
-        if (ttsGenerated) {
-          this.logger.log({
-            id: message.id + '_tts',
-            timestamp: Date.now(),
-            channel: message.channel,
-            from: message.from,
-            type: 'tts',
-            text: response?.text,
-            status: 'success',
-            ttsGenerated: true,
-          });
-        }
-
+        // Send the response and capture any delivery error
+        let sendError: string | undefined;
         if (response) {
           // Voice calls: route response to TwiML redirect flow
           if (message.channel === 'voice' && (message as any)._callSid && channel instanceof TwilioVoiceChannel) {
             channel.setCallResponse((message as any)._callSid, response);
           } else {
-            await channel.send(replyTo, response);
+            try {
+              await channel.send(replyTo, response);
+            } catch (sendErr: any) {
+              sendError = sendErr?.message || String(sendErr);
+              console.error(`[${channel.name}] Failed to send reply to ${replyTo}: ${sendError}`);
+            }
           }
         }
+
+        // Single log entry: inbound message + webhook result + delivery outcome
+        this.logger.log({
+          id: message.id,
+          timestamp: Date.now(),
+          channel: message.channel,
+          from: message.from,
+          senderName: message.senderName,
+          text: message.text,
+          type: message.type,
+          groupId: message.groupId,
+          groupName: message.groupName,
+          route: routedWebhook,
+          responseText: sendError
+            ? `${response?.text ? response.text + '\n' : ''}[Delivery failed: ${sendError}]`
+            : response?.text,
+          status: sendError ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
+          latency,
+          sttTranscription,
+          ttsGenerated: ttsGenerated || undefined,
+        });
       });
     }
 
@@ -286,6 +303,49 @@ export class ChannelKit {
     }
     this.apiServer.captureConsole();
 
+    // Set initial dashboard external access from config
+    if (this.config.tunnel?.expose_dashboard) {
+      this.apiServer.setExposeDashboard(true);
+    }
+
+    // Wire up tunnel callbacks for dashboard control
+    this.apiServer.tunnelStatus = () => ({
+      active: this.tunnel?.getPublicUrl() != null,
+      url: this.tunnel?.getPublicUrl() || null,
+    });
+
+    this.apiServer.tunnelStart = async () => {
+      if (this.tunnel?.getPublicUrl()) {
+        return { url: this.tunnel.getPublicUrl()! };
+      }
+      const port = this.config.apiPort || 4000;
+      // Reload config from file to pick up any saved token/hostname
+      let tunnelConfig: TunnelConfig = { provider: 'cloudflared' };
+      if (this.configPath) {
+        try {
+          const freshConfig = loadConfig(this.configPath, { validate: false });
+          if (freshConfig.tunnel) tunnelConfig = freshConfig.tunnel;
+        } catch {}
+      }
+      this.tunnel = new TunnelManager(tunnelConfig, port);
+      await this.tunnel.start();
+      const publicUrl = this.tunnel.getPublicUrl();
+      if (!publicUrl) throw new Error('Tunnel started but no URL received');
+      this.apiServer.setPublicUrl(publicUrl);
+      this.tunnelStartedBy = 'dashboard';
+      await this.autoConfigureWebhooks(publicUrl);
+      return { url: publicUrl };
+    };
+
+    this.apiServer.tunnelStop = async () => {
+      if (this.tunnel) {
+        await this.tunnel.stop();
+        this.tunnel = undefined;
+        this.apiServer.clearPublicUrl();
+        this.tunnelStartedBy = null;
+      }
+    };
+
     // Start tunnel if configured
     if (this.config.tunnel) {
       const port = this.config.apiPort || 4000;
@@ -295,6 +355,7 @@ export class ChannelKit {
         const publicUrl = this.tunnel.getPublicUrl();
         if (publicUrl) {
           this.apiServer.setPublicUrl(publicUrl);
+          this.tunnelStartedBy = 'cli';
           await this.autoConfigureWebhooks(publicUrl);
         }
       } catch (err: any) {

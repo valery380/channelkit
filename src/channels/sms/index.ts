@@ -58,17 +58,12 @@ export class TwilioSMSChannel extends Channel {
 
   async send(to: string, response: WebhookResponse): Promise<void> {
     if (!response.text) return;
-
-    try {
-      const msg = await this.client.messages.create({
-        body: response.text,
-        from: this.cfg.number,
-        to,
-      });
-      console.log(`[sms:${this.name}] Sent to ${to}: ${msg.sid}`);
-    } catch (err) {
-      console.error(`[sms:${this.name}] Send failed:`, err);
-    }
+    const msg = await this.client.messages.create({
+      body: response.text,
+      from: this.cfg.number,
+      to,
+    });
+    console.log(`[sms:${this.name}] Sent to ${to}: ${msg.sid}`);
   }
 
   /**
@@ -114,6 +109,7 @@ export class TwilioSMSChannel extends Channel {
 
   private async poll(): Promise<void> {
     try {
+      console.log(`[sms:${this.name}] Polling Twilio for inbound messages since ${this.lastPollTime.toISOString()}`);
       const messages = await this.client.messages.list({
         to: this.cfg.number,
         dateSentAfter: this.lastPollTime,

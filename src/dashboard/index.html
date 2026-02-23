@@ -1,602 +1,1837 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ChannelKit Dashboard</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#f8f9fa;--surface:#ffffff;--border:#e1e4e8;--text:#24292f;--dim:#656d76;--accent:#0969da;--green:#1a7f37;--red:#cf222e;--yellow:#9a6700;--highlight:rgba(9,105,218,0.06)}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-.mono{font-family:'SF Mono',SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ChannelKit Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      :root {
+        --bg: #f8f9fa;
+        --surface: #ffffff;
+        --border: #e1e4e8;
+        --text: #24292f;
+        --dim: #656d76;
+        --accent: #0969da;
+        --green: #1a7f37;
+        --red: #cf222e;
+        --yellow: #9a6700;
+        --highlight: rgba(9, 105, 218, 0.06);
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      .mono {
+        font-family:
+          "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo,
+          monospace;
+      }
 
-header{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
-header h1{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px}
-header h1 span{color:var(--accent)}
-.stats{display:flex;gap:20px;flex-wrap:wrap}
-.stat{text-align:center}
-.stat-value{font-size:20px;font-weight:700;color:var(--accent)}
-.stat-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px}
+      header {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 16px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      header h1 span {
+        color: var(--accent);
+      }
+      .stats {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .stat {
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-label {
+        font-size: 11px;
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
 
-.restart-banner{background:#9a6700;color:#fff;padding:10px 24px;font-size:13px;font-weight:500;display:none}
+      .restart-banner {
+        background: #9a6700;
+        color: #fff;
+        padding: 10px 24px;
+        font-size: 13px;
+        font-weight: 500;
+        display: none;
+      }
 
-.tabs{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;gap:0}
-.tab{background:none;border:none;border-bottom:2px solid transparent;padding:12px 16px;font-size:13px;font-weight:500;color:var(--dim);cursor:pointer;transition:color 0.15s}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+      .tabs {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 0 24px;
+        display: flex;
+        gap: 0;
+      }
+      .tab {
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        padding: 12px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--dim);
+        cursor: pointer;
+        transition: color 0.15s;
+      }
+      .tab:hover {
+        color: var(--text);
+      }
+      .tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
 
-.tab-panel{display:none}
-.tab-panel.active{display:block}
+      .tab-panel {
+        display: none;
+      }
+      .tab-panel.active {
+        display: block;
+      }
 
-.filters{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.filters select,.filters input{background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:6px;font-size:13px}
-.filters input{flex:1;min-width:200px}
-.filters select:focus,.filters input:focus{outline:none;border-color:var(--accent)}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.badge-live{background:var(--green);color:#000;animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.7}}
+      .filters {
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 24px;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .filters select,
+      .filters input {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+      }
+      .filters input {
+        flex: 1;
+        min-width: 200px;
+      }
+      .filters select:focus,
+      .filters input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .badge-live {
+        background: var(--green);
+        color: #000;
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
 
-.table-wrap{overflow-x:auto;padding:0 24px 24px}
-table{width:100%;border-collapse:collapse;margin-top:8px}
-th{text-align:left;padding:10px 12px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
-td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
-tr:hover td{background:var(--highlight)}
-tr.new-entry td{animation:fadeIn 0.5s ease}
-#log-body tr{cursor:pointer}
-@keyframes fadeIn{from{background:rgba(88,166,255,0.15)}to{background:transparent}}
+      .table-wrap {
+        overflow-x: auto;
+        padding: 0 24px 24px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+      th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 11px;
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+      }
+      td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        vertical-align: top;
+      }
+      tr:hover td {
+        background: var(--highlight);
+      }
+      tr.new-entry td {
+        animation: fadeIn 0.5s ease;
+      }
+      #log-body tr {
+        cursor: pointer;
+      }
+      @keyframes fadeIn {
+        from {
+          background: rgba(88, 166, 255, 0.15);
+        }
+        to {
+          background: transparent;
+        }
+      }
 
-.channel-icon{font-size:16px;line-height:1}.channel-icon svg{display:block;width:20px;height:20px}
-.text-preview{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim)}
-.status-ok{color:var(--green)}
-.status-err{color:var(--red)}
-.status-noroute{color:var(--yellow)}
-.latency{color:var(--dim);font-size:12px}
-.from-cell .name{color:var(--text);font-weight:500}
-.from-cell .number{color:var(--dim);font-size:11px}
-.route-cell{color:var(--dim);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.time-cell{color:var(--dim);font-size:12px;white-space:nowrap}
+      .channel-icon {
+        font-size: 16px;
+        line-height: 1;
+      }
+      .channel-icon svg {
+        display: block;
+        width: 20px;
+        height: 20px;
+      }
+      .text-preview {
+        max-width: 300px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--dim);
+      }
+      .status-ok {
+        color: var(--green);
+        display: inline-flex;
+      }
+      .status-err {
+        color: var(--red);
+        display: inline-flex;
+      }
+      .status-noroute {
+        color: var(--yellow);
+        display: inline-flex;
+      }
+      .latency {
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .from-cell .name {
+        color: var(--text);
+        font-weight: 500;
+      }
+      .from-cell .number {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .route-cell {
+        color: var(--dim);
+        font-size: 12px;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .time-cell {
+        color: var(--dim);
+        font-size: 12px;
+        white-space: nowrap;
+      }
 
-.detail{display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:4px 0 8px;padding:16px}
-.detail.open{display:block}
-.detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
-.detail-item label{font-size:11px;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:2px}
-.detail-item p{font-size:13px;word-break:break-all}
-.detail-response{margin-top:12px;padding:12px;background:#f0f2f5;border-radius:6px;white-space:pre-wrap;font-size:13px}
+      .detail {
+        display: none;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin: 4px 0 8px;
+        padding: 16px;
+      }
+      .detail.open {
+        display: block;
+      }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 12px;
+      }
+      .detail-item label {
+        font-size: 11px;
+        color: var(--dim);
+        text-transform: uppercase;
+        display: block;
+        margin-bottom: 2px;
+      }
+      .detail-item p {
+        font-size: 13px;
+        word-break: break-all;
+      }
+      .detail-response {
+        margin-top: 12px;
+        padding: 12px;
+        background: #f0f2f5;
+        border-radius: 6px;
+        white-space: pre-wrap;
+        font-size: 13px;
+      }
 
-.empty{text-align:center;padding:60px 20px;color:var(--dim)}
-.empty-icon{font-size:48px;margin-bottom:12px}
+      .empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--dim);
+      }
+      .empty-icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
 
-/* Config panel styles */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;border:none;cursor:pointer}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:#0758a8}
-.btn-danger{background:none;border:1px solid var(--border);color:var(--red);font-size:12px;padding:4px 8px;border-radius:4px;cursor:pointer}
-.btn-danger:hover{background:#fff0f0}
-.btn-edit{background:none;border:1px solid var(--border);color:var(--accent);font-size:12px;padding:4px 8px;border-radius:4px;cursor:pointer}
-.btn-edit:hover{background:var(--highlight)}
-.webhook-cell{max-width:280px}
-.webhook-cell .webhook-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;color:var(--dim);font-size:12px}
-.webhook-cell input{width:100%;padding:4px 6px;border:1px solid var(--accent);border-radius:4px;font-size:12px}
-#services-body input{display:block;padding:4px 6px;border:1px solid var(--accent);border-radius:4px;font-size:12px;box-sizing:border-box}
+      /* Config panel styles */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: #0758a8;
+      }
+      .btn-danger {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--red);
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .btn-danger:hover {
+        background: #fff0f0;
+      }
+      .btn-edit {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--accent);
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .btn-edit:hover {
+        background: var(--highlight);
+      }
+      .webhook-cell {
+        max-width: 280px;
+      }
+      .webhook-cell .webhook-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: block;
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .webhook-cell input {
+        width: 100%;
+        padding: 4px 6px;
+        border: 1px solid var(--accent);
+        border-radius: 4px;
+        font-size: 12px;
+      }
+      #services-body input {
+        display: block;
+        padding: 4px 6px;
+        border: 1px solid var(--accent);
+        border-radius: 4px;
+        font-size: 12px;
+        box-sizing: border-box;
+      }
 
-/* Add service form */
-.add-form{margin:16px 24px;padding:20px;background:var(--surface);border:1px solid var(--border);border-radius:8px}
-.add-form h3{font-size:14px;font-weight:600;margin-bottom:6px}
-.form-hint{font-size:12px;color:var(--dim);margin-bottom:14px}
-.form-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-.form-row input,.form-row select{flex:1;min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)}
-.form-row input:focus,.form-row select:focus{outline:none;border-color:var(--accent)}
+      /* Add service form */
+      .add-form {
+        margin: 16px 24px;
+        padding: 20px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .add-form h3 {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .form-hint {
+        font-size: 12px;
+        color: var(--dim);
+        margin-bottom: 14px;
+      }
+      .form-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .form-row input,
+      .form-row select {
+        flex: 1;
+        min-width: 140px;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-size: 13px;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .form-row input:focus,
+      .form-row select:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
 
-/* Server log styles */
-.log-toolbar{padding:10px 24px;display:flex;align-items:center;gap:14px;background:var(--surface);border-bottom:1px solid var(--border)}
-.log-toolbar button{background:none;border:1px solid var(--border);padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--text)}
-.log-toolbar label{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:5px;cursor:pointer}
-.server-log{padding:12px 24px;background:#1e1e1e;color:#d4d4d4;height:calc(100vh - 220px);overflow-y:auto;font-size:12px;line-height:1.6}
-.server-log div{white-space:pre-wrap;word-break:break-all}
-.server-log .log-err{color:#f48771}
+      /* Server log styles */
+      .log-toolbar {
+        padding: 10px 24px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .log-toolbar button {
+        background: none;
+        border: 1px solid var(--border);
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        color: var(--text);
+      }
+      .log-toolbar label {
+        font-size: 12px;
+        color: var(--dim);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+      }
+      .server-log {
+        padding: 12px 24px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        height: calc(100vh - 220px);
+        overflow-y: auto;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+      .server-log div {
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .server-log .log-err {
+        color: #f48771;
+      }
 
-@media(max-width:768px){
-  header{padding:12px 16px}
-  .filters{padding:8px 16px}
-  .table-wrap{padding:0 8px 16px}
-  td,th{padding:8px 6px;font-size:12px}
-  .text-preview{max-width:150px}
-  .tabs{padding:0 8px}
-}
-</style>
-</head>
-<body>
+      /* Tunnel / Externalize */
+      .tunnel-bar {
+        background: #1a7f37;
+        color: #fff;
+        padding: 10px 24px;
+        font-size: 13px;
+        font-weight: 500;
+        display: none;
+        align-items: center;
+        gap: 12px;
+      }
+      .tunnel-bar.active {
+        display: flex;
+      }
+      .tunnel-url {
+        font-family: "SF Mono", SFMono-Regular, Consolas, monospace;
+        background: rgba(255, 255, 255, 0.2);
+        padding: 3px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        user-select: all;
+      }
+      .tunnel-url:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      .btn-tunnel {
+        background: none;
+        border: 1px solid var(--border);
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        color: var(--text);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn-tunnel:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .btn-tunnel.active {
+        background: var(--green);
+        color: #fff;
+        border-color: var(--green);
+      }
+      .btn-tunnel:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .tunnel-warn {
+        font-size: 11px;
+        opacity: 0.85;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tunnel-warn a {
+        color: #fff;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+      .tunnel-setup {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin-top: 8px;
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12px;
+      }
+      .tunnel-setup.open {
+        display: flex;
+      }
+      .tunnel-setup input {
+        padding: 5px 8px;
+        border: none;
+        border-radius: 4px;
+        font-size: 12px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #24292f;
+      }
+      .tunnel-setup input::placeholder {
+        color: #888;
+      }
+      .tunnel-setup .ts-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .tunnel-setup button {
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        border: none;
+      }
+      .tunnel-has-token {
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.85);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tunnel-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        opacity: 0.9;
+      }
+      .tunnel-toggle input[type="checkbox"] {
+        appearance: none;
+        width: 28px;
+        height: 16px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        position: relative;
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      .tunnel-toggle input[type="checkbox"]::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        background: #fff;
+        border-radius: 50%;
+        transition: transform 0.15s;
+      }
+      .tunnel-toggle input[type="checkbox"]:checked {
+        background: rgba(255, 255, 255, 0.7);
+      }
+      .tunnel-toggle input[type="checkbox"]:checked::after {
+        transform: translateX(12px);
+      }
+      .help-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: rgba(255, 255, 255, 0.7);
+        padding: 0 2px;
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+        line-height: 1;
+      }
+      .help-btn:hover {
+        color: #fff;
+      }
+      .help-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .help-overlay.open {
+        display: flex;
+      }
+      .help-modal {
+        background: #fff;
+        border-radius: 12px;
+        padding: 28px 32px;
+        max-width: 520px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        position: relative;
+        color: var(--text);
+      }
+      .help-modal h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .help-modal .help-sub {
+        font-size: 13px;
+        color: var(--dim);
+        margin-bottom: 20px;
+      }
+      .help-steps {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .help-step {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+      }
+      .help-step-num {
+        min-width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+      }
+      .help-step-body {
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .help-step-body strong {
+        color: var(--text);
+      }
+      .help-step-body code {
+        font-family: "SF Mono", Consolas, monospace;
+        background: #f0f2f5;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 12px;
+      }
+      .help-close {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--dim);
+        display: flex;
+        align-items: center;
+        padding: 4px;
+      }
+      .help-close:hover {
+        color: var(--text);
+      }
 
-<header>
-  <h1>📡 <span>ChannelKit</span> Dashboard</h1>
-  <div class="stats">
-    <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Messages</div></div>
-    <div class="stat"><div class="stat-value" id="stat-errors" style="color:var(--red)">0</div><div class="stat-label">Errors</div></div>
-    <div class="stat"><div class="stat-value" id="stat-latency">0ms</div><div class="stat-label">Avg Latency</div></div>
-    <div class="stat"><div class="stat-value" id="stat-uptime">0s</div><div class="stat-label">Uptime</div></div>
-    <div class="stat"><span class="badge badge-live" id="ws-status">● LIVE</span></div>
-  </div>
-</header>
+      @media (max-width: 768px) {
+        header {
+          padding: 12px 16px;
+        }
+        .filters {
+          padding: 8px 16px;
+        }
+        .table-wrap {
+          padding: 0 8px 16px;
+        }
+        td,
+        th {
+          padding: 8px 6px;
+          font-size: 12px;
+        }
+        .text-preview {
+          max-width: 150px;
+        }
+        .tabs {
+          padding: 0 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          height="26"
+          width="26"
+          viewBox="0 -960 960 960"
+          fill="currentColor"
+          style="vertical-align: middle; margin-right: 6px"
+        >
+          <path
+            d="M480-80q-33 0-56.5-23.5T400-160q0-23 11-42t29-30v-108h-80q-33 0-56.5-23.5T280-420v-80q-23-11-34.5-29.5T234-570q-2-33 19.5-56.5T309-650q33 0 56.5 23.5T389-570q0 23-11.5 41.5T348-500v80h264v-80q-18-10-29.5-28.5T571-570q0-33 23.5-56.5T651-650q33 0 54.5 23.5T727-570q0 23-11.5 41.5T686-500v80q0 33-23.5 56.5T606-340h-86v108q18 11 29 30t11 42q0 33-23.5 56.5T480-80ZM480-760q-33 0-56.5-23.5T400-840q0-33 23.5-56.5T480-920q33 0 56.5 23.5T560-840q0 33-23.5 56.5T480-760Z"
+          /></svg
+        ><span>ChannelKit</span> Dashboard
+      </h1>
+      <div class="stats">
+        <div class="stat">
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-label">Messages</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stat-errors" style="color: var(--red)">
+            0
+          </div>
+          <div class="stat-label">Errors</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stat-latency">0ms</div>
+          <div class="stat-label">Avg Latency</div>
+        </div>
+        <div class="stat">
+          <div class="stat-value" id="stat-uptime">0s</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+        <div class="stat">
+          <button
+            class="btn-tunnel"
+            id="tunnel-btn"
+            onclick="toggleTunnel()"
+            title="Start/stop public access via cloudflared tunnel"
+          >
+            <span id="tunnel-btn-icon"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                height="16"
+                width="16"
+                viewBox="0 -960 960 960"
+                fill="currentColor"
+                style="vertical-align: middle"
+              >
+                <path
+                  d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z"
+                /></svg
+            ></span>
+            <span id="tunnel-btn-text">Externalize</span>
+          </button>
+        </div>
+        <div class="stat">
+          <span class="badge badge-live" id="ws-status">● LIVE</span>
+        </div>
+      </div>
+    </header>
 
-<div class="restart-banner" id="restart-banner">
-  ⚠️ Config changed — restart ChannelKit to apply changes
-  <button id="restart-btn" onclick="restartServer()" style="margin-left:16px;background:#fff;color:#9a6700;border:none;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">Restart Now</button>
-  <span id="restart-status" style="margin-left:10px;font-size:12px"></span>
-</div>
-
-<div class="tabs">
-  <button class="tab active" data-tab="messages">Messages</button>
-  <button class="tab" data-tab="services">Services</button>
-  <button class="tab" data-tab="channels">Channels</button>
-  <button class="tab" data-tab="serverlog">Server Log</button>
-</div>
-
-<!-- ── Messages panel ─────────────────────────────── -->
-<div class="tab-panel active" id="panel-messages">
-  <div class="filters">
-    <select id="filter-channel">
-      <option value="">All Channels</option>
-      <option value="whatsapp">WhatsApp</option>
-      <option value="telegram">Telegram</option>
-      <option value="sms">📟 SMS</option>
-      <option value="voice">📞 Voice</option>
-      <option value="email">📧 Email</option>
-    </select>
-    <input type="text" id="filter-search" placeholder="Search messages, senders, responses...">
-    <button onclick="clearMessages()" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--dim)">Clear</button>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th></th>
-          <th>From</th>
-          <th>Message</th>
-          <th>Webhook</th>
-          <th>Status</th>
-          <th>Latency</th>
-        </tr>
-      </thead>
-      <tbody id="log-body"></tbody>
-    </table>
-    <div class="empty" id="empty-state">
-      <div class="empty-icon">📭</div>
-      <div>No messages yet. Waiting for traffic...</div>
+    <div class="tunnel-bar" id="tunnel-bar">
+      <div
+        style="
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex: 1;
+          flex-wrap: wrap;
+        "
+      >
+        <span>Public URL:</span>
+        <span
+          class="tunnel-url"
+          id="tunnel-url"
+          onclick="copyTunnelUrl()"
+          title="Click to copy"
+        ></span>
+        <button
+          onclick="copyTunnelUrl()"
+          title="Copy URL"
+          style="
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 6px;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+          "
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="16"
+            width="16"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+          >
+            <path
+              d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"
+            />
+          </svg>
+        </button>
+        <span
+          id="tunnel-copied"
+          style="font-size: 11px; opacity: 0; transition: opacity 0.3s"
+          >Copied!</span
+        >
+        <span style="flex: 1"></span>
+        <span
+          class="tunnel-has-token"
+          id="tunnel-has-token"
+          style="display: none"
+          ><svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="14"
+            width="14"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+            style="vertical-align: middle; margin-right: 3px"
+          >
+            <path
+              d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Zm-120 480v-400 400Z"
+            />
+          </svg>
+          Stable URL</span
+        >
+        <span class="tunnel-warn" id="tunnel-warn"
+          ><svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="14"
+            width="14"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+            style="vertical-align: middle; margin-right: 3px"
+          >
+            <path
+              d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"
+            />
+          </svg>
+          URL changes each restart.
+          <a onclick="showTunnelSetup()">Set up stable URL</a
+          ><button
+            class="help-btn"
+            onclick="showTunnelHelp()"
+            title="How to get a stable URL"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              height="16"
+              width="16"
+              viewBox="0 -960 960 960"
+              fill="currentColor"
+            >
+              <path
+                d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-36 8-53t42-47q42-32 62.5-64t20.5-77q0-65-43.5-103.5T480-776q-69 0-114.5 38.5T312-636l66 26q7-37 33-61t69-24q38 0 63 21t25 57q0 26-14.5 47.5T510-516q-40 33-54 61t-14 61Z"
+              />
+            </svg></button
+        ></span>
+        <button
+          id="update-endpoints-btn"
+          onclick="updateExternalEndpoints()"
+          title="Re-register all SMS webhook channels with the current public URL"
+          style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;align-items:center;gap:5px"
+        ><svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M440-122q-121-15-200.5-105.5T160-440q0-66 26-126t72-104l57 57q-38 34-56.5 79T240-440q0 88 56 155.5T440-202v80Zm80 0v-80q87-15 143.5-82.5T720-440q0-100-70-170t-170-70h-3l44 44-56 56-140-140 140-140 56 57-44 43h3q134 0 227 93t93 227q0 121-79.5 211.5T520-122Z"/></svg> Update SMS endpoints</button>
+        <label
+          class="tunnel-toggle"
+          title="Allow dashboard access from the external URL"
+        >
+          <input
+            type="checkbox"
+            id="tunnel-expose"
+            onchange="toggleExposeDashboard(this.checked)"
+          />
+          <span>Dashboard access</span>
+        </label>
+        <button
+          onclick="toggleTunnel()"
+          style="
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+          "
+        >
+          Stop
+        </button>
+      </div>
+      <div class="tunnel-setup" id="tunnel-setup">
+        <div style="opacity: 0.9">
+          For a stable URL, create a free
+          <a
+            href="https://one.dash.cloudflare.com"
+            target="_blank"
+            style="color: #fff"
+            >Cloudflare Tunnel</a
+          >, then paste the token and hostname below:
+        </div>
+        <div class="ts-row">
+          <input
+            id="ts-token"
+            placeholder="Tunnel token (eyJh...)"
+            style="flex: 2; min-width: 200px"
+          />
+          <input
+            id="ts-hostname"
+            placeholder="Public hostname (e.g. channelkit.example.com)"
+            style="flex: 1; min-width: 180px"
+          />
+        </div>
+        <div class="ts-row">
+          <button
+            onclick="saveTunnelConfig()"
+            style="background: #fff; color: #1a7f37; font-weight: 600"
+          >
+            Save
+          </button>
+          <button
+            onclick="hideTunnelSetup()"
+            style="background: rgba(255, 255, 255, 0.2); color: #fff"
+          >
+            Cancel
+          </button>
+          <button
+            id="ts-clear-btn"
+            onclick="clearTunnelConfig()"
+            style="
+              background: rgba(255, 255, 255, 0.1);
+              color: rgba(255, 255, 255, 0.7);
+              display: none;
+            "
+          >
+            Clear token
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- ── Services panel ─────────────────────────────── -->
-<div class="tab-panel" id="panel-services">
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Name</th><th>Channel</th><th>Webhook</th><th>Code / Command</th><th style="width:130px"></th></tr>
-      </thead>
-      <tbody id="services-body"></tbody>
-    </table>
-  </div>
-  <div class="add-form">
-    <h3>Add Service</h3>
-    <p class="form-hint">Create a new service binding between a channel and a webhook URL.</p>
-    <div class="form-row">
-      <input id="svc-name" placeholder="Service name (e.g. support)">
-      <select id="svc-channel" onchange="updateServiceForm()"><option value="">Select channel…</option></select>
-      <input id="svc-webhook" placeholder="Webhook URL (e.g. http://localhost:3000/support)">
+    <!-- ── Cloudflare Tunnel help modal ─────────────────── -->
+    <div
+      class="help-overlay"
+      id="tunnel-help-overlay"
+      onclick="if (event.target === this) closeTunnelHelp();"
+    >
+      <div
+        class="help-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="How to get a stable URL"
+      >
+        <button class="help-close" onclick="closeTunnelHelp()" title="Close">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="20"
+            width="20"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+          >
+            <path
+              d="M256-192 192-256l224-224-224-224 64-64 224 224 224-224 64 64-224 224 224 224-64 64-224-224-224 224Z"
+            />
+          </svg>
+        </button>
+        <h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="20"
+            width="20"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+            style="color: var(--accent)"
+          >
+            <path
+              d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Zm-120 480v-400 400Z"
+            />
+          </svg>
+          Get a Stable Public URL
+        </h2>
+        <p class="help-sub">
+          Use a free Cloudflare Tunnel to keep the same URL across restarts.
+        </p>
+        <div class="help-steps">
+          <div class="help-step">
+            <div class="help-step-num">1</div>
+            <div class="help-step-body">
+              <strong>Create a Cloudflare account</strong><br />Go to
+              <a
+                href="https://one.dash.cloudflare.com"
+                target="_blank"
+                style="color: var(--accent)"
+                >one.dash.cloudflare.com</a
+              >
+              and sign up for free. No credit card required.
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">2</div>
+            <div class="help-step-body">
+              <strong>Add your domain to Cloudflare</strong><br />In the
+              Cloudflare dashboard click <strong>Add a site</strong>, enter your
+              domain name, and choose the <strong>Free</strong> plan. Cloudflare
+              will show you two nameservers (e.g.
+              <code>ada.ns.cloudflare.com</code>). Go to your domain registrar
+              (GoDaddy, Namecheap, etc.) and replace the existing nameservers
+              with these two. DNS propagation takes a few minutes to a few
+              hours.
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">3</div>
+            <div class="help-step-body">
+              <strong>Create a tunnel</strong><br />In the sidebar go to
+              <strong>Zero Trust → Networks → Connectors</strong>, then click
+              <strong>Create a tunnel</strong>. Choose
+              <code>Cloudflared</code> as the connector, give it a name (e.g.
+              <code>channelkit</code>), and save.
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">4</div>
+            <div class="help-step-body">
+              <strong>Copy the tunnel token</strong><br />After saving,
+              Cloudflare shows install instructions. Copy the long token that
+              appears after <code>--token</code>. It starts with
+              <code>eyJh…</code>
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">5</div>
+            <div class="help-step-body">
+              <strong>Add a public hostname</strong><br />In the tunnel settings
+              go to the <strong>Public Hostnames</strong> tab. Add a hostname on
+              your domain (e.g. <code>channelkit.yourdomain.com</code>) and
+              point it to <code>localhost:4000</code> with HTTP service type.
+              Save.
+            </div>
+          </div>
+          <div class="help-step">
+            <div class="help-step-num">6</div>
+            <div class="help-step-body">
+              <strong>Paste token &amp; hostname here</strong><br />Click
+              <strong>Set up stable URL</strong> below the public URL bar, paste
+              the token and your hostname, then click <strong>Save</strong>.
+              Click <strong>Externalize</strong> to connect.
+            </div>
+          </div>
+        </div>
+        <p style="margin-top: 18px; font-size: 12px; color: var(--dim)">
+          The tunnel stays active as long as ChannelKit is running. If you don't
+          have a domain yet, any cheap registrar works — just point the
+          nameservers to Cloudflare after registering.
+        </p>
+      </div>
     </div>
-    <div class="form-row" id="svc-cc-row" style="display:none">
-      <input id="svc-code" placeholder="Magic code — WhatsApp multi-service (optional)">
-      <input id="svc-command" placeholder="Slash command — Telegram, e.g. /support (optional)">
+
+    <div class="restart-banner" id="restart-banner">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        height="16"
+        width="16"
+        viewBox="0 -960 960 960"
+        fill="currentColor"
+        style="vertical-align: middle; margin-right: 5px"
+      >
+        <path
+          d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"
+        />
+      </svg>
+      Config changed — restart ChannelKit to apply changes
+      <button
+        id="restart-btn"
+        onclick="restartServer()"
+        style="
+          margin-left: 16px;
+          background: #fff;
+          color: #9a6700;
+          border: none;
+          padding: 4px 12px;
+          border-radius: 4px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        "
+      >
+        Restart Now
+      </button>
+      <span
+        id="restart-status"
+        style="margin-left: 10px; font-size: 12px"
+      ></span>
     </div>
-    <div class="form-row">
-      <button class="btn btn-primary" onclick="addService()">Add Service</button>
-      <span id="svc-mode-hint" style="font-size:12px;color:var(--dim)"></span>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="messages">Messages</button>
+      <button class="tab" data-tab="services">Services</button>
+      <button class="tab" data-tab="channels">Channels</button>
+      <button class="tab" data-tab="serverlog">Server Log</button>
     </div>
-  </div>
-</div>
 
-<!-- ── Channels panel ─────────────────────────────── -->
-<div class="tab-panel" id="panel-channels">
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Name</th><th>Type</th><th>Details</th><th>Services</th><th>Unmatched msgs</th><th style="width:80px"></th></tr>
-      </thead>
-      <tbody id="channels-body"></tbody>
-    </table>
-  </div>
-  <div class="add-form">
-    <h3>Add Channel</h3>
-    <p class="form-hint">Configure a new messaging channel. Changes take effect after restart.</p>
-    <div class="form-row">
-      <input id="ch-name" placeholder="Channel name (e.g. mywhatsapp)">
-      <select id="ch-type" onchange="renderChannelFields()">
-        <option value="">Select type…</option>
-        <option value="whatsapp">WhatsApp</option>
-        <option value="telegram">Telegram</option>
-        <option value="sms-twilio">SMS (Twilio)</option>
-        <option value="voice-twilio">Voice (Twilio)</option>
-        <option value="email-resend">Email (Resend)</option>
-      </select>
+    <!-- ── Messages panel ─────────────────────────────── -->
+    <div class="tab-panel active" id="panel-messages">
+      <div class="filters">
+        <select id="filter-channel">
+          <option value="">All Channels</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="telegram">Telegram</option>
+          <option value="sms">SMS</option>
+          <option value="voice">📞 Voice</option>
+          <option value="email">📧 Email</option>
+        </select>
+        <input
+          type="text"
+          id="filter-search"
+          placeholder="Search messages, senders, responses..."
+        />
+        <button
+          onclick="clearMessages()"
+          style="
+            background: none;
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--dim);
+          "
+        >
+          Clear
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th></th>
+              <th>From</th>
+              <th>Message</th>
+              <th>Webhook</th>
+              <th>Status</th>
+              <th>Latency</th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+        <div class="empty" id="empty-state">
+          <div class="empty-icon">📭</div>
+          <div>No messages yet. Waiting for traffic...</div>
+        </div>
+      </div>
     </div>
-    <div id="ch-fields"></div>
-    <div class="form-row" id="ch-submit-row" style="display:none">
-      <button class="btn btn-primary" onclick="addChannel()">Add Channel</button>
-      <span id="ch-note" style="font-size:12px;color:var(--dim)"></span>
+
+    <!-- ── Services panel ─────────────────────────────── -->
+    <div class="tab-panel" id="panel-services">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Channel</th>
+              <th>Webhook</th>
+              <th>Code / Command</th>
+              <th style="width: 130px"></th>
+            </tr>
+          </thead>
+          <tbody id="services-body"></tbody>
+        </table>
+      </div>
+      <div class="add-form">
+        <h3>Add Service</h3>
+        <p class="form-hint">
+          Create a new service binding between a channel and a webhook URL.
+        </p>
+        <div class="form-row">
+          <input id="svc-name" placeholder="Service name (e.g. support)" />
+          <select id="svc-channel" onchange="updateServiceForm()">
+            <option value="">Select channel…</option>
+          </select>
+          <input
+            id="svc-webhook"
+            placeholder="Webhook URL (e.g. http://localhost:3000/support)"
+          />
+        </div>
+        <div class="form-row" id="svc-cc-row" style="display: none">
+          <input
+            id="svc-code"
+            placeholder="Magic code — WhatsApp multi-service (optional)"
+          />
+          <input
+            id="svc-command"
+            placeholder="Slash command — Telegram, e.g. /support (optional)"
+          />
+        </div>
+        <div class="form-row">
+          <button class="btn btn-primary" onclick="addService()">
+            Add Service
+          </button>
+          <span
+            id="svc-mode-hint"
+            style="font-size: 12px; color: var(--dim)"
+          ></span>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- ── Server Log panel ───────────────────────────── -->
-<div class="tab-panel" id="panel-serverlog">
-  <div class="log-toolbar">
-    <button onclick="clearServerLog()">Clear</button>
-    <label><input type="checkbox" id="log-autoscroll" checked> Auto-scroll</label>
-    <span id="log-count" style="color:var(--dim);font-size:12px"></span>
-  </div>
-  <div class="server-log mono" id="server-log">
-    <div style="color:#666">Waiting for log output…</div>
-  </div>
-</div>
+    <!-- ── Channels panel ─────────────────────────────── -->
+    <div class="tab-panel" id="panel-channels">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Details</th>
+              <th>Services</th>
+              <th>Unmatched msgs</th>
+              <th style="width: 80px"></th>
+            </tr>
+          </thead>
+          <tbody id="channels-body"></tbody>
+        </table>
+      </div>
+      <div class="add-form">
+        <h3>Add Channel</h3>
+        <p class="form-hint">
+          Configure a new messaging channel. Changes take effect after restart.
+        </p>
+        <div class="form-row">
+          <input id="ch-name" placeholder="Channel name (e.g. mywhatsapp)" />
+          <select id="ch-type" onchange="renderChannelFields()">
+            <option value="">Select type…</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="telegram">Telegram</option>
+            <option value="sms-twilio">SMS (Twilio)</option>
+            <option value="voice-twilio">Voice (Twilio)</option>
+            <option value="email-resend">Email (Resend)</option>
+          </select>
+        </div>
+        <div id="ch-fields"></div>
+        <div class="form-row" id="ch-submit-row" style="display: none">
+          <button class="btn btn-primary" onclick="addChannel()">
+            Add Channel
+          </button>
+          <span id="ch-note" style="font-size: 12px; color: var(--dim)"></span>
+        </div>
+      </div>
+    </div>
 
-<script>
-const API = window.location.origin;
-const WS_URL = `ws://${window.location.host}`;
+    <!-- ── Server Log panel ───────────────────────────── -->
+    <div class="tab-panel" id="panel-serverlog">
+      <div class="log-toolbar">
+        <button onclick="clearServerLog()">Clear</button>
+        <label
+          ><input type="checkbox" id="log-autoscroll" checked />
+          Auto-scroll</label
+        >
+        <span id="log-count" style="color: var(--dim); font-size: 12px"></span>
+      </div>
+      <div class="server-log mono" id="server-log">
+        <div style="color: #666">Waiting for log output…</div>
+      </div>
+    </div>
 
-// ─── Tab switching ─────────────────────────────────
-document.querySelectorAll('.tab').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'services' || btn.dataset.tab === 'channels') loadConfigData();
-    if (btn.dataset.tab === 'serverlog') loadServerLogs();
-  });
-});
+    <script>
+      const API = window.location.origin;
+      const WS_URL = `ws://${window.location.host}`;
 
-// ─── Shared helpers ────────────────────────────────
-function escHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+      // ─── Tab switching ─────────────────────────────────
+      document.querySelectorAll(".tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll(".tab")
+            .forEach((t) => t.classList.remove("active"));
+          document
+            .querySelectorAll(".tab-panel")
+            .forEach((p) => p.classList.remove("active"));
+          btn.classList.add("active");
+          document
+            .getElementById("panel-" + btn.dataset.tab)
+            .classList.add("active");
+          if (btn.dataset.tab === "services" || btn.dataset.tab === "channels")
+            loadConfigData();
+          if (btn.dataset.tab === "serverlog") loadServerLogs();
+        });
+      });
 
-function formatTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
+      // ─── Shared helpers ────────────────────────────────
+      function escHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
 
-function formatDate(ts) {
-  const d = new Date(ts);
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + formatTime(ts);
-}
+      function formatTime(ts) {
+        const d = new Date(ts);
+        return d.toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+      }
 
-function formatUptime(ms) {
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return s + 's';
-  if (s < 3600) return Math.floor(s / 60) + 'm';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
-  return Math.floor(s / 86400) + 'd ' + Math.floor((s % 86400) / 3600) + 'h';
-}
+      function formatDate(ts) {
+        const d = new Date(ts);
+        return (
+          d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
+          " " +
+          formatTime(ts)
+        );
+      }
 
-function truncate(str, len = 60) {
-  if (!str) return '<span style="color:var(--dim)">—</span>';
-  return escHtml(str.length > len ? str.slice(0, len) + '…' : str);
-}
+      function formatUptime(ms) {
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return s + "s";
+        if (s < 3600) return Math.floor(s / 60) + "m";
+        if (s < 86400)
+          return (
+            Math.floor(s / 3600) + "h " + Math.floor((s % 3600) / 60) + "m"
+          );
+        return (
+          Math.floor(s / 86400) + "d " + Math.floor((s % 86400) / 3600) + "h"
+        );
+      }
 
-function shortUrl(url) {
-  if (!url) return '—';
-  try { return new URL(url).pathname; } catch { return url; }
-}
+      function truncate(str, len = 60) {
+        if (!str) return '<span style="color:var(--dim)">—</span>';
+        return escHtml(str.length > len ? str.slice(0, len) + "…" : str);
+      }
 
-// ─── Messages panel ────────────────────────────────
-const logBody = document.getElementById('log-body');
-const emptyState = document.getElementById('empty-state');
-const filterChannel = document.getElementById('filter-channel');
-const filterSearch = document.getElementById('filter-search');
-const wsStatus = document.getElementById('ws-status');
+      function shortUrl(url) {
+        if (!url) return "—";
+        try {
+          return new URL(url).pathname;
+        } catch {
+          return url;
+        }
+      }
 
-let allEntries = [];
-let currentChannels = {};
-const channelIcons = {
-  whatsapp: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>',
-  telegram: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#26A5E4" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
-  sms: '📟', voice: '📞', email: '📧', 'system (async)': '🔄'
-};
+      // ─── Messages panel ────────────────────────────────
+      const logBody = document.getElementById("log-body");
+      const emptyState = document.getElementById("empty-state");
+      const filterChannel = document.getElementById("filter-channel");
+      const filterSearch = document.getElementById("filter-search");
+      const wsStatus = document.getElementById("ws-status");
 
-function typeLabel(entry) {
-  if (entry.type === 'async-outbound') return '<span style="color:var(--accent);font-size:11px;font-weight:600">ASYNC ↗</span>';
-  return '';
-}
+      let allEntries = [];
+      let currentChannels = {};
+      const channelIcons = {
+        whatsapp:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>',
+        telegram:
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#26A5E4" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>',
+        sms: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/><path fill="#6B7280" d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>',
+        voice: "📞",
+        email: "📧",
+        "system (async)": "🔄",
+      };
 
-function statusIcon(status) {
-  if (status === 'success') return '<span class="status-ok">✅</span>';
-  if (status === 'error') return '<span class="status-err">❌</span>';
-  return '<span class="status-noroute">⚪</span>';
-}
+      function typeLabel(entry) {
+        if (entry.type === "async-outbound")
+          return '<span style="color:var(--accent);font-size:11px;font-weight:600">ASYNC ↗</span>';
+        return "";
+      }
 
-function renderRow(entry, isNew) {
-  const tr = document.createElement('tr');
-  if (isNew) tr.classList.add('new-entry');
-  tr.innerHTML = `
+      function statusIcon(status) {
+        if (status === "success")
+          return '<span class="status-ok"><svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg></span>';
+        if (status === "error")
+          return '<span class="status-err"><svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-280q17 0 28.5-11.5T520-320q0-17-11.5-28.5T480-360q-17 0-28.5 11.5T440-320q0 17 11.5 28.5T480-280Zm-40-160h80v-240h-80v240Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg></span>';
+        return '<span class="status-noroute"><svg xmlns="http://www.w3.org/2000/svg" height="18" width="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M280-440h400v-80H280v80Zm200 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg></span>';
+      }
+
+      function renderRow(entry, isNew) {
+        const tr = document.createElement("tr");
+        if (isNew) tr.classList.add("new-entry");
+        tr.innerHTML = `
     <td class="time-cell mono">${formatTime(entry.timestamp)}</td>
-    <td class="channel-icon">${entry.type === 'async-outbound' ? '🔄' : (channelIcons[entry.channel] || '📨')}</td>
+    <td class="channel-icon">${entry.type === "async-outbound" ? "🔄" : channelIcons[entry.channel] || "📨"}</td>
     <td class="from-cell">
-      <div class="name">${escHtml(entry.senderName || '')}</div>
+      <div class="name">${escHtml(entry.senderName || "")}</div>
       <div class="number mono">${escHtml(entry.from)}</div>
     </td>
     <td class="text-preview">${typeLabel(entry)} ${truncate(entry.text)}</td>
     <td class="route-cell mono">${escHtml(shortUrl(entry.route))}</td>
     <td>${statusIcon(entry.status)}</td>
-    <td class="latency mono">${entry.latency != null ? entry.latency + 'ms' : '—'}</td>
+    <td class="latency mono">${entry.latency != null ? entry.latency + "ms" : "—"}</td>
   `;
 
-  tr.addEventListener('click', () => {
-    const existing = tr.nextElementSibling;
-    if (existing && existing.classList.contains('detail-row')) { existing.remove(); return; }
-    document.querySelectorAll('.detail-row').forEach(el => el.remove());
+        tr.addEventListener("click", () => {
+          const existing = tr.nextElementSibling;
+          if (existing && existing.classList.contains("detail-row")) {
+            existing.remove();
+            return;
+          }
+          document.querySelectorAll(".detail-row").forEach((el) => el.remove());
 
-    const detailTr = document.createElement('tr');
-    detailTr.classList.add('detail-row');
-    const td = document.createElement('td');
-    td.colSpan = 7;
-    td.innerHTML = `
+          const detailTr = document.createElement("tr");
+          detailTr.classList.add("detail-row");
+          const td = document.createElement("td");
+          td.colSpan = 7;
+          td.innerHTML = `
       <div class="detail open">
         <div class="detail-grid">
           <div class="detail-item"><label>ID</label><p class="mono">${escHtml(entry.id)}</p></div>
           <div class="detail-item"><label>Timestamp</label><p>${formatDate(entry.timestamp)}</p></div>
           <div class="detail-item"><label>Channel</label><p>${escHtml(entry.channel)}</p></div>
-          <div class="detail-item"><label>From</label><p>${escHtml(entry.senderName || '')} (${escHtml(entry.from)})</p></div>
+          <div class="detail-item"><label>From</label><p>${escHtml(entry.senderName || "")} (${escHtml(entry.from)})</p></div>
           <div class="detail-item"><label>Type</label><p>${escHtml(entry.type)}</p></div>
-          <div class="detail-item"><label>Group</label><p>${escHtml(entry.groupName || entry.groupId || '—')}</p></div>
-          <div class="detail-item"><label>Webhook</label><p class="mono">${escHtml(entry.route || '—')}</p></div>
+          <div class="detail-item"><label>Group</label><p>${escHtml(entry.groupName || entry.groupId || "—")}</p></div>
+          <div class="detail-item"><label>Webhook</label><p class="mono">${escHtml(entry.route || "—")}</p></div>
           <div class="detail-item"><label>Status</label><p>${escHtml(entry.status)}</p></div>
-          <div class="detail-item"><label>Latency</label><p>${entry.latency != null ? entry.latency + 'ms' : '—'}</p></div>
+          <div class="detail-item"><label>Latency</label><p>${entry.latency != null ? entry.latency + "ms" : "—"}</p></div>
         </div>
-        <div class="detail-item" style="margin-top:12px"><label>Full Message</label><div class="detail-response">${escHtml(entry.text || '—')}</div></div>
-        <div class="detail-item" style="margin-top:8px"><label>Response</label><div class="detail-response">${escHtml(entry.responseText || '—')}</div></div>
+        <div class="detail-item" style="margin-top:12px"><label>Full Message</label><div class="detail-response">${escHtml(entry.text || "—")}</div></div>
+        <div class="detail-item" style="margin-top:8px"><label>Response</label><div class="detail-response">${escHtml(entry.responseText || "—")}</div></div>
       </div>
     `;
-    detailTr.appendChild(td);
-    tr.after(detailTr);
-  });
+          detailTr.appendChild(td);
+          tr.after(detailTr);
+        });
 
-  return tr;
-}
+        return tr;
+      }
 
-function render(entries, isNew) {
-  if (isNew && entries.length === 1) {
-    logBody.prepend(renderRow(entries[0], true));
-    emptyState.style.display = 'none';
-    return;
-  }
-  logBody.innerHTML = '';
-  if (entries.length === 0) { emptyState.style.display = ''; return; }
-  emptyState.style.display = 'none';
-  entries.forEach(e => logBody.appendChild(renderRow(e, false)));
-}
+      function render(entries, isNew) {
+        if (isNew && entries.length === 1) {
+          logBody.prepend(renderRow(entries[0], true));
+          emptyState.style.display = "none";
+          return;
+        }
+        logBody.innerHTML = "";
+        if (entries.length === 0) {
+          emptyState.style.display = "";
+          return;
+        }
+        emptyState.style.display = "none";
+        entries.forEach((e) => logBody.appendChild(renderRow(e, false)));
+      }
 
-function getFiltered() {
-  let results = allEntries;
-  const ch = filterChannel.value;
-  const q = filterSearch.value.toLowerCase();
-  if (ch) results = results.filter(e => e.channel === ch);
-  if (q) results = results.filter(e =>
-    (e.text || '').toLowerCase().includes(q) ||
-    (e.from || '').toLowerCase().includes(q) ||
-    (e.senderName || '').toLowerCase().includes(q) ||
-    (e.responseText || '').toLowerCase().includes(q)
-  );
-  return results;
-}
+      function getFiltered() {
+        let results = allEntries;
+        const ch = filterChannel.value;
+        const q = filterSearch.value.toLowerCase();
+        if (ch) results = results.filter((e) => e.channel === ch);
+        if (q)
+          results = results.filter(
+            (e) =>
+              (e.text || "").toLowerCase().includes(q) ||
+              (e.from || "").toLowerCase().includes(q) ||
+              (e.senderName || "").toLowerCase().includes(q) ||
+              (e.responseText || "").toLowerCase().includes(q),
+          );
+        return results;
+      }
 
-function applyFilters() { render(getFiltered(), false); }
-async function clearMessages() {
-  if (!confirm('Clear all message logs? This cannot be undone.')) return;
-  await fetch(API + '/api/logs', { method: 'DELETE' });
-  allEntries = [];
-  render([], false);
-  updateStats();
-}
-filterChannel.addEventListener('change', applyFilters);
-let searchTimeout;
-filterSearch.addEventListener('input', () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(applyFilters, 200);
-});
+      function applyFilters() {
+        render(getFiltered(), false);
+      }
+      async function clearMessages() {
+        if (!confirm("Clear all message logs? This cannot be undone.")) return;
+        await fetch(API + "/api/logs", { method: "DELETE" });
+        allEntries = [];
+        render([], false);
+        updateStats();
+      }
+      filterChannel.addEventListener("change", applyFilters);
+      let searchTimeout;
+      filterSearch.addEventListener("input", () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(applyFilters, 200);
+      });
 
-function updateStats() {
-  fetch(API + '/api/logs/stats').then(r => r.json()).then(s => {
-    document.getElementById('stat-total').textContent = s.total;
-    document.getElementById('stat-errors').textContent = s.errorCount || 0;
-    document.getElementById('stat-latency').textContent = s.avgLatency + 'ms';
-    document.getElementById('stat-uptime').textContent = formatUptime(s.uptime);
-  }).catch(() => {});
-}
+      function updateStats() {
+        fetch(API + "/api/logs/stats")
+          .then((r) => r.json())
+          .then((s) => {
+            document.getElementById("stat-total").textContent = s.total;
+            document.getElementById("stat-errors").textContent =
+              s.errorCount || 0;
+            document.getElementById("stat-latency").textContent =
+              s.avgLatency + "ms";
+            document.getElementById("stat-uptime").textContent = formatUptime(
+              s.uptime,
+            );
+          })
+          .catch(() => {});
+      }
 
-fetch(API + '/api/logs').then(r => r.json()).then(entries => {
-  allEntries = entries;
-  render(getFiltered(), false);
-  updateStats();
-}).catch(() => {});
+      fetch(API + "/api/logs")
+        .then((r) => r.json())
+        .then((entries) => {
+          allEntries = entries;
+          render(getFiltered(), false);
+          updateStats();
+        })
+        .catch(() => {});
 
-// ─── Services & Channels panels ────────────────────
-async function loadConfigData() {
-  try {
-    const data = await fetch(API + '/api/config').then(r => r.json());
-    if (data.error) return;
-    currentChannels = data.channels || {};
-    renderServices(data.services || {}, currentChannels);
-    renderChannels(currentChannels, data.services || {});
-    // Populate channel dropdown
-    const sel = document.getElementById('svc-channel');
-    const current = sel.value;
-    sel.innerHTML = '<option value="">Select channel…</option>' +
-      Object.keys(currentChannels).map(n => `<option value="${escHtml(n)}"${n === current ? ' selected' : ''}>${escHtml(n)}</option>`).join('');
-    updateServiceForm();
-  } catch {}
-}
+      // ─── Services & Channels panels ────────────────────
+      async function loadConfigData() {
+        try {
+          const data = await fetch(API + "/api/config").then((r) => r.json());
+          if (data.error) return;
+          currentChannels = data.channels || {};
+          hasSmsWebhookChannels = Object.values(currentChannels).some(
+            (ch) => ch.type === "sms" && !ch.poll_interval
+          );
+          renderServices(data.services || {}, currentChannels);
+          renderChannels(currentChannels, data.services || {});
+          // Populate channel dropdown
+          const sel = document.getElementById("svc-channel");
+          const current = sel.value;
+          sel.innerHTML =
+            '<option value="">Select channel…</option>' +
+            Object.keys(currentChannels)
+              .map(
+                (n) =>
+                  `<option value="${escHtml(n)}"${n === current ? " selected" : ""}>${escHtml(n)}</option>`,
+              )
+              .join("");
+          updateServiceForm();
+        } catch {}
+      }
 
-function renderServices(services, channels) {
-  const tbody = document.getElementById('services-body');
-  const entries = Object.entries(services);
-  if (entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No services configured</td></tr>';
-    return;
-  }
-  tbody.innerHTML = entries.map(([name, svc]) => `
+      function renderServices(services, channels) {
+        const tbody = document.getElementById("services-body");
+        const entries = Object.entries(services);
+        if (entries.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No services configured</td></tr>';
+          return;
+        }
+        tbody.innerHTML = entries
+          .map(
+            ([name, svc]) => `
     <tr>
       <td style="font-weight:500">${escHtml(name)}</td>
       <td>${escHtml(svc.channel)}</td>
       <td class="webhook-cell" id="wh-cell-${escHtml(name)}">
         <span class="webhook-text mono">${escHtml(svc.webhook)}</span>
       </td>
-      <td id="cc-cell-${escHtml(name)}" data-code="${escHtml(svc.code||'')}" data-command="${escHtml(svc.command||'')}" style="color:var(--dim);font-size:12px">${escHtml(svc.code || svc.command || '—')}</td>
+      <td id="cc-cell-${escHtml(name)}" data-code="${escHtml(svc.code || "")}" data-command="${escHtml(svc.command || "")}" style="color:var(--dim);font-size:12px">${escHtml(svc.code || svc.command || "—")}</td>
       <td id="act-cell-${escHtml(name)}" style="text-align:right;white-space:nowrap">
         <button class="btn-edit" data-name="${escHtml(name)}" onclick="editService(this.dataset.name)">Edit</button>
         <button class="btn-danger" data-name="${escHtml(name)}" onclick="removeService(this.dataset.name)">Remove</button>
       </td>
     </tr>
-  `).join('');
-}
+  `,
+          )
+          .join("");
+      }
 
-function renderChannels(channels, services) {
-  const tbody = document.getElementById('channels-body');
-  const entries = Object.entries(channels);
-  if (entries.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No channels configured</td></tr>';
-    return;
-  }
-  tbody.innerHTML = entries.map(([name, ch]) => {
-    const deps = Object.entries(services).filter(([, s]) => s.channel === name).map(([n]) => n);
-    const detail = ch.number || (ch.bot_token ? ch.bot_token.slice(0,12)+'…' : '') || ch.from_email || '';
-    return `<tr>
+      function renderChannels(channels, services) {
+        const tbody = document.getElementById("channels-body");
+        const entries = Object.entries(channels);
+        if (entries.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="text-align:center;color:var(--dim);padding:32px">No channels configured</td></tr>';
+          return;
+        }
+        tbody.innerHTML = entries
+          .map(([name, ch]) => {
+            const deps = Object.entries(services)
+              .filter(([, s]) => s.channel === name)
+              .map(([n]) => n);
+            const detail =
+              ch.number ||
+              (ch.bot_token ? ch.bot_token.slice(0, 12) + "…" : "") ||
+              ch.from_email ||
+              "";
+            const isSms = ch.type === "sms";
+            const smsMode = isSms
+              ? ch.poll_interval
+                ? "polling"
+                : "webhook"
+              : "";
+            const smsModeLabel = isSms
+              ? ch.poll_interval
+                ? `Polling (${ch.poll_interval}s)`
+                : "External Address"
+              : "";
+            return `<tr>
       <td style="font-weight:500">${escHtml(name)}</td>
       <td>${escHtml(ch.type)}</td>
-      <td class="mono" style="color:var(--dim);font-size:12px">${escHtml(detail)}</td>
-      <td style="font-size:12px;color:var(--dim)">${deps.length > 0 ? deps.map(escHtml).join(', ') : '—'}</td>
-      <td>${(ch.mode === 'groups' || deps.length > 1) ? `
+      <td class="mono" style="color:var(--dim);font-size:12px">${escHtml(detail)}${isSms ? `<div style="margin-top:3px;font-family:inherit;color:var(--accent);font-size:11px">${escHtml(smsModeLabel)}</div>` : ""}</td>
+      <td style="font-size:12px;color:var(--dim)">${deps.length > 0 ? deps.map(escHtml).join(", ") : "—"}</td>
+      <td>${
+        ch.mode === "groups" || deps.length > 1
+          ? `
         <select data-name="${escHtml(name)}" onchange="setUnmatched(this.dataset.name, this.value)"
           style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text)">
-          <option value="" ${!ch.unmatched ? 'selected' : ''}>Ignore (default)</option>
-          <option value="list" ${ch.unmatched === 'list' ? 'selected' : ''}>List services</option>
-          <option value="ignore" ${ch.unmatched === 'ignore' ? 'selected' : ''}>Ignore</option>
-        </select>` : '<span style="color:var(--dim);font-size:12px">—</span>'}</td>
-      <td style="text-align:right"><button class="btn-danger" data-name="${escHtml(name)}" data-deps="${escHtml(JSON.stringify(deps))}" onclick="removeChannel(this.dataset.name, JSON.parse(this.dataset.deps))">Remove</button></td>
+          <option value="" ${!ch.unmatched ? "selected" : ""}>Ignore (default)</option>
+          <option value="list" ${ch.unmatched === "list" ? "selected" : ""}>List services</option>
+          <option value="ignore" ${ch.unmatched === "ignore" ? "selected" : ""}>Ignore</option>
+        </select>`
+          : '<span style="color:var(--dim);font-size:12px">—</span>'
+      }</td>
+      <td style="text-align:right;white-space:nowrap">${isSms ? `<button class="btn-edit" data-name="${escHtml(name)}" data-mode="${escHtml(smsMode)}" data-interval="${ch.poll_interval || 60}" onclick="editSmsSettings(this.dataset.name, this.dataset.mode, this.dataset.interval)">Settings</button> ` : ""}<button class="btn-danger" data-name="${escHtml(name)}" data-deps="${escHtml(JSON.stringify(deps))}" onclick="removeChannel(this.dataset.name, JSON.parse(this.dataset.deps))">Remove</button></td>
     </tr>`;
-  }).join('');
-}
+          })
+          .join("");
+      }
 
-function editService(name) {
-  const whCell = document.getElementById('wh-cell-' + name);
-  const ccCell = document.getElementById('cc-cell-' + name);
-  const actCell = document.getElementById('act-cell-' + name);
-  if (!whCell || !ccCell || !actCell) return;
+      function editService(name) {
+        const whCell = document.getElementById("wh-cell-" + name);
+        const ccCell = document.getElementById("cc-cell-" + name);
+        const actCell = document.getElementById("act-cell-" + name);
+        if (!whCell || !ccCell || !actCell) return;
 
-  const currentWebhook = whCell.querySelector('.webhook-text')?.textContent || '';
-  const currentCode = ccCell.dataset.code || '';
-  const currentCommand = ccCell.dataset.command || '';
+        const currentWebhook =
+          whCell.querySelector(".webhook-text")?.textContent || "";
+        const currentCode = ccCell.dataset.code || "";
+        const currentCommand = ccCell.dataset.command || "";
 
-  whCell.innerHTML = `<input id="edit-wh-input" value="${escHtml(currentWebhook)}" placeholder="Webhook URL" style="width:100%">`;
+        whCell.innerHTML = `<input id="edit-wh-input" value="${escHtml(currentWebhook)}" placeholder="Webhook URL" style="width:100%">`;
 
-  ccCell.innerHTML = `
+        ccCell.innerHTML = `
     <input id="edit-code-input" value="${escHtml(currentCode)}" placeholder="Magic code" style="width:100%;margin-bottom:4px">
     <input id="edit-cmd-input" value="${escHtml(currentCommand)}" placeholder="Slash command" style="width:100%">`;
 
-  actCell.innerHTML = `
+        actCell.innerHTML = `
     <button class="btn-edit" data-name="${escHtml(name)}" onclick="saveService(this.dataset.name)">Save</button>
     <button style="margin-left:4px;background:none;border:none;cursor:pointer;color:var(--dim);font-size:13px" onclick="loadConfigData()">Cancel</button>`;
 
-  document.getElementById('edit-wh-input')?.focus();
-}
+        document.getElementById("edit-wh-input")?.focus();
+      }
 
-async function saveService(name) {
-  const webhook = document.getElementById('edit-wh-input')?.value.trim();
-  const code = document.getElementById('edit-code-input')?.value.trim();
-  const command = document.getElementById('edit-cmd-input')?.value.trim();
-  if (!webhook) { alert('Webhook URL is required'); return; }
-  const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ webhook, code: code || null, command: command || null }),
-  });
-  if (!res.ok) { let m = `Save failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
-  loadConfigData();
-}
+      async function saveService(name) {
+        const webhook = document.getElementById("edit-wh-input")?.value.trim();
+        const code = document.getElementById("edit-code-input")?.value.trim();
+        const command = document.getElementById("edit-cmd-input")?.value.trim();
+        if (!webhook) {
+          alert("Webhook URL is required");
+          return;
+        }
+        const res = await fetch(
+          API + "/api/config/services/" + encodeURIComponent(name),
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              webhook,
+              code: code || null,
+              command: command || null,
+            }),
+          },
+        );
+        if (!res.ok) {
+          let m = `Save failed (${res.status})`;
+          try {
+            m = (await res.json()).error || m;
+          } catch {}
+          alert(m);
+          return;
+        }
+        loadConfigData();
+      }
 
-async function removeService(name) {
-  if (!confirm(`Remove service "${name}"?`)) return;
-  const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), { method: 'DELETE' });
-  if (!res.ok) { let m = `Remove failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
-  loadConfigData();
-}
+      async function removeService(name) {
+        if (!confirm(`Remove service "${name}"?`)) return;
+        const res = await fetch(
+          API + "/api/config/services/" + encodeURIComponent(name),
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          let m = `Remove failed (${res.status})`;
+          try {
+            m = (await res.json()).error || m;
+          } catch {}
+          alert(m);
+          return;
+        }
+        loadConfigData();
+      }
 
-function updateServiceForm() {
-  const chName = document.getElementById('svc-channel').value;
-  const ch = currentChannels[chName];
-  const isServiceMode = ch?.mode === 'service';
-  const ccRow = document.getElementById('svc-cc-row');
-  const hint = document.getElementById('svc-mode-hint');
-  if (ccRow) ccRow.style.display = isServiceMode ? 'none' : '';
-  if (hint) hint.textContent = isServiceMode ? 'Service mode — no code or command needed.' : '';
-}
+      function updateServiceForm() {
+        const chName = document.getElementById("svc-channel").value;
+        const ch = currentChannels[chName];
+        const isServiceMode = ch?.mode === "service";
+        const ccRow = document.getElementById("svc-cc-row");
+        const hint = document.getElementById("svc-mode-hint");
+        if (ccRow) ccRow.style.display = isServiceMode ? "none" : "";
+        if (hint)
+          hint.textContent = isServiceMode
+            ? "Service mode — no code or command needed."
+            : "";
+      }
 
-async function setUnmatched(name, value) {
-  await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ unmatched: value || null }),
-  });
-}
+      async function setUnmatched(name, value) {
+        await fetch(API + "/api/config/channels/" + encodeURIComponent(name), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ unmatched: value || null }),
+        });
+      }
 
-const CHANNEL_FIELDS = {
-  whatsapp: {
-    note: 'After adding, restart and run: channelkit channel add whatsapp <name> to pair via QR.',
-    fields: [],
-  },
-  telegram: {
-    note: 'Create a bot at @BotFather and paste the token here.',
-    fields: [
-      { id: 'ch-bot-token', label: 'Bot Token', placeholder: '123456:ABC-DEF1234...' },
-    ],
-  },
-  'sms-twilio': {
-    note: 'Twilio console: Account SID and Auth Token from the dashboard.',
-    fields: [
-      { id: 'ch-account-sid', label: 'Account SID', placeholder: 'ACxxxxxxx' },
-      { id: 'ch-auth-token', label: 'Auth Token', placeholder: '' },
-      { id: 'ch-number', label: 'Phone Number', placeholder: '+12025551234' },
-    ],
-  },
-  'voice-twilio': {
-    note: 'Same credentials as SMS. Voice and SMS can share credentials but need separate channels.',
-    fields: [
-      { id: 'ch-account-sid', label: 'Account SID', placeholder: 'ACxxxxxxx' },
-      { id: 'ch-auth-token', label: 'Auth Token', placeholder: '' },
-      { id: 'ch-number', label: 'Phone Number', placeholder: '+12025551234' },
-    ],
-  },
-  'email-resend': {
-    note: 'Get your API key from resend.com.',
-    fields: [
-      { id: 'ch-api-key', label: 'API Key', placeholder: 're_xxxxxxx' },
-      { id: 'ch-from-email', label: 'From Email', placeholder: 'support@yourdomain.com' },
-    ],
-  },
-};
+      const CHANNEL_FIELDS = {
+        whatsapp: {
+          note: "After adding, restart and run: channelkit channel add whatsapp <name> to pair via QR.",
+          fields: [],
+        },
+        telegram: {
+          note: "Create a bot at @BotFather and paste the token here.",
+          fields: [
+            {
+              id: "ch-bot-token",
+              label: "Bot Token",
+              placeholder: "123456:ABC-DEF1234...",
+            },
+          ],
+        },
+        "sms-twilio": {
+          note: "Twilio console: Account SID and Auth Token from the dashboard.",
+          fields: [
+            {
+              id: "ch-account-sid",
+              label: "Account SID",
+              placeholder: "ACxxxxxxx",
+            },
+            { id: "ch-auth-token", label: "Auth Token", placeholder: "" },
+            {
+              id: "ch-number",
+              label: "Phone Number",
+              placeholder: "+12025551234",
+            },
+          ],
+        },
+        "voice-twilio": {
+          note: "Same credentials as SMS. Voice and SMS can share credentials but need separate channels.",
+          fields: [
+            {
+              id: "ch-account-sid",
+              label: "Account SID",
+              placeholder: "ACxxxxxxx",
+            },
+            { id: "ch-auth-token", label: "Auth Token", placeholder: "" },
+            {
+              id: "ch-number",
+              label: "Phone Number",
+              placeholder: "+12025551234",
+            },
+          ],
+        },
+        "email-resend": {
+          note: "Get your API key from resend.com.",
+          fields: [
+            { id: "ch-api-key", label: "API Key", placeholder: "re_xxxxxxx" },
+            {
+              id: "ch-from-email",
+              label: "From Email",
+              placeholder: "support@yourdomain.com",
+            },
+          ],
+        },
+      };
 
-function renderChannelFields() {
-  const type = document.getElementById('ch-type').value;
-  const container = document.getElementById('ch-fields');
-  const submitRow = document.getElementById('ch-submit-row');
-  const note = document.getElementById('ch-note');
-  if (!type) { container.innerHTML = ''; submitRow.style.display = 'none'; return; }
-  const def = CHANNEL_FIELDS[type];
-  const typeFields = def.fields.map(f =>
-    `<div class="form-row"><input id="${f.id}" placeholder="${escHtml(f.label + (f.placeholder ? ' — ' + f.placeholder : ''))}" style="flex:1"></div>`
-  ).join('');
-  container.innerHTML = typeFields + `
+      function renderChannelFields() {
+        const type = document.getElementById("ch-type").value;
+        const container = document.getElementById("ch-fields");
+        const submitRow = document.getElementById("ch-submit-row");
+        const note = document.getElementById("ch-note");
+        if (!type) {
+          container.innerHTML = "";
+          submitRow.style.display = "none";
+          return;
+        }
+        const def = CHANNEL_FIELDS[type];
+        const typeFields = def.fields
+          .map(
+            (f) =>
+              `<div class="form-row"><input id="${f.id}" placeholder="${escHtml(f.label + (f.placeholder ? " — " + f.placeholder : ""))}" style="flex:1"></div>`,
+          )
+          .join("");
+        const smsInboundHtml =
+          type === "sms-twilio"
+            ? `
+    <div class="form-row">
+      <select id="ch-sms-inbound" onchange="updateSmsInboundFields()"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="polling">Polling — fetch messages at regular intervals</option>
+        <option value="webhook">External Address — receive webhooks from Twilio</option>
+      </select>
+    </div>
+    <div class="form-row" id="ch-sms-poll-row">
+      <input id="ch-sms-poll-interval" type="number" value="60" min="5" max="3600"
+        placeholder="Poll interval in seconds (default: 60)"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+    </div>
+    <div id="ch-sms-webhook-info" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px"></div>
+  `
+            : "";
+        container.innerHTML =
+          typeFields +
+          smsInboundHtml +
+          `
     <div class="form-row">
       <select id="ch-mode" onchange="updateChannelModeFields()"
         style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
@@ -611,207 +1846,744 @@ function renderChannelFields() {
         <option value="list">Unmatched messages: Reply with service list</option>
       </select>
     </div>`;
-  note.textContent = def.note;
-  submitRow.style.display = 'flex';
-}
-
-function updateChannelModeFields() {
-  const mode = document.getElementById('ch-mode')?.value;
-  const row = document.getElementById('ch-unmatched-row');
-  if (row) row.style.display = mode === 'groups' ? '' : 'none';
-}
-
-async function addChannel() {
-  const name = document.getElementById('ch-name').value.trim();
-  const typeKey = document.getElementById('ch-type').value;
-  if (!name || !typeKey) { alert('Channel name and type are required'); return; }
-
-  const body = { name };
-  if (typeKey === 'whatsapp') {
-    Object.assign(body, { type: 'whatsapp' });
-  } else if (typeKey === 'telegram') {
-    const token = document.getElementById('ch-bot-token')?.value.trim();
-    if (!token) { alert('Bot token is required'); return; }
-    Object.assign(body, { type: 'telegram', bot_token: token });
-  } else if (typeKey === 'sms-twilio') {
-    const sid = document.getElementById('ch-account-sid')?.value.trim();
-    const tok = document.getElementById('ch-auth-token')?.value.trim();
-    const num = document.getElementById('ch-number')?.value.trim();
-    if (!sid || !tok || !num) { alert('Account SID, Auth Token and Phone Number are required'); return; }
-    Object.assign(body, { type: 'sms', provider: 'twilio', account_sid: sid, auth_token: tok, number: num });
-  } else if (typeKey === 'voice-twilio') {
-    const sid = document.getElementById('ch-account-sid')?.value.trim();
-    const tok = document.getElementById('ch-auth-token')?.value.trim();
-    const num = document.getElementById('ch-number')?.value.trim();
-    if (!sid || !tok || !num) { alert('Account SID, Auth Token and Phone Number are required'); return; }
-    Object.assign(body, { type: 'voice', provider: 'twilio', account_sid: sid, auth_token: tok, number: num });
-  } else if (typeKey === 'email-resend') {
-    const key = document.getElementById('ch-api-key')?.value.trim();
-    const from = document.getElementById('ch-from-email')?.value.trim();
-    if (!key || !from) { alert('API Key and From Email are required'); return; }
-    Object.assign(body, { type: 'email', provider: 'resend', api_key: key, from_email: from });
-  }
-
-  const mode = document.getElementById('ch-mode')?.value || 'service';
-  Object.assign(body, { mode });
-  if (mode === 'groups') {
-    const unmatched = document.getElementById('ch-unmatched')?.value;
-    if (unmatched) Object.assign(body, { unmatched });
-  }
-
-  const res = await fetch(API + '/api/config/channels', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let errMsg = `Failed to add channel (${res.status})`;
-    try { const d = await res.json(); errMsg = d.error || errMsg; } catch {}
-    alert(errMsg);
-    return;
-  }
-  // Clear form
-  document.getElementById('ch-name').value = '';
-  document.getElementById('ch-type').value = '';
-  document.getElementById('ch-fields').innerHTML = '';
-  document.getElementById('ch-submit-row').style.display = 'none';
-  loadConfigData();
-}
-
-async function removeChannel(name, deps) {
-  const msg = deps.length > 0
-    ? `Remove channel "${name}"?\n\nThis will also remove these services:\n• ${deps.join('\n• ')}`
-    : `Remove channel "${name}"?`;
-  if (!confirm(msg)) return;
-  const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(name), { method: 'DELETE' });
-  if (!res.ok) { let m = `Remove failed (${res.status})`; try { m = (await res.json()).error || m; } catch {} alert(m); return; }
-  loadConfigData();
-}
-
-async function addService() {
-  const name = document.getElementById('svc-name').value.trim();
-  const channel = document.getElementById('svc-channel').value;
-  const webhook = document.getElementById('svc-webhook').value.trim();
-  const code = document.getElementById('svc-code').value.trim();
-  const command = document.getElementById('svc-command').value.trim();
-  if (!name || !channel || !webhook) { alert('Name, channel and webhook URL are required'); return; }
-  const res = await fetch(API + '/api/config/services', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, channel, webhook, ...(code && { code }), ...(command && { command }) }),
-  });
-  if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed to add service'); return; }
-  ['svc-name','svc-webhook','svc-code','svc-command'].forEach(id => { document.getElementById(id).value = ''; });
-  loadConfigData();
-}
-
-// ─── Server Log panel ──────────────────────────────
-let serverLogLines = [];
-
-async function loadServerLogs() {
-  try {
-    const lines = await fetch(API + '/api/server-logs').then(r => r.json());
-    serverLogLines = lines;
-    renderServerLog();
-  } catch {}
-}
-
-function renderServerLog() {
-  const el = document.getElementById('server-log');
-  if (serverLogLines.length === 0) {
-    el.innerHTML = '<div style="color:#666">No log output captured yet.</div>';
-  } else {
-    el.innerHTML = serverLogLines.map(l =>
-      `<div class="${l.level === 'stderr' ? 'log-err' : ''}">${escHtml(l.text)}</div>`
-    ).join('');
-  }
-  document.getElementById('log-count').textContent = serverLogLines.length + ' lines';
-  if (document.getElementById('log-autoscroll').checked) el.scrollTop = el.scrollHeight;
-}
-
-async function clearServerLog() {
-  await fetch(API + '/api/server-logs', { method: 'DELETE' });
-  serverLogLines = [];
-  renderServerLog();
-}
-
-// ─── Restart ───────────────────────────────────────
-async function restartServer() {
-  if (!confirm('Restart ChannelKit now?\n\nThe process will restart and the dashboard will reload automatically.')) return;
-  const btn = document.getElementById('restart-btn');
-  const status = document.getElementById('restart-status');
-  btn.disabled = true;
-  btn.textContent = 'Restarting…';
-  status.textContent = '';
-  try {
-    await fetch(API + '/api/restart', { method: 'POST' });
-  } catch {}
-  status.textContent = 'Waiting for server…';
-  // Poll until the server comes back, then reload
-  let attempts = 0;
-  const poll = setInterval(async () => {
-    attempts++;
-    if (attempts > 30) { clearInterval(poll); status.textContent = 'Restart timed out — reload manually'; return; }
-    try {
-      const r = await fetch(API + '/api/health');
-      if (r.ok) { clearInterval(poll); location.reload(); }
-    } catch {}
-  }, 1000);
-}
-
-// ─── WebSocket ─────────────────────────────────────
-let ws;
-function connectWs() {
-  ws = new WebSocket(WS_URL);
-  ws.onopen = () => {
-    wsStatus.textContent = '● LIVE';
-    wsStatus.className = 'badge badge-live';
-  };
-  ws.onclose = () => {
-    wsStatus.textContent = '● OFFLINE';
-    wsStatus.style.background = 'var(--red)';
-    setTimeout(connectWs, 3000);
-  };
-  ws.onmessage = (ev) => {
-    try {
-      const msg = JSON.parse(ev.data);
-
-      if (msg.type === 'newEntry') {
-        allEntries.unshift(msg.entry);
-        if (allEntries.length > 1000) allEntries.pop();
-        const filtered = getFiltered();
-        if (filtered[0] && filtered[0].id === msg.entry.id) render([msg.entry], true);
-        updateStats();
+        note.textContent = def.note;
+        submitRow.style.display = "flex";
       }
 
-      if (msg.type === 'serverLog') {
-        serverLogLines.push(msg);
-        if (serverLogLines.length > 500) serverLogLines.shift();
-        if (document.getElementById('panel-serverlog').classList.contains('active')) {
-          const el = document.getElementById('server-log');
-          const div = document.createElement('div');
-          if (msg.level === 'stderr') div.className = 'log-err';
-          div.textContent = msg.text;
-          // Remove placeholder
-          const placeholder = el.querySelector('div[style*="color:#666"]');
-          if (placeholder) placeholder.remove();
-          el.appendChild(div);
-          document.getElementById('log-count').textContent = serverLogLines.length + ' lines';
-          if (document.getElementById('log-autoscroll').checked) el.scrollTop = el.scrollHeight;
+      function updateChannelModeFields() {
+        const mode = document.getElementById("ch-mode")?.value;
+        const row = document.getElementById("ch-unmatched-row");
+        if (row) row.style.display = mode === "groups" ? "" : "none";
+      }
+
+      function updateSmsInboundFields() {
+        const mode = document.getElementById("ch-sms-inbound")?.value;
+        const pollRow = document.getElementById("ch-sms-poll-row");
+        const webhookInfo = document.getElementById("ch-sms-webhook-info");
+        if (!pollRow || !webhookInfo) return;
+
+        if (mode === "polling") {
+          pollRow.style.display = "";
+          webhookInfo.style.display = "none";
+        } else {
+          pollRow.style.display = "none";
+          if (!tunnelState.active) {
+            webhookInfo.style.display = "block";
+            webhookInfo.style.background = "#fff8e1";
+            webhookInfo.style.color = "#9a6700";
+            webhookInfo.style.border = "1px solid #ffe082";
+            webhookInfo.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"/></svg> Service is not externalized. Please <strong>Externalize</strong> first to use the external address mode.';
+          } else {
+            webhookInfo.style.display = "block";
+            webhookInfo.style.background = "#e8f5e9";
+            webhookInfo.style.color = "#1a7f37";
+            webhookInfo.style.border = "1px solid #a5d6a7";
+            webhookInfo.innerHTML =
+              '<svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg> Twilio will send incoming SMS to your external address.';
+          }
         }
       }
 
-      if (msg.type === 'configChanged') {
-        document.getElementById('restart-banner').style.display = 'block';
-        const active = document.querySelector('.tab.active')?.dataset.tab;
-        if (active === 'services' || active === 'channels') loadConfigData();
-      }
-    } catch {}
-  };
-}
-connectWs();
+      async function addChannel() {
+        const name = document.getElementById("ch-name").value.trim();
+        const typeKey = document.getElementById("ch-type").value;
+        if (!name || !typeKey) {
+          alert("Channel name and type are required");
+          return;
+        }
 
-setInterval(updateStats, 30000);
-</script>
-</body>
+        const body = { name };
+        if (typeKey === "whatsapp") {
+          Object.assign(body, { type: "whatsapp" });
+        } else if (typeKey === "telegram") {
+          const token = document.getElementById("ch-bot-token")?.value.trim();
+          if (!token) {
+            alert("Bot token is required");
+            return;
+          }
+          Object.assign(body, { type: "telegram", bot_token: token });
+        } else if (typeKey === "sms-twilio") {
+          const sid = document.getElementById("ch-account-sid")?.value.trim();
+          const tok = document.getElementById("ch-auth-token")?.value.trim();
+          const num = document.getElementById("ch-number")?.value.trim();
+          if (!sid || !tok || !num) {
+            alert("Account SID, Auth Token and Phone Number are required");
+            return;
+          }
+          const smsInbound =
+            document.getElementById("ch-sms-inbound")?.value || "polling";
+          if (smsInbound === "webhook" && !tunnelState.active) {
+            alert(
+              "Please externalize the service first to use the external address mode.",
+            );
+            return;
+          }
+          Object.assign(body, {
+            type: "sms",
+            provider: "twilio",
+            account_sid: sid,
+            auth_token: tok,
+            number: num,
+          });
+          if (smsInbound === "polling") {
+            const pollInterval =
+              parseInt(
+                document.getElementById("ch-sms-poll-interval")?.value,
+              ) || 60;
+            Object.assign(body, { poll_interval: pollInterval });
+          }
+        } else if (typeKey === "voice-twilio") {
+          const sid = document.getElementById("ch-account-sid")?.value.trim();
+          const tok = document.getElementById("ch-auth-token")?.value.trim();
+          const num = document.getElementById("ch-number")?.value.trim();
+          if (!sid || !tok || !num) {
+            alert("Account SID, Auth Token and Phone Number are required");
+            return;
+          }
+          Object.assign(body, {
+            type: "voice",
+            provider: "twilio",
+            account_sid: sid,
+            auth_token: tok,
+            number: num,
+          });
+        } else if (typeKey === "email-resend") {
+          const key = document.getElementById("ch-api-key")?.value.trim();
+          const from = document.getElementById("ch-from-email")?.value.trim();
+          if (!key || !from) {
+            alert("API Key and From Email are required");
+            return;
+          }
+          Object.assign(body, {
+            type: "email",
+            provider: "resend",
+            api_key: key,
+            from_email: from,
+          });
+        }
+
+        const mode = document.getElementById("ch-mode")?.value || "service";
+        Object.assign(body, { mode });
+        if (mode === "groups") {
+          const unmatched = document.getElementById("ch-unmatched")?.value;
+          if (unmatched) Object.assign(body, { unmatched });
+        }
+
+        const res = await fetch(API + "/api/config/channels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          let errMsg = `Failed to add channel (${res.status})`;
+          try {
+            const d = await res.json();
+            errMsg = d.error || errMsg;
+          } catch {}
+          alert(errMsg);
+          return;
+        }
+        // For SMS channels, update Twilio webhook via sms-settings endpoint
+        if (typeKey === "sms-twilio") {
+          const smsInbound =
+            document.getElementById("ch-sms-inbound")?.value || "polling";
+          try {
+            const smsRes = await fetch(
+              API +
+                "/api/config/channels/" +
+                encodeURIComponent(name) +
+                "/sms-settings",
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  inbound_mode: smsInbound,
+                  ...(smsInbound === "polling" && {
+                    poll_interval:
+                      parseInt(
+                        document.getElementById("ch-sms-poll-interval")?.value,
+                      ) || 60,
+                  }),
+                }),
+              },
+            );
+            if (!smsRes.ok) {
+              const d = await smsRes.json().catch(() => ({}));
+              console.warn("SMS settings update:", d.error || "failed");
+            }
+          } catch (e) {
+            console.error("Failed to update SMS settings:", e);
+          }
+        }
+        // Clear form
+        document.getElementById("ch-name").value = "";
+        document.getElementById("ch-type").value = "";
+        document.getElementById("ch-fields").innerHTML = "";
+        document.getElementById("ch-submit-row").style.display = "none";
+        loadConfigData();
+      }
+
+      async function removeChannel(name, deps) {
+        const msg =
+          deps.length > 0
+            ? `Remove channel "${name}"?\n\nThis will also remove these services:\n• ${deps.join("\n• ")}`
+            : `Remove channel "${name}"?`;
+        if (!confirm(msg)) return;
+        const res = await fetch(
+          API + "/api/config/channels/" + encodeURIComponent(name),
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          let m = `Remove failed (${res.status})`;
+          try {
+            m = (await res.json()).error || m;
+          } catch {}
+          alert(m);
+          return;
+        }
+        loadConfigData();
+      }
+
+      function editSmsSettings(name, currentMode, currentInterval) {
+        document
+          .querySelectorAll(".sms-settings-row")
+          .forEach((el) => el.remove());
+        const tbody = document.getElementById("channels-body");
+        const rows = tbody.querySelectorAll("tr");
+        let targetRow = null;
+        for (const row of rows) {
+          const firstTd = row.querySelector("td");
+          if (firstTd && firstTd.textContent.trim() === name) {
+            targetRow = row;
+            break;
+          }
+        }
+        if (!targetRow) return;
+        const settingsRow = document.createElement("tr");
+        settingsRow.className = "sms-settings-row";
+        const td = document.createElement("td");
+        td.colSpan = 6;
+        td.innerHTML = `
+    <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:4px 0 8px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">SMS Inbound Settings</div>
+      <div class="form-row">
+        <select id="sms-set-mode" onchange="updateSmsSettingsUI()"
+          style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+          <option value="polling" ${currentMode === "polling" ? "selected" : ""}>Polling \u2014 fetch messages at regular intervals</option>
+          <option value="webhook" ${currentMode === "webhook" ? "selected" : ""}>External Address \u2014 receive webhooks from Twilio</option>
+        </select>
+      </div>
+      <div class="form-row" id="sms-set-poll-row" ${currentMode !== "polling" ? 'style="display:none"' : ""}>
+        <input id="sms-set-interval" type="number" value="${parseInt(currentInterval) || 60}" min="5" max="3600"
+          placeholder="Poll interval in seconds"
+          style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+      </div>
+      <div id="sms-set-webhook-info" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px"></div>
+      <div class="form-row" style="margin-top:8px;gap:8px">
+        <button class="btn btn-primary" onclick="saveSmsSettings('${escHtml(name)}')">Save</button>
+        <button style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--dim)" onclick="closeSmsSettings()">Cancel</button>
+      </div>
+    </div>`;
+        settingsRow.appendChild(td);
+        targetRow.after(settingsRow);
+        updateSmsSettingsUI();
+      }
+
+      function updateSmsSettingsUI() {
+        const mode = document.getElementById("sms-set-mode")?.value;
+        const pollRow = document.getElementById("sms-set-poll-row");
+        const info = document.getElementById("sms-set-webhook-info");
+        if (!pollRow || !info) return;
+        if (mode === "polling") {
+          pollRow.style.display = "";
+          info.style.display = "none";
+        } else {
+          pollRow.style.display = "none";
+          if (!tunnelState.active) {
+            info.style.display = "block";
+            info.style.background = "#fff8e1";
+            info.style.color = "#9a6700";
+            info.style.border = "1px solid #ffe082";
+            info.innerHTML =
+              "\u26a0\ufe0f Service is not externalized. Please <strong>Externalize</strong> first to use the external address mode.";
+          } else {
+            info.style.display = "block";
+            info.style.background = "#e8f5e9";
+            info.style.color = "#1a7f37";
+            info.style.border = "1px solid #a5d6a7";
+            info.innerHTML =
+              "\u2705 Twilio will send incoming SMS to your external address.";
+          }
+        }
+      }
+
+      async function saveSmsSettings(name) {
+        const mode = document.getElementById("sms-set-mode")?.value;
+        if (mode === "webhook" && !tunnelState.active) {
+          alert(
+            "Please externalize the service first to use the external address mode.",
+          );
+          return;
+        }
+        const interval =
+          parseInt(document.getElementById("sms-set-interval")?.value) || 60;
+        const btn = document.querySelector(".sms-settings-row .btn-primary");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "Saving\u2026";
+        }
+        try {
+          const res = await fetch(
+            API +
+              "/api/config/channels/" +
+              encodeURIComponent(name) +
+              "/sms-settings",
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                inbound_mode: mode,
+                ...(mode === "polling" && { poll_interval: interval }),
+              }),
+            },
+          );
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            alert(d.error || "Failed to save SMS settings");
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "Save";
+            }
+            return;
+          }
+          closeSmsSettings();
+          loadConfigData();
+        } catch (e) {
+          alert("Failed to save SMS settings: " + e.message);
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Save";
+          }
+        }
+      }
+
+      function closeSmsSettings() {
+        document
+          .querySelectorAll(".sms-settings-row")
+          .forEach((el) => el.remove());
+      }
+
+      async function addService() {
+        const name = document.getElementById("svc-name").value.trim();
+        const channel = document.getElementById("svc-channel").value;
+        const webhook = document.getElementById("svc-webhook").value.trim();
+        const code = document.getElementById("svc-code").value.trim();
+        const command = document.getElementById("svc-command").value.trim();
+        if (!name || !channel || !webhook) {
+          alert("Name, channel and webhook URL are required");
+          return;
+        }
+        const res = await fetch(API + "/api/config/services", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            channel,
+            webhook,
+            ...(code && { code }),
+            ...(command && { command }),
+          }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          alert(d.error || "Failed to add service");
+          return;
+        }
+        ["svc-name", "svc-webhook", "svc-code", "svc-command"].forEach((id) => {
+          document.getElementById(id).value = "";
+        });
+        loadConfigData();
+      }
+
+      // ─── Server Log panel ──────────────────────────────
+      let serverLogLines = [];
+
+      async function loadServerLogs() {
+        try {
+          const lines = await fetch(API + "/api/server-logs").then((r) =>
+            r.json(),
+          );
+          serverLogLines = lines;
+          renderServerLog();
+        } catch {}
+      }
+
+      function renderServerLog() {
+        const el = document.getElementById("server-log");
+        if (serverLogLines.length === 0) {
+          el.innerHTML =
+            '<div style="color:#666">No log output captured yet.</div>';
+        } else {
+          el.innerHTML = serverLogLines
+            .map(
+              (l) =>
+                `<div class="${l.level === "stderr" ? "log-err" : ""}">${escHtml(l.text)}</div>`,
+            )
+            .join("");
+        }
+        document.getElementById("log-count").textContent =
+          serverLogLines.length + " lines";
+        if (document.getElementById("log-autoscroll").checked)
+          el.scrollTop = el.scrollHeight;
+      }
+
+      async function clearServerLog() {
+        await fetch(API + "/api/server-logs", { method: "DELETE" });
+        serverLogLines = [];
+        renderServerLog();
+      }
+
+      // ─── Tunnel / Externalize ───────────────────────────
+      let tunnelState = { active: false, url: null };
+      let tunnelHasToken = false;
+      let hasSmsWebhookChannels = false;
+
+      function updateTunnelUI() {
+        const btn = document.getElementById("tunnel-btn");
+        const btnText = document.getElementById("tunnel-btn-text");
+        const bar = document.getElementById("tunnel-bar");
+        const urlEl = document.getElementById("tunnel-url");
+        const warn = document.getElementById("tunnel-warn");
+        const hasToken = document.getElementById("tunnel-has-token");
+
+        if (tunnelState.active && tunnelState.url) {
+          btn.classList.add("active");
+          btnText.textContent = "External";
+          bar.classList.add("active");
+          urlEl.textContent = tunnelState.url;
+          // Show stable badge or warning based on token config
+          const updateBtn = document.getElementById("update-endpoints-btn");
+          if (tunnelHasToken) {
+            warn.style.display = "none";
+            hasToken.style.display = "";
+            if (updateBtn) updateBtn.style.display = "none";
+          } else {
+            warn.style.display = "";
+            hasToken.style.display = "none";
+            if (updateBtn) updateBtn.style.display = hasSmsWebhookChannels ? "inline-flex" : "none";
+          }
+        } else {
+          btn.classList.remove("active");
+          btnText.textContent = "Externalize";
+          bar.classList.remove("active");
+          urlEl.textContent = "";
+        }
+        btn.disabled = false;
+      }
+
+      async function toggleTunnel() {
+        const btn = document.getElementById("tunnel-btn");
+        const btnText = document.getElementById("tunnel-btn-text");
+        btn.disabled = true;
+
+        if (tunnelState.active) {
+          btnText.textContent = "Stopping\u2026";
+          try {
+            await fetch(API + "/api/tunnel/stop", { method: "POST" });
+            tunnelState = { active: false, url: null };
+          } catch (err) {
+            alert("Failed to stop tunnel: " + err.message);
+          }
+        } else {
+          btnText.textContent = "Starting\u2026";
+          try {
+            const res = await fetch(API + "/api/tunnel/start", {
+              method: "POST",
+            });
+            const data = await res.json();
+            if (res.ok) {
+              tunnelState = { active: true, url: data.url };
+            } else {
+              alert(
+                "Failed to start tunnel: " + (data.error || "Unknown error"),
+              );
+            }
+          } catch (err) {
+            alert("Failed to start tunnel: " + err.message);
+          }
+        }
+        updateTunnelUI();
+      }
+
+      function copyTunnelUrl() {
+        if (!tunnelState.url) return;
+        navigator.clipboard.writeText(tunnelState.url).then(() => {
+          const el = document.getElementById("tunnel-copied");
+          el.style.opacity = "1";
+          setTimeout(() => {
+            el.style.opacity = "0";
+          }, 1500);
+        });
+      }
+
+      async function updateExternalEndpoints() {
+        const btn = document.getElementById("update-endpoints-btn");
+        const originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.textContent = "Updating\u2026";
+        try {
+          const res = await fetch(API + "/api/tunnel/update-webhooks", { method: "POST" });
+          const data = await res.json();
+          if (!res.ok) {
+            alert("Failed to update endpoints: " + (data.error || res.status));
+            return;
+          }
+          const lines = [];
+          if (data.updated.length > 0) lines.push("Updated: " + data.updated.join(", "));
+          if (data.errors.length > 0) lines.push("Errors: " + data.errors.map(e => e.name + " — " + e.error).join("; "));
+          if (data.updated.length === 0 && data.errors.length === 0) lines.push("No SMS channels in webhook mode found.");
+          alert(lines.join("\n"));
+        } catch (err) {
+          alert("Failed to update endpoints: " + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
+
+      function showTunnelHelp() {
+        document.getElementById("tunnel-help-overlay").classList.add("open");
+      }
+
+      function closeTunnelHelp() {
+        document.getElementById("tunnel-help-overlay").classList.remove("open");
+      }
+
+      function showTunnelSetup() {
+        const setup = document.getElementById("tunnel-setup");
+        setup.classList.add("open");
+        // Load existing config
+        fetch(API + "/api/tunnel/config")
+          .then((r) => r.json())
+          .then((cfg) => {
+            if (cfg.token)
+              document.getElementById("ts-token").value = cfg.token;
+            if (cfg.public_url)
+              document.getElementById("ts-hostname").value =
+                cfg.public_url.replace(/^https?:\/\//, "");
+            document.getElementById("ts-clear-btn").style.display = cfg.token
+              ? ""
+              : "none";
+          })
+          .catch(() => {});
+      }
+
+      function hideTunnelSetup() {
+        document.getElementById("tunnel-setup").classList.remove("open");
+      }
+
+      async function saveTunnelConfig() {
+        const token = document.getElementById("ts-token").value.trim();
+        let hostname = document.getElementById("ts-hostname").value.trim();
+        if (!token || !hostname) {
+          alert("Both tunnel token and public hostname are required.");
+          return;
+        }
+        // Ensure hostname is a full URL
+        if (!hostname.startsWith("http")) hostname = "https://" + hostname;
+        const res = await fetch(API + "/api/tunnel/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, public_url: hostname }),
+        });
+        if (!res.ok) {
+          const d = await res.json();
+          alert(d.error || "Failed to save");
+          return;
+        }
+        tunnelHasToken = true;
+        hideTunnelSetup();
+        // If tunnel is active, stop and restart to use the new token
+        if (tunnelState.active) {
+          await fetch(API + "/api/tunnel/stop", { method: "POST" });
+          tunnelState = { active: false, url: null };
+          updateTunnelUI();
+          alert(
+            "Token saved. Click Externalize again to connect with your stable URL.",
+          );
+        } else {
+          alert(
+            "Token saved. Click Externalize to connect with your stable URL.",
+          );
+        }
+      }
+
+      async function clearTunnelConfig() {
+        if (
+          !confirm(
+            "Remove the tunnel token? The next Externalize will use a random URL.",
+          )
+        )
+          return;
+        await fetch(API + "/api/tunnel/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: null, public_url: null }),
+        });
+        tunnelHasToken = false;
+        document.getElementById("ts-token").value = "";
+        document.getElementById("ts-hostname").value = "";
+        document.getElementById("ts-clear-btn").style.display = "none";
+        hideTunnelSetup();
+        updateTunnelUI();
+      }
+
+      async function toggleExposeDashboard(enabled) {
+        await fetch(API + "/api/tunnel/expose-dashboard", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
+        });
+      }
+
+      // Load initial tunnel status + config
+      fetch(API + "/api/config")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.channels) {
+            hasSmsWebhookChannels = Object.values(data.channels).some(
+              (ch) => ch.type === "sms" && !ch.poll_interval
+            );
+            updateTunnelUI();
+          }
+        })
+        .catch(() => {});
+      fetch(API + "/api/tunnel/status")
+        .then((r) => r.json())
+        .then((s) => {
+          tunnelState = s;
+          updateTunnelUI();
+        })
+        .catch(() => {});
+      fetch(API + "/api/tunnel/config")
+        .then((r) => r.json())
+        .then((cfg) => {
+          tunnelHasToken = !!cfg.token;
+          document.getElementById("tunnel-expose").checked =
+            !!cfg.expose_dashboard;
+          updateTunnelUI();
+        })
+        .catch(() => {});
+
+      // ─── Restart ───────────────────────────────────────
+      async function restartServer() {
+        if (
+          !confirm(
+            "Restart ChannelKit now?\n\nThe process will restart and the dashboard will reload automatically.",
+          )
+        )
+          return;
+        const btn = document.getElementById("restart-btn");
+        const status = document.getElementById("restart-status");
+        btn.disabled = true;
+        btn.textContent = "Restarting…";
+        status.textContent = "";
+        try {
+          await fetch(API + "/api/restart", { method: "POST" });
+        } catch {}
+        status.textContent = "Waiting for server…";
+        // Poll until the server comes back, then reload
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          if (attempts > 30) {
+            clearInterval(poll);
+            status.textContent = "Restart timed out — reload manually";
+            return;
+          }
+          try {
+            const r = await fetch(API + "/api/health");
+            if (r.ok) {
+              clearInterval(poll);
+              location.reload();
+            }
+          } catch {}
+        }, 1000);
+      }
+
+      // ─── WebSocket ─────────────────────────────────────
+      let ws;
+      function connectWs() {
+        ws = new WebSocket(WS_URL);
+        ws.onopen = () => {
+          wsStatus.textContent = "● LIVE";
+          wsStatus.className = "badge badge-live";
+        };
+        ws.onclose = () => {
+          wsStatus.textContent = "● OFFLINE";
+          wsStatus.style.background = "var(--red)";
+          setTimeout(connectWs, 3000);
+        };
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+
+            if (msg.type === "newEntry") {
+              allEntries.unshift(msg.entry);
+              if (allEntries.length > 1000) allEntries.pop();
+              const filtered = getFiltered();
+              if (filtered[0] && filtered[0].id === msg.entry.id)
+                render([msg.entry], true);
+              updateStats();
+            }
+
+            if (msg.type === "serverLog") {
+              serverLogLines.push(msg);
+              if (serverLogLines.length > 500) serverLogLines.shift();
+              if (
+                document
+                  .getElementById("panel-serverlog")
+                  .classList.contains("active")
+              ) {
+                const el = document.getElementById("server-log");
+                const div = document.createElement("div");
+                if (msg.level === "stderr") div.className = "log-err";
+                div.textContent = msg.text;
+                // Remove placeholder
+                const placeholder = el.querySelector(
+                  'div[style*="color:#666"]',
+                );
+                if (placeholder) placeholder.remove();
+                el.appendChild(div);
+                document.getElementById("log-count").textContent =
+                  serverLogLines.length + " lines";
+                if (document.getElementById("log-autoscroll").checked)
+                  el.scrollTop = el.scrollHeight;
+              }
+            }
+
+            if (msg.type === "tunnelStatus") {
+              tunnelState = { active: msg.active, url: msg.url || null };
+              if (msg.exposeDashboard !== undefined) {
+                document.getElementById("tunnel-expose").checked =
+                  msg.exposeDashboard;
+              }
+              updateTunnelUI();
+            }
+
+            if (msg.type === "configChanged") {
+              document.getElementById("restart-banner").style.display = "block";
+              const active = document.querySelector(".tab.active")?.dataset.tab;
+              if (active === "services" || active === "channels")
+                loadConfigData();
+            }
+          } catch {}
+        };
+      }
+      connectWs();
+
+      setInterval(updateStats, 30000);
+    </script>
+  </body>
 </html>
