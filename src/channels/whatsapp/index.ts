@@ -228,10 +228,13 @@ export class WhatsAppChannel extends Channel {
 
     // Voice message from buffer (TTS output)
     if (response.media?.buffer && response.media.mimetype?.includes('audio')) {
+      const mime = response.media.mimetype;
+      // WhatsApp voice notes (ptt) require OGG/Opus — other formats (e.g. MP3) are sent as audio files
+      const isOggOpus = mime.includes('ogg') || mime.includes('opus');
       await this.sock.sendMessage(to, {
         audio: response.media.buffer,
-        mimetype: response.media.mimetype,
-        ptt: true, // sends as voice note
+        mimetype: mime,
+        ptt: isOggOpus,
       } as any);
       // If there was also text, don't send it separately (voice replaces text)
       return;

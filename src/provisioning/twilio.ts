@@ -16,6 +16,8 @@ export interface AvailableNumber {
     mms: boolean;
     voice: boolean;
   };
+  price?: string;
+  priceUnit?: string;
 }
 
 export interface PurchasedNumber {
@@ -49,6 +51,23 @@ export class TwilioProvisioner {
         results = await this.client.availablePhoneNumbers(countryCode).local.list(filters);
       }
 
+      // Fetch pricing for this country/type
+      let price: string | undefined;
+      let priceUnit: string | undefined;
+      try {
+        const pricing = await this.client.pricing.v1.phoneNumbers.countries(countryCode).fetch();
+        // SDK passes raw API objects — inner keys are snake_case despite type declarations
+        const match = pricing.phoneNumberPrices?.find(
+          (p: any) => p.number_type === type,
+        );
+        if (match) {
+          price = String((match as any).current_price ?? (match as any).base_price);
+          priceUnit = pricing.priceUnit;
+        }
+      } catch (_) {
+        // Pricing API may not be available — continue without price
+      }
+
       return results.map((n) => ({
         phoneNumber: n.phoneNumber,
         friendlyName: n.friendlyName,
@@ -62,6 +81,8 @@ export class TwilioProvisioner {
           mms: n.capabilities.mms || false,
           voice: voiceEnabled || (n.capabilities.voice || false),
         },
+        price,
+        priceUnit,
       }));
     } catch (err: any) {
       throw new Error(`Failed to search numbers: ${err.message}`);
@@ -80,7 +101,41 @@ export class TwilioProvisioner {
         friendlyName: result.friendlyName,
       };
     } catch (err: any) {
+      // If a regulatory bundle is required, try to find an approved one and retry
+      if (err.code === 21725 || /bundle required/i.test(err.message)) {
+        const bundleSid = await this.findApprovedBundle();
+        if (!bundleSid) {
+          throw new Error(
+            'This country requires a regulatory bundle. Create one at https://console.twilio.com/us1/develop/phone-numbers/manage/regulatory-compliance/bundles then try again.',
+          );
+        }
+        try {
+          const result = await this.client.incomingPhoneNumbers.create({
+            phoneNumber,
+            bundleSid,
+          });
+          return {
+            sid: result.sid,
+            phoneNumber: result.phoneNumber,
+            friendlyName: result.friendlyName,
+          };
+        } catch (retryErr: any) {
+          throw new Error(`Failed to purchase number: ${retryErr.message}`);
+        }
+      }
       throw new Error(`Failed to purchase number: ${err.message}`);
+    }
+  }
+
+  private async findApprovedBundle(): Promise<string | undefined> {
+    try {
+      const bundles = await this.client.numbers.v2.regulatoryCompliance.bundles.list({
+        status: 'twilio-approved',
+        limit: 1,
+      });
+      return bundles[0]?.sid;
+    } catch (_) {
+      return undefined;
     }
   }
 

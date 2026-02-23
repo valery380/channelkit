@@ -118,17 +118,26 @@ class GoogleSTT implements STTProvider {
 
   async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
     const encoding = this.getEncoding(mimetype);
+    const langCode = language || this.sttConfig.language || 'en-US';
     const config: any = {
       encoding,
-      sampleRateHertz: encoding === 'OGG_OPUS' ? 48000 : 16000,
-      languageCode: language || this.sttConfig.language || 'en-US',
-      model: 'default',
+      languageCode: langCode,
       enableAutomaticPunctuation: true,
     };
+
+    // WhatsApp Ogg/Opus files have sample rate 0 in the header, so always specify explicitly.
+    // WhatsApp voice notes are 16kHz; generic Opus is typically 48kHz.
+    config.sampleRateHertz = encoding === 'OGG_OPUS' ? 16000 : 16000;
 
     // Auto language detection: add alternative languages
     if (this.sttConfig.alternative_languages?.length) {
       config.alternativeLanguageCodes = this.sttConfig.alternative_languages;
+    }
+
+    // Validate audio header
+    const magic = audio.slice(0, 4).toString('ascii');
+    if (encoding === 'OGG_OPUS' && magic !== 'OggS') {
+      console.warn(`[stt:google] Audio buffer does not start with OggS magic (got: ${magic}). Buffer may be corrupt.`);
     }
 
     const body = {
@@ -149,6 +158,8 @@ class GoogleSTT implements STTProvider {
       url = 'https://speech.googleapis.com/v1/speech:recognize';
       headers['Authorization'] = `Bearer ${token}`;
     }
+
+    console.log(`[stt:google] Request config: encoding=${encoding}, lang=${langCode}, audioBytes=${audio.length}, magic=${magic}`);
 
     const res = await fetch(url, {
       method: 'POST',
