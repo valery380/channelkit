@@ -565,6 +565,130 @@
         background: var(--bg);
       }
 
+      /* Send message modal */
+      .send-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .send-overlay.open {
+        display: flex;
+      }
+      .send-modal {
+        background: var(--surface);
+        border-radius: 14px;
+        padding: 28px 32px;
+        max-width: 520px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .send-modal h3 {
+        font-size: 16px;
+        margin-bottom: 16px;
+      }
+      .send-modal label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+        margin-top: 12px;
+      }
+      .send-modal label:first-of-type { margin-top: 0; }
+      .send-modal select,
+      .send-modal input,
+      .send-modal textarea {
+        width: 100%;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-family: inherit;
+      }
+      .send-modal textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+      .send-modal select:focus,
+      .send-modal input:focus,
+      .send-modal textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .send-modal .send-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+      .send-modal .btn-send {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .send-modal .btn-send:hover { opacity: 0.9; }
+      .send-modal .btn-send:disabled { opacity: 0.5; cursor: default; }
+      .send-modal .btn-cancel {
+        background: none;
+        border: 1px solid var(--border);
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--dim);
+      }
+      .send-modal .btn-cancel:hover { background: var(--bg); }
+      .send-modal .send-status {
+        font-size: 12px;
+        margin-top: 10px;
+        min-height: 18px;
+      }
+      .send-modal .api-examples {
+        margin-top: 16px;
+        border-top: 1px solid var(--border);
+        padding-top: 12px;
+      }
+      .send-modal .api-examples summary {
+        font-size: 12px;
+        color: var(--dim);
+        cursor: pointer;
+        font-weight: 600;
+      }
+      .send-modal .api-examples pre {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 11px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin-top: 8px;
+        line-height: 1.5;
+      }
+      .send-modal .api-examples pre code {
+        font-family: "SF Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      }
+      .send-modal .api-examples h4 {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--dim);
+        margin: 10px 0 4px;
+      }
+
       /* Server log styles */
       .log-toolbar {
         padding: 10px 24px;
@@ -1309,6 +1433,22 @@
         >
           Clear
         </button>
+        <button
+          onclick="openSendModal()"
+          style="
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: auto;
+          "
+        >
+          Send Message
+        </button>
       </div>
       <div class="table-wrap">
         <table>
@@ -1490,6 +1630,30 @@
     </div>
 
     <!-- ── QR pairing modal ──────────────────────────── -->
+    <!-- ── Send message modal ──────────────────────── -->
+    <div class="send-overlay" id="send-overlay" onclick="if(event.target===this)closeSendModal()">
+      <div class="send-modal">
+        <h3>Send WhatsApp Message</h3>
+        <label>Channel</label>
+        <select id="send-channel"></select>
+        <label>Phone number</label>
+        <input type="tel" id="send-number" placeholder="+972542688963" />
+        <label>Message</label>
+        <textarea id="send-text" placeholder="Type your message..."></textarea>
+        <div class="send-actions">
+          <button class="btn-cancel" onclick="closeSendModal()">Cancel</button>
+          <button class="btn-send" id="send-btn" onclick="doSendMessage()">Send</button>
+        </div>
+        <div class="send-status" id="send-status"></div>
+        <div class="api-examples">
+          <details>
+            <summary>API Examples</summary>
+            <div id="api-examples-content"></div>
+          </details>
+        </div>
+      </div>
+    </div>
+
     <div class="qr-overlay" id="qr-overlay">
       <div class="qr-modal">
         <h3 id="qr-title">Pair WhatsApp</h3>
@@ -1981,8 +2145,10 @@
 
       const CHANNEL_FIELDS = {
         whatsapp: {
-          note: "After adding, restart and run: channelkit channel add whatsapp <name> to pair via QR.",
-          fields: [],
+          note: "After adding, you'll pair via QR code. Optionally buy a Twilio number below.",
+          fields: [
+            { id: "ch-number", label: "Phone Number (optional)", placeholder: "+12025551234" },
+          ],
         },
         telegram: {
           note: "Create a bot at @BotFather and paste the token here.",
@@ -2080,6 +2246,45 @@
               `<div class="form-row"><input id="${f.id}" placeholder="${escHtml(f.label + (f.placeholder ? " — " + f.placeholder : ""))}" style="flex:1"></div>`,
           )
           .join("");
+
+        // "Buy a number" inline section for Twilio-based channels
+        const hasBuyOption = type === "sms-twilio" || type === "voice-twilio" || type === "whatsapp";
+        let buyHtml = "";
+        if (hasBuyOption) {
+          const defaultType = type === "voice-twilio" ? "local" : "mobile";
+          buyHtml = `
+    <div id="ch-buy-section">
+      <div id="ch-buy-toggle" style="margin:-4px 0 8px">
+        <button type="button" onclick="toggleBuyNumber()" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:0;text-decoration:underline">
+          or buy a new number from Twilio
+        </button>
+      </div>
+      <div id="ch-buy-panel" style="display:none;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--surface)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Buy a Twilio Number</div>
+        ${type === "whatsapp" ? `
+        <div class="form-row"><input id="ch-buy-sid" placeholder="Account SID — ACxxxxxxx" style="flex:1"></div>
+        <div class="form-row"><input id="ch-buy-token" placeholder="Auth Token" style="flex:1"></div>
+        ` : `
+        <div style="font-size:12px;color:var(--dim);margin-bottom:8px">Using the Account SID and Auth Token above.</div>
+        `}
+        <div class="form-row">
+          <select id="ch-buy-country" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+          </select>
+          <select id="ch-buy-type" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+            <option value="mobile" ${defaultType === "mobile" ? "selected" : ""}>Mobile</option>
+            <option value="local" ${defaultType === "local" ? "selected" : ""}>Local</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-primary" style="font-size:12px;padding:6px 14px" onclick="searchBuyNumbers()">Search Numbers</button>
+          <button type="button" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;color:var(--dim)" onclick="closeBuyPanel()">Cancel</button>
+        </div>
+        <div id="ch-buy-error" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;color:var(--red);background:#ffeef0;border:1px solid #ffc1c7;margin-top:4px"></div>
+        <div id="ch-buy-results" style="display:none;margin-top:10px"></div>
+      </div>
+    </div>`;
+        }
+
         const smsInboundHtml =
           type === "sms-twilio"
             ? `
@@ -2100,6 +2305,7 @@
             : "";
         container.innerHTML =
           typeFields +
+          buyHtml +
           smsInboundHtml +
           `
     <div class="form-row">
@@ -2117,6 +2323,8 @@
       </select>
     </div>`;
         note.textContent = def.note;
+        // Populate country dropdown if buy section exists
+        if (hasBuyOption) populateBuyCountries();
       }
 
       function updateChannelModeFields() {
@@ -2151,6 +2359,168 @@
             webhookInfo.innerHTML =
               '<svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg> Twilio will send incoming SMS to your external address.';
           }
+        }
+      }
+
+      // ─── Buy Twilio Number (inline) ─────────────────────
+      const COUNTRY_OPTIONS = [
+        { code: 'US', label: 'United States (+1)' },
+        { code: 'GB', label: 'United Kingdom (+44)' },
+        { code: 'CA', label: 'Canada (+1)' },
+        { code: 'AU', label: 'Australia (+61)' },
+        { code: 'DE', label: 'Germany (+49)' },
+        { code: 'FR', label: 'France (+33)' },
+        { code: 'IL', label: 'Israel (+972)' },
+        { code: 'NL', label: 'Netherlands (+31)' },
+        { code: 'SE', label: 'Sweden (+46)' },
+        { code: 'ES', label: 'Spain (+34)' },
+        { code: 'IT', label: 'Italy (+39)' },
+        { code: 'BR', label: 'Brazil (+55)' },
+        { code: 'JP', label: 'Japan (+81)' },
+        { code: 'IN', label: 'India (+91)' },
+        { code: 'PL', label: 'Poland (+48)' },
+      ];
+
+      function populateBuyCountries() {
+        const sel = document.getElementById('ch-buy-country');
+        if (!sel) return;
+        sel.innerHTML = COUNTRY_OPTIONS.map(c =>
+          `<option value="${c.code}">${escHtml(c.label)}</option>`
+        ).join('');
+      }
+
+      function toggleBuyNumber() {
+        const panel = document.getElementById('ch-buy-panel');
+        const toggle = document.getElementById('ch-buy-toggle');
+        if (!panel) return;
+        const show = panel.style.display === 'none';
+        panel.style.display = show ? '' : 'none';
+        toggle.style.display = show ? 'none' : '';
+      }
+
+      function closeBuyPanel() {
+        const panel = document.getElementById('ch-buy-panel');
+        const toggle = document.getElementById('ch-buy-toggle');
+        if (panel) panel.style.display = 'none';
+        if (toggle) toggle.style.display = '';
+        // Clear results
+        const results = document.getElementById('ch-buy-results');
+        if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+      }
+
+      function getBuyCredentials() {
+        const type = document.getElementById('ch-type')?.value;
+        // For WhatsApp: credentials are in the buy panel itself
+        if (type === 'whatsapp') {
+          return {
+            sid: document.getElementById('ch-buy-sid')?.value.trim(),
+            tok: document.getElementById('ch-buy-token')?.value.trim(),
+          };
+        }
+        // For SMS/Voice: credentials come from the main form
+        return {
+          sid: document.getElementById('ch-account-sid')?.value.trim(),
+          tok: document.getElementById('ch-auth-token')?.value.trim(),
+        };
+      }
+
+      async function searchBuyNumbers() {
+        const { sid, tok } = getBuyCredentials();
+        const country = document.getElementById('ch-buy-country')?.value;
+        const numType = document.getElementById('ch-buy-type')?.value;
+        const errBox = document.getElementById('ch-buy-error');
+        errBox.style.display = 'none';
+
+        if (!sid || !tok) {
+          errBox.textContent = 'Account SID and Auth Token are required';
+          errBox.style.display = 'block';
+          return;
+        }
+
+        const btn = document.querySelector('#ch-buy-panel > .form-row > .btn-primary');
+        btn.disabled = true; btn.textContent = 'Searching\u2026';
+
+        try {
+          const res = await fetch(API + '/api/twilio/search-numbers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_sid: sid, auth_token: tok, country_code: country, type: numType, limit: 10 }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Search failed');
+          if (!data.numbers || data.numbers.length === 0) throw new Error('No numbers available. Try a different country or type.');
+          renderBuyResults(data.numbers);
+        } catch (e) {
+          errBox.textContent = e.message; errBox.style.display = 'block';
+        } finally {
+          btn.disabled = false; btn.textContent = 'Search Numbers';
+        }
+      }
+
+      function renderBuyResults(numbers) {
+        const resultsDiv = document.getElementById('ch-buy-results');
+        resultsDiv.style.display = '';
+
+        const rows = numbers.map(n => {
+          const caps = [];
+          if (n.capabilities.sms) caps.push('<span style="background:#e8f5e9;color:#1a7f37;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600">SMS</span>');
+          if (n.capabilities.voice) caps.push('<span style="background:#e3f2fd;color:#0969da;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600">Voice</span>');
+          if (n.capabilities.mms) caps.push('<span style="background:#fff3e0;color:#9a6700;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600">MMS</span>');
+          const loc = [n.locality, n.region].filter(Boolean).join(', ');
+          return `<tr>
+            <td class="mono" style="font-weight:500;font-size:12px">${escHtml(n.phoneNumber)}</td>
+            <td style="font-size:11px;color:var(--dim)">${escHtml(loc || n.isoCountry)}</td>
+            <td>${caps.join(' ')}</td>
+            <td><button class="btn btn-primary" style="padding:3px 10px;font-size:11px" onclick='confirmBuyNumber(${JSON.stringify(n.phoneNumber)})'>Buy</button></td>
+          </tr>`;
+        }).join('');
+
+        resultsDiv.innerHTML = `
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px">Available Numbers</div>
+          <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+            <table style="margin:0">
+              <thead><tr><th style="font-size:10px">Number</th><th style="font-size:10px">Location</th><th style="font-size:10px">Capabilities</th><th style="width:50px"></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div id="ch-buy-purchase-error" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;color:var(--red);background:#ffeef0;border:1px solid #ffc1c7;margin-top:6px"></div>
+        `;
+      }
+
+      async function confirmBuyNumber(phoneNumber) {
+        if (!confirm('Purchase ' + phoneNumber + ' from Twilio? Your account will be charged.')) return;
+
+        const { sid, tok } = getBuyCredentials();
+        const errBox = document.getElementById('ch-buy-purchase-error');
+        if (errBox) errBox.style.display = 'none';
+
+        // Disable all buy buttons
+        document.querySelectorAll('#ch-buy-results .btn-primary').forEach(b => { b.disabled = true; });
+
+        try {
+          const res = await fetch(API + '/api/twilio/buy-number', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ account_sid: sid, auth_token: tok, phone_number: phoneNumber }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Purchase failed');
+
+          // Fill the phone number into the form
+          const numInput = document.getElementById('ch-number');
+          if (numInput) numInput.value = data.purchased.phoneNumber;
+
+          // Show success and close panel
+          const panel = document.getElementById('ch-buy-panel');
+          panel.innerHTML = `
+            <div style="background:#e8f5e9;color:#1a7f37;padding:10px 14px;border-radius:6px;font-size:13px;border:1px solid #a5d6a7">
+              <svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg>
+              Purchased <strong class="mono">${escHtml(data.purchased.phoneNumber)}</strong> — filled in above.
+            </div>
+          `;
+        } catch (e) {
+          if (errBox) { errBox.textContent = e.message; errBox.style.display = 'block'; }
+          document.querySelectorAll('#ch-buy-results .btn-primary').forEach(b => { b.disabled = false; });
         }
       }
 
@@ -2226,6 +2596,130 @@
         }
       }
 
+      // ─── Send message modal ─────────────────────────
+      let cachedApiSecret = null;
+      let sendChannelList = [];
+
+      async function openSendModal() {
+        const statusEl = document.getElementById("send-status");
+        statusEl.textContent = "";
+        statusEl.style.color = "";
+        document.getElementById("send-text").value = "";
+        document.getElementById("send-btn").disabled = false;
+
+        // Fetch config to get channels and api_secret
+        try {
+          const res = await fetch(API + "/api/config");
+          const data = await res.json();
+          cachedApiSecret = data.api_secret || null;
+          sendChannelList = [];
+          const sel = document.getElementById("send-channel");
+          sel.innerHTML = "";
+          for (const [name, cfg] of Object.entries(data.channels)) {
+            if (cfg.type === "whatsapp") {
+              sendChannelList.push(name);
+              const opt = document.createElement("option");
+              opt.value = name;
+              opt.textContent = name;
+              sel.appendChild(opt);
+            }
+          }
+          if (sendChannelList.length === 0) {
+            sel.innerHTML = '<option value="">No WhatsApp channels</option>';
+          }
+        } catch {}
+
+        updateApiExamples();
+        document.getElementById("send-overlay").classList.add("open");
+        document.getElementById("send-number").focus();
+      }
+
+      function closeSendModal() {
+        document.getElementById("send-overlay").classList.remove("open");
+      }
+
+      function phoneToJid(phone) {
+        return phone.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
+      }
+
+      async function doSendMessage() {
+        const channel = document.getElementById("send-channel").value;
+        const phone = document.getElementById("send-number").value.trim();
+        const text = document.getElementById("send-text").value.trim();
+        const statusEl = document.getElementById("send-status");
+        const btn = document.getElementById("send-btn");
+
+        if (!channel) { statusEl.textContent = "Select a channel"; statusEl.style.color = "var(--red)"; return; }
+        if (!phone) { statusEl.textContent = "Enter a phone number"; statusEl.style.color = "var(--red)"; return; }
+        if (!text) { statusEl.textContent = "Enter a message"; statusEl.style.color = "var(--red)"; return; }
+
+        btn.disabled = true;
+        statusEl.textContent = "Sending...";
+        statusEl.style.color = "var(--dim)";
+
+        const jid = phoneToJid(phone);
+        const headers = { "Content-Type": "application/json" };
+        if (cachedApiSecret) headers["Authorization"] = "Bearer " + cachedApiSecret;
+
+        try {
+          const res = await fetch(
+            API + "/api/send/" + encodeURIComponent(channel) + "/" + encodeURIComponent(jid),
+            { method: "POST", headers, body: JSON.stringify({ text }) }
+          );
+          const data = await res.json();
+          if (res.ok) {
+            statusEl.textContent = "Message sent!";
+            statusEl.style.color = "var(--green)";
+            document.getElementById("send-text").value = "";
+          } else {
+            statusEl.textContent = data.error || "Failed to send";
+            statusEl.style.color = "var(--red)";
+          }
+        } catch (e) {
+          statusEl.textContent = "Error: " + e.message;
+          statusEl.style.color = "var(--red)";
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      function updateApiExamples() {
+        const channel = document.getElementById("send-channel").value || "whatsapp";
+        const phone = document.getElementById("send-number").value.trim() || "+972542688963";
+        const jid = phoneToJid(phone);
+        const baseUrl = API;
+        const secretHeader = cachedApiSecret
+          ? '\n  -H "Authorization: Bearer ' + cachedApiSecret + '" \\\n'
+          : "\n";
+
+        const curlExample =
+          "curl -X POST " + baseUrl + "/api/send/" + channel + "/" + encodeURIComponent(jid) + " \\\n" +
+          '  -H "Content-Type: application/json" \\' +
+          secretHeader +
+          "  -d '{\"text\": \"Hello from the API!\"}'";
+
+        const authLine = cachedApiSecret
+          ? '\n    "Authorization": "Bearer ' + cachedApiSecret + '",'
+          : "";
+        const jsExample =
+          "await fetch(\"" + baseUrl + "/api/send/" + channel + "/" + encodeURIComponent(jid) + "\", {\n" +
+          '  method: "POST",\n' +
+          "  headers: {" + authLine + '\n    "Content-Type": "application/json"\n  },\n' +
+          '  body: JSON.stringify({ text: "Hello from the API!" })\n' +
+          "});";
+
+        const container = document.getElementById("api-examples-content");
+        container.innerHTML =
+          "<h4>cURL</h4><pre><code>" + escHtml(curlExample) + "</code></pre>" +
+          "<h4>JavaScript</h4><pre><code>" + escHtml(jsExample) + "</code></pre>" +
+          '<p style="font-size:11px;color:var(--dim);margin-top:8px">' +
+          "JID format: strip non-digits from phone number, append <code>@s.whatsapp.net</code></p>";
+      }
+
+      // Update examples when inputs change
+      document.getElementById("send-channel").addEventListener("change", updateApiExamples);
+      document.getElementById("send-number").addEventListener("input", updateApiExamples);
+
       async function addChannel() {
         const name = document.getElementById("ch-name").value.trim();
         const typeKey = document.getElementById("ch-type").value;
@@ -2236,7 +2730,8 @@
 
         const body = { name };
         if (typeKey === "whatsapp") {
-          Object.assign(body, { type: "whatsapp" });
+          const num = document.getElementById("ch-number")?.value.trim();
+          Object.assign(body, { type: "whatsapp", ...(num && { number: num }) });
         } else if (typeKey === "telegram") {
           const token = document.getElementById("ch-bot-token")?.value.trim();
           if (!token) {

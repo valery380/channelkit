@@ -7,6 +7,7 @@ import { Channel } from '../channels/base';
 import { WhatsAppChannel } from '../channels/whatsapp';
 import { Logger } from './logger';
 import { loadConfig, saveConfig } from '../config/parser';
+import { TwilioProvisioner } from '../provisioning/twilio';
 
 export class ApiServer {
   private app = express();
@@ -21,6 +22,7 @@ export class ApiServer {
   private configPath?: string;
   private serverLogBuffer: Array<{ level: string; text: string; ts: number }> = [];
   private exposeDashboard = false;
+  private apiSecret: string | null = null;
   findVoiceConfig?: (channelName: string) => any;
   tunnelStart?: () => Promise<{ url: string }>;
   tunnelStop?: () => Promise<void>;
@@ -52,6 +54,10 @@ export class ApiServer {
 
   getExposeDashboard(): boolean {
     return this.exposeDashboard;
+  }
+
+  setApiSecret(secret: string | undefined): void {
+    this.apiSecret = secret || null;
   }
 
   setLogger(logger: Logger): void {
@@ -127,6 +133,15 @@ export class ApiServer {
   private setupRoutes(): void {
     // POST /api/send/:channel/:jid — async message sending
     this.app.post('/api/send/:channel/:jid', async (req, res) => {
+      // Check API secret if configured
+      if (this.apiSecret) {
+        const auth = req.headers.authorization;
+        if (!auth || auth !== `Bearer ${this.apiSecret}`) {
+          res.status(401).json({ error: 'Invalid or missing Authorization header' });
+          return;
+        }
+      }
+
       const { channel: channelName, jid } = req.params;
       const { text, media } = req.body;
 
@@ -525,7 +540,7 @@ export class ApiServer {
       }
       try {
         const config = loadConfig(this.configPath, { validate: false });
-        res.json({ channels: config.channels, services: config.services || {} });
+        res.json({ channels: config.channels, services: config.services || {}, api_secret: config.api_secret || null });
       } catch (err: any) {
         res.status(500).json({ error: err.message });
       }
@@ -795,6 +810,41 @@ export class ApiServer {
       }
     });
 
+    // POST /api/twilio/search-numbers — search available Twilio numbers
+    this.app.post('/api/twilio/search-numbers', async (req, res) => {
+      const { account_sid, auth_token, country_code, type, limit } = req.body;
+      if (!account_sid || !auth_token || !country_code) {
+        res.status(400).json({ error: 'account_sid, auth_token, and country_code are required' });
+        return;
+      }
+      try {
+        const provisioner = new TwilioProvisioner({ accountSid: account_sid, authToken: auth_token });
+        const numbers = await provisioner.searchNumbers(country_code, {
+          type: type || 'mobile',
+          limit: limit || 10,
+        });
+        res.json({ numbers });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/twilio/buy-number — purchase a Twilio number and create channels
+    this.app.post('/api/twilio/buy-number', async (req, res) => {
+      const { account_sid, auth_token, phone_number } = req.body;
+      if (!account_sid || !auth_token || !phone_number) {
+        res.status(400).json({ error: 'account_sid, auth_token, and phone_number are required' });
+        return;
+      }
+      try {
+        const provisioner = new TwilioProvisioner({ accountSid: account_sid, authToken: auth_token });
+        const purchased = await provisioner.purchaseNumber(phone_number);
+        res.json({ ok: true, purchased });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // POST /api/restart — restart the ChannelKit process
     this.app.post('/api/restart', (_req, res) => {
       res.json({ ok: true });
@@ -860,13 +910,86 @@ export class ApiServer {
   }
 
   async start(): Promise<void> {
-    return new Promise((resolve) => {
+    const portInUse = await this.isPortInUse(this.port);
+    if (portInUse) {
+      const freed = await this.promptKillExistingProcess(this.port);
+      if (!freed) {
+        console.log('[api] Exiting — port is in use.');
+        process.exit(1);
+      }
+      // Recreate HTTP server and WSS since the old ones may be in a bad state
+      this.httpServer = createServer(this.app);
+      this.wss = new WebSocketServer({ server: this.httpServer });
+    }
+
+    return new Promise((resolve, reject) => {
       this.server = this.httpServer.listen(this.port, () => {
         console.log(`[api] Async API listening on port ${this.port}`);
         console.log(`📊 Dashboard: http://localhost:${this.port}/dashboard`);
         resolve();
       });
+      this.server.on('error', (err: Error) => reject(err));
     });
+  }
+
+  private isPortInUse(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const tester = require('net').createServer()
+        .once('error', (err: NodeJS.ErrnoException) => {
+          resolve(err.code === 'EADDRINUSE');
+        })
+        .once('listening', () => {
+          tester.close(() => resolve(false));
+        })
+        .listen(port);
+    });
+  }
+
+  private async promptKillExistingProcess(port: number): Promise<boolean> {
+    const { execSync } = await import('child_process');
+    const { createInterface } = await import('readline');
+
+    // Find the PID using the port
+    let pid: string | undefined;
+    try {
+      const out = execSync(`lsof -ti tcp:${port}`, { encoding: 'utf-8' }).trim();
+      pid = out.split('\n')[0];
+    } catch {
+      // lsof may fail if no process found or not available
+    }
+
+    const pidInfo = pid ? ` (PID ${pid})` : '';
+    console.error(`\n⚠️  Port ${port} is already in use${pidInfo}.`);
+
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    const answer = await new Promise<string>((res) => {
+      rl.question(`   Kill the existing process and continue? [y/N] `, (ans) => {
+        rl.close();
+        res(ans.trim().toLowerCase());
+      });
+    });
+
+    if (answer === 'y' || answer === 'yes') {
+      try {
+        if (pid) {
+          execSync(`kill -9 ${pid}`);
+        } else {
+          execSync(`lsof -ti tcp:${port} | xargs kill -9`);
+        }
+        console.log(`   Killed process on port ${port}. Waiting for port to be released...`);
+        // Wait until the port is actually free (up to 5 seconds)
+        for (let i = 0; i < 10; i++) {
+          await new Promise((r) => setTimeout(r, 500));
+          if (!(await this.isPortInUse(port))) return true;
+        }
+        console.error(`   Port ${port} is still in use after waiting.`);
+        return false;
+      } catch (killErr: any) {
+        console.error(`   Failed to kill process: ${killErr.message}`);
+        return false;
+      }
+    }
+    return false;
   }
 
   async stop(): Promise<void> {

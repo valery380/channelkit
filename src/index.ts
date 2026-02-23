@@ -96,8 +96,11 @@ export class ChannelKit {
       this.channelMap.set(name, channel);
       // Register by name for API server
       this.apiServer.registerChannel(name, channel);
-      // Also register by type for backward compat
-      this.apiServer.registerChannel(channelConfig.type, channel);
+      // Also register by type for backward compat, but don't overwrite
+      // a channel that was registered by its actual name
+      if (!this.channelMap.has(channelConfig.type)) {
+        this.apiServer.registerChannel(channelConfig.type, channel);
+      }
 
       const mode = this.router.getChannelMode(name);
       console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
@@ -300,6 +303,9 @@ export class ChannelKit {
     await this.apiServer.start();
     if (this.configPath) {
       this.apiServer.setConfigPath(this.configPath);
+    }
+    if (this.config.api_secret) {
+      this.apiServer.setApiSecret(this.config.api_secret);
     }
     this.apiServer.captureConsole();
 

@@ -416,11 +416,13 @@ async function startCommand(configPath: string, opts: { tunnel?: boolean; public
 
   let config;
   try {
-    config = loadConfig(configPath);
+    config = loadConfig(configPath, { validate: false });
   } catch (err: any) {
     console.error(c('yellow', `  ❌ Failed to load config: ${err.message}`));
     process.exit(1);
   }
+  if (!config.channels) config.channels = {};
+  if (!config.services) config.services = {};
 
   // Apply CLI tunnel overrides
   if (opts.tunnel) {
@@ -1350,6 +1352,50 @@ provision
       console.error(c('yellow', `\n  ❌ ${err.message}\n`));
     } finally {
       rl.close();
+    }
+  });
+
+program
+  .command('send <channel> <number> <message>')
+  .description('Send a WhatsApp message to a phone number')
+  .option('-c, --config <path>', 'Path to config file', 'config.yaml')
+  .option('-p, --port <port>', 'API server port', '4000')
+  .action(async (channelName: string, number: string, message: string, opts: { config: string; port: string }) => {
+    const jid = number.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+    const port = parseInt(opts.port, 10);
+    const baseUrl = `http://localhost:${port}`;
+    const url = `${baseUrl}/api/send/${encodeURIComponent(channelName)}/${encodeURIComponent(jid)}`;
+
+    // Load api_secret from config if present
+    const configPath = resolve(opts.config);
+    let secret: string | undefined;
+    if (existsSync(configPath)) {
+      try {
+        const config = loadConfig(configPath, { validate: false });
+        secret = config.api_secret;
+      } catch {}
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (secret) headers['Authorization'] = `Bearer ${secret}`;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text: message }),
+      });
+      const data = await res.json() as any;
+      if (res.ok) {
+        console.log(c('green', `  ✅ Message sent to ${number} via ${channelName}`));
+      } else {
+        console.error(c('yellow', `  ❌ ${data.error || 'Failed to send'}`));
+        process.exit(1);
+      }
+    } catch (err: any) {
+      console.error(c('yellow', `  ❌ Could not connect to ChannelKit at ${baseUrl}`));
+      console.error(c('dim', `  Make sure ChannelKit is running (channelkit start)`));
+      process.exit(1);
     }
   });
 

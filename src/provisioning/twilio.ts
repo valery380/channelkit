@@ -31,22 +31,22 @@ export class TwilioProvisioner {
     this.client = Twilio(config.accountSid, config.authToken);
   }
 
-  async searchNumbers(countryCode: string, options?: { type?: 'mobile' | 'local'; limit?: number }): Promise<AvailableNumber[]> {
+  async searchNumbers(countryCode: string, options?: { type?: 'mobile' | 'local'; limit?: number; smsEnabled?: boolean; voiceEnabled?: boolean }): Promise<AvailableNumber[]> {
     const type = options?.type || 'mobile';
     const limit = options?.limit || 5;
+    const smsEnabled = options?.smsEnabled ?? true;
+    const voiceEnabled = options?.voiceEnabled ?? true;
 
     try {
+      const filters: Record<string, any> = { limit };
+      if (smsEnabled) filters.smsEnabled = true;
+      if (voiceEnabled) filters.voiceEnabled = true;
+
       let results;
       if (type === 'mobile') {
-        results = await this.client.availablePhoneNumbers(countryCode).mobile.list({
-          smsEnabled: true,
-          limit,
-        });
+        results = await this.client.availablePhoneNumbers(countryCode).mobile.list(filters);
       } else {
-        results = await this.client.availablePhoneNumbers(countryCode).local.list({
-          smsEnabled: true,
-          limit,
-        });
+        results = await this.client.availablePhoneNumbers(countryCode).local.list(filters);
       }
 
       return results.map((n) => ({
@@ -56,9 +56,11 @@ export class TwilioProvisioner {
         region: n.region,
         isoCountry: n.isoCountry,
         capabilities: {
-          sms: n.capabilities.sms || false,
+          // Trust the filter we sent — if we asked for smsEnabled/voiceEnabled,
+          // the number supports it even if Twilio's capabilities object disagrees.
+          sms: smsEnabled || (n.capabilities.sms || false),
           mms: n.capabilities.mms || false,
-          voice: n.capabilities.voice || false,
+          voice: voiceEnabled || (n.capabilities.voice || false),
         },
       }));
     } catch (err: any) {

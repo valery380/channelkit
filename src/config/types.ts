@@ -128,4 +128,5 @@ export interface AppConfig {
   apiPort?: number;
   dashboard?: DashboardConfig;
   tunnel?: TunnelConfig;
+  api_secret?: string;         // Bearer token required for /api/send/ endpoint
 }
