@@ -1401,6 +1401,7 @@
       <button class="tab" data-tab="services">Services</button>
       <button class="tab" data-tab="channels">Channels</button>
       <button class="tab" data-tab="serverlog">Server Log</button>
+      <button class="tab" data-tab="settings">Settings</button>
     </div>
 
     <!-- ── Messages panel ─────────────────────────────── -->
@@ -1482,7 +1483,7 @@
               <th>Channel</th>
               <th>Webhook</th>
               <th>Code / Command</th>
-              <th style="width: 130px"></th>
+              <th style="width: 190px"></th>
             </tr>
           </thead>
           <tbody id="services-body"></tbody>
@@ -1629,6 +1630,72 @@
       </div>
     </div>
 
+    <!-- ── Settings panel ────────────────────────────── -->
+    <div class="tab-panel" id="panel-settings">
+      <div style="max-width:560px;margin:0 auto;padding:24px 0">
+        <div style="margin-bottom:24px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">Twilio Defaults</div>
+          <div style="font-size:12px;color:var(--dim);margin-bottom:12px">Default credentials used when adding SMS or Voice channels.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">Account SID</label>
+              <div style="position:relative">
+                <input type="password" id="set-twilio-sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">Auth Token</label>
+              <div style="position:relative">
+                <input type="password" id="set-twilio-token" placeholder="Auth Token" style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:20px;margin-bottom:24px">
+          <div style="font-size:15px;font-weight:600;margin-bottom:4px">API Keys</div>
+          <div style="font-size:12px;color:var(--dim);margin-bottom:12px">Keys for speech-to-text and text-to-speech providers.</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">Google API Key <span style="color:var(--dim);font-weight:400">(STT &amp; TTS)</span></label>
+              <div style="position:relative">
+                <input type="password" id="set-google-key" placeholder="AIza..." style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">ElevenLabs API Key <span style="color:var(--dim);font-weight:400">(TTS)</span></label>
+              <div style="position:relative">
+                <input type="password" id="set-elevenlabs-key" placeholder="sk_..." style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">OpenAI API Key <span style="color:var(--dim);font-weight:400">(Whisper STT &amp; TTS)</span></label>
+              <div style="position:relative">
+                <input type="password" id="set-openai-key" placeholder="sk-..." style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px;font-weight:500;display:block;margin-bottom:3px">Deepgram API Key <span style="color:var(--dim);font-weight:400">(STT)</span></label>
+              <div style="position:relative">
+                <input type="password" id="set-deepgram-key" placeholder="Deepgram API key" style="width:100%;padding:7px 36px 7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit" />
+                <button onclick="toggleSettingsVis(this)" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--dim);font-size:11px">show</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px">
+          <button onclick="saveSettings()" style="background:var(--accent);color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Save Settings</button>
+          <span id="settings-status" style="font-size:12px"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- ── QR pairing modal ──────────────────────────── -->
     <!-- ── Send message modal ──────────────────────── -->
     <div class="send-overlay" id="send-overlay" onclick="if(event.target===this)closeSendModal()">
@@ -1688,6 +1755,7 @@
           if (btn.dataset.tab === "services" || btn.dataset.tab === "channels")
             loadConfigData();
           if (btn.dataset.tab === "serverlog") loadServerLogs();
+          if (btn.dataset.tab === "settings") loadSettings();
         });
       });
 
@@ -1754,6 +1822,7 @@
 
       let allEntries = [];
       let currentChannels = {};
+      let currentServices = {};
       const channelIcons = {
         whatsapp:
           '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>',
@@ -1910,6 +1979,7 @@
           const data = await fetch(API + "/api/config").then((r) => r.json());
           if (data.error) return;
           currentChannels = data.channels || {};
+          currentServices = data.services || {};
           hasSmsWebhookChannels = Object.values(currentChannels).some(
             (ch) => ch.type === "sms" && !ch.poll_interval
           );
@@ -1935,20 +2005,29 @@
         }
         tbody.innerHTML = entries
           .map(
-            ([name, svc]) => `
+            ([name, svc]) => {
+              const audioParts = [];
+              if (svc.stt) audioParts.push('STT: ' + escHtml(svc.stt.provider) + (svc.stt.language ? ' (' + escHtml(svc.stt.language) + ')' : ''));
+              if (svc.tts) audioParts.push('TTS: ' + escHtml(svc.tts.provider) + (svc.tts.language ? ' (' + escHtml(svc.tts.language) + ')' : ''));
+              const audioLabel = audioParts.length > 0
+                ? `<div style="margin-top:3px;font-size:11px;color:var(--dim)">${audioParts.join(' · ')}</div>`
+                : '';
+              return `
     <tr>
-      <td style="font-weight:500">${escHtml(name)}</td>
+      <td style="font-weight:500">${escHtml(name)}${audioLabel}</td>
       <td>${escHtml(svc.channel)}</td>
       <td class="webhook-cell" id="wh-cell-${escHtml(name)}">
         <span class="webhook-text mono">${escHtml(svc.webhook)}</span>
       </td>
       <td id="cc-cell-${escHtml(name)}" data-code="${escHtml(svc.code || "")}" data-command="${escHtml(svc.command || "")}" style="color:var(--dim);font-size:12px">${escHtml(svc.code || svc.command || "—")}</td>
       <td id="act-cell-${escHtml(name)}" style="text-align:right;white-space:nowrap">
+        <button class="btn-edit" data-name="${escHtml(name)}" onclick="editAudioSettings(this.dataset.name)">Audio</button>
         <button class="btn-edit" data-name="${escHtml(name)}" onclick="editService(this.dataset.name)">Edit</button>
         <button class="btn-danger" data-name="${escHtml(name)}" onclick="removeService(this.dataset.name)">Remove</button>
       </td>
     </tr>
-  `,
+  `;
+            },
           )
           .join("");
       }
@@ -2220,6 +2299,10 @@
         document.getElementById("ch-step-hint").textContent =
           "Configure your new " + (CHANNEL_TYPE_LABELS[type] || type) + " channel.";
         renderChannelFields();
+        // Auto-fill Twilio defaults from settings
+        if (type === 'sms-twilio' || type === 'voice-twilio' || type === 'whatsapp') {
+          prefillTwilioDefaults();
+        }
         document.getElementById("ch-name").focus();
       }
 
@@ -2303,10 +2386,29 @@
     <div id="ch-sms-webhook-info" style="display:none;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px"></div>
   `
             : "";
+
+        const emailInboundHtml =
+          type === "email-resend"
+            ? `
+    <div class="form-row">
+      <select id="ch-email-inbound" onchange="updateEmailInboundFields()"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+        <option value="webhook">Webhook — Resend forwards emails to your endpoint</option>
+        <option value="polling">Polling — fetch emails at regular intervals</option>
+      </select>
+    </div>
+    <div class="form-row" id="ch-email-poll-row" style="display:none">
+      <input id="ch-email-poll-interval" type="number" value="30" min="5" max="3600"
+        placeholder="Poll interval in seconds (default: 30)"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+    </div>
+  `
+            : "";
         container.innerHTML =
           typeFields +
           buyHtml +
           smsInboundHtml +
+          emailInboundHtml +
           `
     <div class="form-row">
       <select id="ch-mode" onchange="updateChannelModeFields()"
@@ -2362,6 +2464,13 @@
         }
       }
 
+      function updateEmailInboundFields() {
+        const mode = document.getElementById("ch-email-inbound")?.value;
+        const pollRow = document.getElementById("ch-email-poll-row");
+        if (!pollRow) return;
+        pollRow.style.display = mode === "polling" ? "" : "none";
+      }
+
       // ─── Buy Twilio Number (inline) ─────────────────────
       const COUNTRY_OPTIONS = [
         { code: 'US', label: 'United States (+1)' },
@@ -2410,18 +2519,18 @@
 
       function getBuyCredentials() {
         const type = document.getElementById('ch-type')?.value;
-        // For WhatsApp: credentials are in the buy panel itself
+        let sid, tok;
         if (type === 'whatsapp') {
-          return {
-            sid: document.getElementById('ch-buy-sid')?.value.trim(),
-            tok: document.getElementById('ch-buy-token')?.value.trim(),
-          };
+          sid = document.getElementById('ch-buy-sid')?.value.trim();
+          tok = document.getElementById('ch-buy-token')?.value.trim();
+        } else {
+          sid = document.getElementById('ch-account-sid')?.value.trim();
+          tok = document.getElementById('ch-auth-token')?.value.trim();
         }
-        // For SMS/Voice: credentials come from the main form
-        return {
-          sid: document.getElementById('ch-account-sid')?.value.trim(),
-          tok: document.getElementById('ch-auth-token')?.value.trim(),
-        };
+        // Fall back to cached Twilio defaults from settings
+        if (!sid && twilioDefaults.sid) sid = twilioDefaults.sid;
+        if (!tok && twilioDefaults.tok) tok = twilioDefaults.tok;
+        return { sid, tok };
       }
 
       async function searchBuyNumbers() {
@@ -2467,10 +2576,12 @@
           if (n.capabilities.voice) caps.push('<span style="background:#e3f2fd;color:#0969da;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600">Voice</span>');
           if (n.capabilities.mms) caps.push('<span style="background:#fff3e0;color:#9a6700;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600">MMS</span>');
           const loc = [n.locality, n.region].filter(Boolean).join(', ');
+          const priceStr = n.price ? `${(n.priceUnit || 'USD').toUpperCase()} $${parseFloat(n.price).toFixed(2)}/mo` : '';
           return `<tr>
             <td class="mono" style="font-weight:500;font-size:12px">${escHtml(n.phoneNumber)}</td>
             <td style="font-size:11px;color:var(--dim)">${escHtml(loc || n.isoCountry)}</td>
             <td>${caps.join(' ')}</td>
+            <td style="font-size:11px;color:var(--dim);white-space:nowrap">${priceStr}</td>
             <td><button class="btn btn-primary" style="padding:3px 10px;font-size:11px" onclick='confirmBuyNumber(${JSON.stringify(n.phoneNumber)})'>Buy</button></td>
           </tr>`;
         }).join('');
@@ -2479,7 +2590,7 @@
           <div style="font-size:12px;font-weight:600;margin-bottom:6px">Available Numbers</div>
           <div style="max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
             <table style="margin:0">
-              <thead><tr><th style="font-size:10px">Number</th><th style="font-size:10px">Location</th><th style="font-size:10px">Capabilities</th><th style="width:50px"></th></tr></thead>
+              <thead><tr><th style="font-size:10px">Number</th><th style="font-size:10px">Location</th><th style="font-size:10px">Capabilities</th><th style="font-size:10px">Price</th><th style="width:50px"></th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -2740,8 +2851,8 @@
           }
           Object.assign(body, { type: "telegram", bot_token: token });
         } else if (typeKey === "sms-twilio") {
-          const sid = document.getElementById("ch-account-sid")?.value.trim();
-          const tok = document.getElementById("ch-auth-token")?.value.trim();
+          const sid = document.getElementById("ch-account-sid")?.value.trim() || twilioDefaults.sid;
+          const tok = document.getElementById("ch-auth-token")?.value.trim() || twilioDefaults.tok;
           const num = document.getElementById("ch-number")?.value.trim();
           if (!sid || !tok || !num) {
             alert("Account SID, Auth Token and Phone Number are required");
@@ -2770,8 +2881,8 @@
             Object.assign(body, { poll_interval: pollInterval });
           }
         } else if (typeKey === "voice-twilio") {
-          const sid = document.getElementById("ch-account-sid")?.value.trim();
-          const tok = document.getElementById("ch-auth-token")?.value.trim();
+          const sid = document.getElementById("ch-account-sid")?.value.trim() || twilioDefaults.sid;
+          const tok = document.getElementById("ch-auth-token")?.value.trim() || twilioDefaults.tok;
           const num = document.getElementById("ch-number")?.value.trim();
           if (!sid || !tok || !num) {
             alert("Account SID, Auth Token and Phone Number are required");
@@ -2797,6 +2908,15 @@
             api_key: key,
             from_email: from,
           });
+          const emailInbound =
+            document.getElementById("ch-email-inbound")?.value || "webhook";
+          if (emailInbound === "polling") {
+            const pollInterval =
+              parseInt(
+                document.getElementById("ch-email-poll-interval")?.value,
+              ) || 30;
+            Object.assign(body, { poll_interval: pollInterval });
+          }
         }
 
         const mode = document.getElementById("ch-mode")?.value || "service";
@@ -3014,6 +3134,158 @@
           .forEach((el) => el.remove());
       }
 
+      // --- Audio (STT / TTS) settings per service ---
+
+      const sttProviderMap = {
+        google:  { label: 'Google', key: 'google_api_key' },
+        whisper: { label: 'Whisper (OpenAI)', key: 'openai_api_key' },
+        deepgram:{ label: 'Deepgram', key: 'deepgram_api_key' },
+      };
+      const ttsProviderMap = {
+        google:     { label: 'Google', key: 'google_api_key' },
+        elevenlabs: { label: 'ElevenLabs', key: 'elevenlabs_api_key' },
+        openai:     { label: 'OpenAI', key: 'openai_api_key' },
+      };
+
+      function buildProviderOptions(map, currentProvider) {
+        let html = `<option value=""${!currentProvider ? ' selected' : ''}>None</option>`;
+        for (const [id, info] of Object.entries(map)) {
+          const hasKey = !!(cachedSettings[info.key]);
+          const sel = currentProvider === id ? ' selected' : '';
+          const dis = hasKey ? '' : ' disabled';
+          const suffix = hasKey ? '' : ' (no API key)';
+          html += `<option value="${id}"${sel}${dis}>${info.label}${suffix}</option>`;
+        }
+        return html;
+      }
+
+      async function editAudioSettings(name) {
+        // Close any existing audio / sms settings rows
+        document.querySelectorAll('.audio-settings-row').forEach(el => el.remove());
+        closeSmsSettings();
+
+        // Ensure we have fresh settings data for provider availability
+        await loadSettings();
+
+        const svc = currentServices[name];
+        if (!svc) return;
+        const stt = svc.stt || {};
+        const tts = svc.tts || {};
+
+        const tbody = document.getElementById('services-body');
+        const rows = tbody.querySelectorAll('tr');
+        let targetRow = null;
+        for (const row of rows) {
+          const firstTd = row.querySelector('td');
+          if (firstTd && firstTd.textContent.trim().startsWith(name)) { targetRow = row; break; }
+        }
+        if (!targetRow) return;
+
+        const settingsRow = document.createElement('tr');
+        settingsRow.className = 'audio-settings-row';
+        const td = document.createElement('td');
+        td.colSpan = 6;
+        td.innerHTML = `
+    <div style="padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:4px 0 8px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Audio Settings &mdash; ${escHtml(name)}</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <!-- STT -->
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--dim)">Speech-to-Text (incoming audio)</div>
+          <div class="form-row">
+            <select id="audio-stt-provider"
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)"
+              onchange="toggleAudioLangFields()">
+              ${buildProviderOptions(sttProviderMap, stt.provider)}
+            </select>
+          </div>
+          <div id="audio-stt-lang-row" class="form-row" style="${stt.provider ? '' : 'display:none'}">
+            <input id="audio-stt-lang" value="${escHtml(stt.language || '')}" placeholder="Language (e.g. en-US, he-IL)"
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+        <!-- TTS -->
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--dim)">Text-to-Speech (outgoing audio)</div>
+          <div class="form-row">
+            <select id="audio-tts-provider"
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)"
+              onchange="toggleAudioLangFields()">
+              ${buildProviderOptions(ttsProviderMap, tts.provider)}
+            </select>
+          </div>
+          <div id="audio-tts-lang-row" class="form-row" style="${tts.provider ? '' : 'display:none'}">
+            <input id="audio-tts-lang" value="${escHtml(tts.language || '')}" placeholder="Language (e.g. en-US, he-IL)"
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+          </div>
+          <div id="audio-tts-voice-row" class="form-row" style="${tts.provider ? '' : 'display:none'}">
+            <input id="audio-tts-voice" value="${escHtml(tts.voice || '')}" placeholder="Voice (optional, e.g. alloy, Rachel)"
+              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--text)">
+          </div>
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px;gap:8px">
+        <button class="btn btn-primary" onclick="saveAudioSettings('${escHtml(name)}')">Save</button>
+        <button style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;color:var(--dim)" onclick="closeAudioSettings()">Cancel</button>
+        <span id="audio-settings-status" style="font-size:12px;margin-left:8px;align-self:center"></span>
+      </div>
+    </div>`;
+        settingsRow.appendChild(td);
+        targetRow.after(settingsRow);
+      }
+
+      function toggleAudioLangFields() {
+        const sttProv = document.getElementById('audio-stt-provider')?.value;
+        const ttsProv = document.getElementById('audio-tts-provider')?.value;
+        const sttLang = document.getElementById('audio-stt-lang-row');
+        const ttsLang = document.getElementById('audio-tts-lang-row');
+        const ttsVoice = document.getElementById('audio-tts-voice-row');
+        if (sttLang) sttLang.style.display = sttProv ? '' : 'none';
+        if (ttsLang) ttsLang.style.display = ttsProv ? '' : 'none';
+        if (ttsVoice) ttsVoice.style.display = ttsProv ? '' : 'none';
+      }
+
+      async function saveAudioSettings(name) {
+        const svc = currentServices[name];
+        if (!svc) return;
+
+        const sttProvider = document.getElementById('audio-stt-provider')?.value || '';
+        const sttLang = document.getElementById('audio-stt-lang')?.value.trim() || '';
+        const ttsProvider = document.getElementById('audio-tts-provider')?.value || '';
+        const ttsLang = document.getElementById('audio-tts-lang')?.value.trim() || '';
+        const ttsVoice = document.getElementById('audio-tts-voice')?.value.trim() || '';
+
+        const stt = sttProvider ? { provider: sttProvider, language: sttLang || undefined } : null;
+        const tts = ttsProvider ? { provider: ttsProvider, language: ttsLang || undefined, voice: ttsVoice || undefined } : null;
+
+        const statusEl = document.getElementById('audio-settings-status');
+        try {
+          const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webhook: svc.webhook,
+              code: svc.code || null,
+              command: svc.command || null,
+              stt,
+              tts,
+            }),
+          });
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            throw new Error(d.error || 'Save failed');
+          }
+          if (statusEl) { statusEl.textContent = 'Saved'; statusEl.style.color = 'var(--green)'; }
+          setTimeout(() => { closeAudioSettings(); loadConfigData(); }, 600);
+        } catch (e) {
+          if (statusEl) { statusEl.textContent = e.message; statusEl.style.color = 'var(--red)'; }
+        }
+      }
+
+      function closeAudioSettings() {
+        document.querySelectorAll('.audio-settings-row').forEach(el => el.remove());
+      }
+
       async function addService() {
         const name = document.getElementById("svc-name").value.trim();
         const channel = document.getElementById("svc-channel").value;
@@ -3081,6 +3353,117 @@
         await fetch(API + "/api/server-logs", { method: "DELETE" });
         serverLogLines = [];
         renderServerLog();
+      }
+
+      // ─── Settings ────────────────────────────────────────
+      const settingsFields = [
+        { id: 'set-twilio-sid',     key: 'twilio_account_sid' },
+        { id: 'set-twilio-token',   key: 'twilio_auth_token' },
+        { id: 'set-google-key',     key: 'google_api_key' },
+        { id: 'set-elevenlabs-key', key: 'elevenlabs_api_key' },
+        { id: 'set-openai-key',     key: 'openai_api_key' },
+        { id: 'set-deepgram-key',   key: 'deepgram_api_key' },
+      ];
+      let cachedSettings = {};
+
+      async function loadSettings() {
+        try {
+          const res = await fetch(API + '/api/settings');
+          const data = await res.json();
+          cachedSettings = data.settings || {};
+          for (const f of settingsFields) {
+            const el = document.getElementById(f.id);
+            if (el) {
+              el.value = cachedSettings[f.key] || '';
+              el.dataset.original = cachedSettings[f.key] || '';
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load settings', e);
+        }
+      }
+
+      async function saveSettings() {
+        const body = {};
+        for (const f of settingsFields) {
+          const el = document.getElementById(f.id);
+          if (!el) continue;
+          const val = el.value.trim();
+          // Only send if the value was actually changed (not the masked placeholder)
+          if (val !== (el.dataset.original || '')) {
+            body[f.key] = val;
+          }
+        }
+        const statusEl = document.getElementById('settings-status');
+        if (Object.keys(body).length === 0) {
+          statusEl.textContent = 'No changes to save';
+          statusEl.style.color = 'var(--dim)';
+          setTimeout(() => statusEl.textContent = '', 2000);
+          return;
+        }
+        try {
+          const res = await fetch(API + '/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+          statusEl.textContent = 'Saved';
+          statusEl.style.color = 'var(--green)';
+          setTimeout(() => statusEl.textContent = '', 2000);
+          loadSettings(); // reload masked values
+          fetchTwilioDefaults(); // refresh cached defaults
+        } catch (e) {
+          statusEl.textContent = e.message;
+          statusEl.style.color = 'var(--red)';
+        }
+      }
+
+      function toggleSettingsVis(btn) {
+        const input = btn.parentElement.querySelector('input');
+        if (input.type === 'password') {
+          input.type = 'text';
+          btn.textContent = 'hide';
+        } else {
+          input.type = 'password';
+          btn.textContent = 'show';
+        }
+      }
+
+      let twilioDefaults = { sid: '', tok: '' };
+
+      async function fetchTwilioDefaults() {
+        try {
+          const res = await fetch(API + '/api/settings/twilio-defaults');
+          const data = await res.json();
+          twilioDefaults.sid = data.account_sid || '';
+          twilioDefaults.tok = data.auth_token || '';
+        } catch (e) { /* ignore */ }
+      }
+
+      // Load defaults on startup so they're ready for any channel form
+      fetchTwilioDefaults();
+
+      function maskValue(val) {
+        if (!val) return '';
+        return val.length > 4 ? '••••' + val.slice(-4) : '••••';
+      }
+
+      function prefillTwilioDefaults() {
+        if (!twilioDefaults.sid && !twilioDefaults.tok) return;
+        // Update placeholders to show masked defaults (don't fill actual values)
+        const fields = [
+          { id: 'ch-account-sid', val: twilioDefaults.sid },
+          { id: 'ch-auth-token',  val: twilioDefaults.tok },
+          { id: 'ch-buy-sid',     val: twilioDefaults.sid },
+          { id: 'ch-buy-token',   val: twilioDefaults.tok },
+        ];
+        for (const f of fields) {
+          const el = document.getElementById(f.id);
+          if (el && !el.value && f.val) {
+            el.placeholder = 'Using default (' + maskValue(f.val) + ')';
+          }
+        }
       }
 
       // ─── Tunnel / Externalize ───────────────────────────

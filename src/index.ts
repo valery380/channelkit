@@ -25,6 +25,24 @@ export class ChannelKit {
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
 
   constructor(private config: AppConfig, private configPath?: string) {
+    // Populate process.env from config.settings (existing env vars take precedence)
+    if (config.settings) {
+      const map: Record<string, string> = {
+        twilio_account_sid: 'TWILIO_ACCOUNT_SID',
+        twilio_auth_token: 'TWILIO_AUTH_TOKEN',
+        google_api_key: 'GOOGLE_API_KEY',
+        elevenlabs_api_key: 'ELEVENLABS_API_KEY',
+        openai_api_key: 'OPENAI_API_KEY',
+        deepgram_api_key: 'DEEPGRAM_API_KEY',
+      };
+      for (const [key, envVar] of Object.entries(map)) {
+        const val = (config.settings as any)[key];
+        if (val && !process.env[envVar]) {
+          process.env[envVar] = val;
+        }
+      }
+    }
+
     this.router = new Router(config.services, config.routes);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
@@ -243,12 +261,15 @@ export class ChannelKit {
           }
         }
 
-        // TTS: convert text to voice if webhook requested it
+        // TTS: convert text to speech when TTS is configured on the service
         let ttsGenerated = false;
+        let ttsError: string | undefined;
         if (response && serviceConfig) {
-          const hadVoice = response.voice;
-          response = await processOutbound(response, serviceConfig);
-          if (hadVoice && response.media) {
+          const hadMedia = response.media;
+          const result = await processOutbound(response, serviceConfig);
+          response = result.response;
+          ttsError = result.ttsError;
+          if (!hadMedia && response.media) {
             ttsGenerated = true;
           }
         }
@@ -269,6 +290,15 @@ export class ChannelKit {
           }
         }
 
+        // Build response text for logging, including any errors
+        let logResponseText = response?.text;
+        if (ttsError) {
+          logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[TTS failed: ${ttsError}]`;
+        }
+        if (sendError) {
+          logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[Delivery failed: ${sendError}]`;
+        }
+
         // Single log entry: inbound message + webhook result + delivery outcome
         this.logger.log({
           id: message.id,
@@ -281,10 +311,8 @@ export class ChannelKit {
           groupId: message.groupId,
           groupName: message.groupName,
           route: routedWebhook,
-          responseText: sendError
-            ? `${response?.text ? response.text + '\n' : ''}[Delivery failed: ${sendError}]`
-            : response?.text,
-          status: sendError ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
+          responseText: logResponseText,
+          status: (sendError || ttsError) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
           latency,
           sttTranscription,
           ttsGenerated: ttsGenerated || undefined,

@@ -119,6 +119,15 @@ export interface TunnelConfig {
   expose_dashboard?: boolean;  // allow dashboard access via tunnel (default: false)
 }
 
+export interface SettingsConfig {
+  twilio_account_sid?: string;
+  twilio_auth_token?: string;
+  google_api_key?: string;
+  elevenlabs_api_key?: string;
+  openai_api_key?: string;
+  deepgram_api_key?: string;
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -128,5 +137,6 @@ export interface AppConfig {
   apiPort?: number;
   dashboard?: DashboardConfig;
   tunnel?: TunnelConfig;
+  settings?: SettingsConfig;
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
 }

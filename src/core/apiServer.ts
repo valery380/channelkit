@@ -532,6 +532,78 @@ export class ApiServer {
       res.json({ ok: true, expose_dashboard: this.exposeDashboard });
     });
 
+    // GET /api/settings — return settings with masked secret values
+    this.app.get('/api/settings', (_req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        const settings = config.settings || {};
+        // Mask values: show only last 4 chars
+        const masked: Record<string, string> = {};
+        for (const [key, val] of Object.entries(settings)) {
+          if (typeof val === 'string' && val.length > 0) {
+            masked[key] = val.length > 4 ? '•'.repeat(val.length - 4) + val.slice(-4) : '••••';
+          } else {
+            masked[key] = '';
+          }
+        }
+        res.json({ settings: masked });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // GET /api/settings/twilio-defaults — return raw Twilio SID/token for auto-fill
+    this.app.get('/api/settings/twilio-defaults', (_req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        res.json({
+          account_sid: config.settings?.twilio_account_sid || '',
+          auth_token: config.settings?.twilio_auth_token || '',
+        });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // PUT /api/settings — update settings (only non-empty fields are written)
+    this.app.put('/api/settings', (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        if (!config.settings) config.settings = {};
+        const allowed = ['twilio_account_sid', 'twilio_auth_token', 'google_api_key', 'elevenlabs_api_key', 'openai_api_key', 'deepgram_api_key'];
+        const envMap: Record<string, string> = {
+          twilio_account_sid: 'TWILIO_ACCOUNT_SID',
+          twilio_auth_token: 'TWILIO_AUTH_TOKEN',
+          google_api_key: 'GOOGLE_API_KEY',
+          elevenlabs_api_key: 'ELEVENLABS_API_KEY',
+          openai_api_key: 'OPENAI_API_KEY',
+          deepgram_api_key: 'DEEPGRAM_API_KEY',
+        };
+        for (const key of allowed) {
+          if (key in req.body) {
+            const val = req.body[key]?.trim() || '';
+            if (val) {
+              (config.settings as any)[key] = val;
+              process.env[envMap[key]] = val;
+            } else {
+              delete (config.settings as any)[key];
+              delete process.env[envMap[key]];
+            }
+          }
+        }
+        // Clean up empty settings object
+        if (Object.keys(config.settings).length === 0) delete config.settings;
+        saveConfig(this.configPath, config);
+        this.broadcast({ type: 'configChanged' });
+        res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     // GET /api/config — return channels and services from config file
     this.app.get('/api/config', (_req, res) => {
       if (!this.configPath) {
@@ -574,12 +646,22 @@ export class ApiServer {
       }
     });
 
-    // PUT /api/config/services/:name — update service fields (webhook, code, command)
+    // PUT /api/config/services/:name — update service fields (webhook, code, command, stt, tts)
     this.app.put('/api/config/services/:name', (req, res) => {
       if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
       const { name } = req.params;
-      const { webhook, code, command } = req.body;
+      const { webhook, code, command, stt, tts } = req.body;
       if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
+      const validSttProviders = ['google', 'whisper', 'deepgram'];
+      const validTtsProviders = ['google', 'elevenlabs', 'openai'];
+      if (stt && !validSttProviders.includes(stt.provider)) {
+        res.status(400).json({ error: `Invalid STT provider. Must be one of: ${validSttProviders.join(', ')}` });
+        return;
+      }
+      if (tts && !validTtsProviders.includes(tts.provider)) {
+        res.status(400).json({ error: `Invalid TTS provider. Must be one of: ${validTtsProviders.join(', ')}` });
+        return;
+      }
       try {
         const config = loadConfig(this.configPath, { validate: false });
         if (!config.services?.[name]) {
@@ -589,6 +671,22 @@ export class ApiServer {
         config.services[name].webhook = webhook;
         if (code) { config.services[name].code = code; } else { delete config.services[name].code; }
         if (command) { config.services[name].command = command; } else { delete config.services[name].command; }
+        // STT config
+        if (stt && stt.provider) {
+          config.services[name].stt = { provider: stt.provider };
+          if (stt.language) config.services[name].stt.language = stt.language;
+          if (stt.alternative_languages?.length) config.services[name].stt.alternative_languages = stt.alternative_languages;
+        } else {
+          delete config.services[name].stt;
+        }
+        // TTS config
+        if (tts && tts.provider) {
+          config.services[name].tts = { provider: tts.provider };
+          if (tts.language) config.services[name].tts.language = tts.language;
+          if (tts.voice) config.services[name].tts.voice = tts.voice;
+        } else {
+          delete config.services[name].tts;
+        }
         saveConfig(this.configPath, config);
         this.broadcast({ type: 'configChanged' });
         res.json({ ok: true });
@@ -971,16 +1069,20 @@ export class ApiServer {
 
     if (answer === 'y' || answer === 'yes') {
       try {
-        if (pid) {
-          execSync(`kill -9 ${pid}`);
-        } else {
-          execSync(`lsof -ti tcp:${port} | xargs kill -9`);
-        }
+        // Kill all processes on this port
+        try {
+          execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
+        } catch {}
         console.log(`   Killed process on port ${port}. Waiting for port to be released...`);
-        // Wait until the port is actually free (up to 5 seconds)
-        for (let i = 0; i < 10; i++) {
+        // Wait until the port is actually free (up to 10 seconds)
+        // Re-kill any new processes that appear on the port during the wait
+        for (let i = 0; i < 20; i++) {
           await new Promise((r) => setTimeout(r, 500));
           if (!(await this.isPortInUse(port))) return true;
+          // A new process may have grabbed the port — kill it too
+          try {
+            execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
+          } catch {}
         }
         console.error(`   Port ${port} is still in use after waiting.`);
         return false;

@@ -67,15 +67,21 @@ export async function processInbound(message: UnifiedMessage, serviceConfig: Ser
   }
 }
 
+export interface OutboundResult {
+  response: WebhookResponse;
+  ttsError?: string;
+}
+
 /**
- * Process outbound response: if voice=true and TTS is configured, synthesize audio.
- * Returns a new response with media buffer, or the original response if no TTS needed.
+ * Process outbound response: if TTS is configured on the service, synthesize audio.
+ * Returns the response (with media buffer on success) and any TTS error.
  */
-export async function processOutbound(response: WebhookResponse, serviceConfig: ServiceConfig): Promise<WebhookResponse> {
-  if (!response.voice || !response.text || !serviceConfig.tts) return response;
+export async function processOutbound(response: WebhookResponse, serviceConfig: ServiceConfig): Promise<OutboundResult> {
+  // Synthesize when TTS is configured on the service, unless the webhook explicitly opted out (voice: false)
+  if (response.voice === false || !response.text || !serviceConfig.tts) return { response };
 
   const tts = getTTS(serviceConfig);
-  if (!tts) return response;
+  if (!tts) return { response };
 
   try {
     console.log(`[tts] Synthesizing: "${response.text.substring(0, 80)}${response.text.length > 80 ? '...' : ''}"`);
@@ -83,12 +89,11 @@ export async function processOutbound(response: WebhookResponse, serviceConfig: 
     console.log(`[tts] Synthesized ${buffer.length} bytes (${mimetype})`);
 
     return {
-      ...response,
-      media: { buffer, mimetype },
+      response: { ...response, media: { buffer, mimetype } },
     };
-  } catch (err) {
+  } catch (err: any) {
     console.error(`[tts] Synthesis failed:`, err);
-    // Fall back to text response
-    return response;
+    const errMsg = err?.message || String(err);
+    return { response, ttsError: errMsg.substring(0, 300) };
   }
 }
