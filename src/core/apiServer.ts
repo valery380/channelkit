@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { join } from 'path';
 import { readFileSync } from 'fs';
 import { Channel } from '../channels/base';
+import { WhatsAppChannel } from '../channels/whatsapp';
 import { Logger } from './logger';
 import { loadConfig, saveConfig } from '../config/parser';
 
@@ -734,6 +735,61 @@ export class ApiServer {
         saveConfig(this.configPath, config);
         this.broadcast({ type: 'configChanged' });
         res.json({ ok: true });
+      } catch (err: any) {
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    // POST /api/config/channels/:name/pair — trigger WhatsApp QR pairing
+    this.app.post('/api/config/channels/:name/pair', async (req, res) => {
+      if (!this.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+      const { name } = req.params;
+      try {
+        const config = loadConfig(this.configPath, { validate: false });
+        const ch = config.channels[name];
+        if (!ch) { res.status(404).json({ error: `Channel "${name}" not found` }); return; }
+        if (ch.type !== 'whatsapp') { res.status(400).json({ error: 'Only WhatsApp channels support QR pairing' }); return; }
+
+        const { rm } = await import('fs/promises');
+        const { join } = await import('path');
+        const authDir = join(process.cwd(), 'auth', `whatsapp-${name}`);
+
+        // Clear stale auth state so Baileys starts fresh with a new QR
+        await rm(authDir, { recursive: true, force: true });
+
+        // Respond immediately — QR progress arrives via WebSocket
+        res.json({ ok: true, message: 'Pairing started. Watch for QR code.' });
+
+        // Create a real channel instance and call connect() — this produces
+        // a single Baileys socket whose QR is shown both in the terminal and
+        // broadcast to the dashboard (same QR everywhere).
+        const tempChannel = new WhatsAppChannel(name, ch as any);
+        const QRCode = await import('qrcode');
+
+        tempChannel.on('qr', async (qr: string) => {
+          try {
+            const dataUrl = await QRCode.toDataURL(qr, { width: 400, margin: 2 });
+            this.broadcast({ type: 'whatsapp-qr', channel: name, dataUrl });
+          } catch {
+            this.broadcast({ type: 'whatsapp-qr', channel: name, dataUrl: null });
+          }
+        });
+
+        tempChannel.on('connected', () => {
+          this.broadcast({ type: 'whatsapp-paired', channel: name });
+          // Pairing done — disconnect; the real channel starts on next server restart
+          tempChannel.disconnect().catch(() => {});
+        });
+
+        // Start the connection (shows QR in terminal + emits events)
+        tempChannel.connect().catch((err: any) => {
+          this.broadcast({ type: 'whatsapp-pair-error', channel: name, error: err.message });
+        });
+
+        // Timeout — if not paired within 60s, clean up
+        setTimeout(() => {
+          tempChannel.disconnect().catch(() => {});
+        }, 65000);
       } catch (err: any) {
         res.status(500).json({ error: err.message });
       }

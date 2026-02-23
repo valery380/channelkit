@@ -421,6 +421,150 @@
         border-color: var(--accent);
       }
 
+      /* Type / channel picker cards */
+      .picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .picker-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 16px 10px;
+        background: var(--bg);
+        border: 2px solid var(--border);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+        text-align: center;
+      }
+      .picker-card:hover {
+        border-color: var(--accent);
+        background: var(--highlight);
+      }
+      .picker-card.selected {
+        border-color: var(--accent);
+        background: rgba(9, 105, 218, 0.08);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .picker-card .picker-icon {
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 28px;
+      }
+      .picker-card .picker-icon svg {
+        width: 32px;
+        height: 32px;
+      }
+      .picker-card .picker-label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text);
+      }
+      .picker-card .picker-sub {
+        font-size: 11px;
+        color: var(--dim);
+        line-height: 1.3;
+      }
+      .step-back {
+        background: none;
+        border: none;
+        color: var(--accent);
+        font-size: 13px;
+        cursor: pointer;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .step-back:hover {
+        text-decoration: underline;
+      }
+
+      /* QR pairing modal */
+      .qr-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .qr-overlay.open {
+        display: flex;
+      }
+      .qr-modal {
+        background: var(--surface);
+        border-radius: 14px;
+        padding: 32px;
+        max-width: 420px;
+        width: 90%;
+        text-align: center;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .qr-modal h3 {
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+      .qr-modal .qr-sub {
+        font-size: 13px;
+        color: var(--dim);
+        margin-bottom: 20px;
+      }
+      .qr-modal .qr-img-wrap {
+        background: #fff;
+        border-radius: 12px;
+        padding: 12px;
+        display: inline-block;
+        margin-bottom: 16px;
+      }
+      .qr-modal .qr-img-wrap img {
+        display: block;
+        width: 280px;
+        height: 280px;
+      }
+      .qr-modal .qr-waiting {
+        padding: 60px 0;
+        color: var(--dim);
+        font-size: 13px;
+      }
+      .qr-modal .qr-success {
+        padding: 40px 0;
+        color: var(--green);
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .qr-modal .qr-error {
+        padding: 40px 0;
+        color: var(--red);
+        font-size: 14px;
+      }
+      .qr-modal .qr-timer {
+        font-size: 12px;
+        color: var(--dim);
+        margin-bottom: 16px;
+      }
+      .qr-modal .qr-close {
+        background: none;
+        border: 1px solid var(--border);
+        padding: 6px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--dim);
+      }
+      .qr-modal .qr-close:hover {
+        background: var(--bg);
+      }
+
       /* Server log styles */
       .log-toolbar {
         padding: 10px 24px;
@@ -1206,37 +1350,52 @@
       </div>
       <div class="add-form">
         <h3>Add Service</h3>
-        <p class="form-hint">
-          Create a new service binding between a channel and a webhook URL.
-        </p>
-        <div class="form-row">
-          <input id="svc-name" placeholder="Service name (e.g. support)" />
-          <select id="svc-channel" onchange="updateServiceForm()">
-            <option value="">Select channel…</option>
-          </select>
-          <input
-            id="svc-webhook"
-            placeholder="Webhook URL (e.g. http://localhost:3000/support)"
-          />
+        <!-- Step 1: pick channel -->
+        <div id="svc-step-pick">
+          <p class="form-hint">
+            Choose which channel this service will use.
+          </p>
+          <div class="picker-grid" id="svc-channel-picker">
+            <!-- Populated dynamically from loadConfigData -->
+          </div>
+          <p id="svc-no-channels" style="display:none;font-size:13px;color:var(--dim);text-align:center;padding:20px 0">
+            No channels configured yet. Add a channel first.
+          </p>
         </div>
-        <div class="form-row" id="svc-cc-row" style="display: none">
-          <input
-            id="svc-code"
-            placeholder="Magic code — WhatsApp multi-service (optional)"
-          />
-          <input
-            id="svc-command"
-            placeholder="Slash command — Telegram, e.g. /support (optional)"
-          />
-        </div>
-        <div class="form-row">
-          <button class="btn btn-primary" onclick="addService()">
-            Add Service
+        <!-- Step 2: fill in service details -->
+        <div id="svc-step-form" style="display: none">
+          <button class="step-back" onclick="backToServicePicker()">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+            Back to channels
           </button>
-          <span
-            id="svc-mode-hint"
-            style="font-size: 12px; color: var(--dim)"
-          ></span>
+          <p class="form-hint" id="svc-step-hint"></p>
+          <input type="hidden" id="svc-channel" />
+          <div class="form-row">
+            <input id="svc-name" placeholder="Service name (e.g. support)" />
+            <input
+              id="svc-webhook"
+              placeholder="Webhook URL (e.g. http://localhost:3000/support)"
+            />
+          </div>
+          <div class="form-row" id="svc-cc-row" style="display: none">
+            <input
+              id="svc-code"
+              placeholder="Magic code — WhatsApp multi-service (optional)"
+            />
+            <input
+              id="svc-command"
+              placeholder="Slash command — Telegram, e.g. /support (optional)"
+            />
+          </div>
+          <div class="form-row">
+            <button class="btn btn-primary" onclick="addService()">
+              Add Service
+            </button>
+            <span
+              id="svc-mode-hint"
+              style="font-size: 12px; color: var(--dim)"
+            ></span>
+          </div>
         </div>
       </div>
     </div>
@@ -1260,26 +1419,57 @@
       </div>
       <div class="add-form">
         <h3>Add Channel</h3>
-        <p class="form-hint">
-          Configure a new messaging channel. Changes take effect after restart.
-        </p>
-        <div class="form-row">
-          <input id="ch-name" placeholder="Channel name (e.g. mywhatsapp)" />
-          <select id="ch-type" onchange="renderChannelFields()">
-            <option value="">Select type…</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="telegram">Telegram</option>
-            <option value="sms-twilio">SMS (Twilio)</option>
-            <option value="voice-twilio">Voice (Twilio)</option>
-            <option value="email-resend">Email (Resend)</option>
-          </select>
+        <!-- Step 1: pick channel type -->
+        <div id="ch-step-pick">
+          <p class="form-hint">
+            Choose the type of channel to add.
+          </p>
+          <div class="picker-grid" id="ch-type-picker">
+            <div class="picker-card" data-type="whatsapp" onclick="selectChannelType('whatsapp')">
+              <div class="picker-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#25D366" d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></div>
+              <div class="picker-label">WhatsApp</div>
+              <div class="picker-sub">Pair via QR code</div>
+            </div>
+            <div class="picker-card" data-type="telegram" onclick="selectChannelType('telegram')">
+              <div class="picker-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#26A5E4" d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg></div>
+              <div class="picker-label">Telegram</div>
+              <div class="picker-sub">Bot via BotFather</div>
+            </div>
+            <div class="picker-card" data-type="sms-twilio" onclick="selectChannelType('sms-twilio')">
+              <div class="picker-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/><path fill="#6B7280" d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg></div>
+              <div class="picker-label">SMS</div>
+              <div class="picker-sub">Twilio</div>
+            </div>
+            <div class="picker-card" data-type="voice-twilio" onclick="selectChannelType('voice-twilio')">
+              <div class="picker-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg></div>
+              <div class="picker-label">Voice</div>
+              <div class="picker-sub">Twilio</div>
+            </div>
+            <div class="picker-card" data-type="email-resend" onclick="selectChannelType('email-resend')">
+              <div class="picker-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg></div>
+              <div class="picker-label">Email</div>
+              <div class="picker-sub">Resend</div>
+            </div>
+          </div>
         </div>
-        <div id="ch-fields"></div>
-        <div class="form-row" id="ch-submit-row" style="display: none">
-          <button class="btn btn-primary" onclick="addChannel()">
-            Add Channel
+        <!-- Step 2: fill in channel details -->
+        <div id="ch-step-form" style="display: none">
+          <button class="step-back" onclick="backToChannelPicker()">
+            <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+            Back to channel types
           </button>
-          <span id="ch-note" style="font-size: 12px; color: var(--dim)"></span>
+          <p class="form-hint" id="ch-step-hint"></p>
+          <div class="form-row">
+            <input id="ch-name" placeholder="Channel name (e.g. mywhatsapp)" />
+          </div>
+          <input type="hidden" id="ch-type" />
+          <div id="ch-fields"></div>
+          <div class="form-row" id="ch-submit-row">
+            <button class="btn btn-primary" onclick="addChannel()">
+              Add Channel
+            </button>
+            <span id="ch-note" style="font-size: 12px; color: var(--dim)"></span>
+          </div>
         </div>
       </div>
     </div>
@@ -1296,6 +1486,21 @@
       </div>
       <div class="server-log mono" id="server-log">
         <div style="color: #666">Waiting for log output…</div>
+      </div>
+    </div>
+
+    <!-- ── QR pairing modal ──────────────────────────── -->
+    <div class="qr-overlay" id="qr-overlay">
+      <div class="qr-modal">
+        <h3 id="qr-title">Pair WhatsApp</h3>
+        <div class="qr-sub" id="qr-sub">
+          Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device
+        </div>
+        <div id="qr-body">
+          <div class="qr-waiting">Waiting for QR code...</div>
+        </div>
+        <div class="qr-timer" id="qr-timer"></div>
+        <button class="qr-close" onclick="closeQRModal()">Close</button>
       </div>
     </div>
 
@@ -1546,18 +1751,13 @@
           );
           renderServices(data.services || {}, currentChannels);
           renderChannels(currentChannels, data.services || {});
-          // Populate channel dropdown
-          const sel = document.getElementById("svc-channel");
-          const current = sel.value;
-          sel.innerHTML =
-            '<option value="">Select channel…</option>' +
-            Object.keys(currentChannels)
-              .map(
-                (n) =>
-                  `<option value="${escHtml(n)}"${n === current ? " selected" : ""}>${escHtml(n)}</option>`,
-              )
-              .join("");
-          updateServiceForm();
+          // Populate service channel picker cards
+          renderServiceChannelPicker(currentChannels);
+          // Reset add-service to step 1 if channel was removed
+          const svcCh = document.getElementById("svc-channel").value;
+          if (svcCh && !currentChannels[svcCh]) {
+            backToServicePicker();
+          }
         } catch {}
       }
 
@@ -1712,6 +1912,52 @@
         loadConfigData();
       }
 
+      function selectServiceChannel(chName) {
+        document.getElementById("svc-channel").value = chName;
+        document.getElementById("svc-step-pick").style.display = "none";
+        document.getElementById("svc-step-form").style.display = "";
+        const ch = currentChannels[chName];
+        const typeLabel = ch?.type ? (ch.type.charAt(0).toUpperCase() + ch.type.slice(1)) : "";
+        document.getElementById("svc-step-hint").textContent =
+          "Add a service for channel \"" + chName + "\"" + (typeLabel ? " (" + typeLabel + ")" : "") + ".";
+        updateServiceForm();
+        document.getElementById("svc-name").focus();
+      }
+
+      function backToServicePicker() {
+        document.getElementById("svc-step-form").style.display = "none";
+        document.getElementById("svc-step-pick").style.display = "";
+        document.getElementById("svc-channel").value = "";
+        document.getElementById("svc-name").value = "";
+        document.getElementById("svc-webhook").value = "";
+        document.getElementById("svc-code").value = "";
+        document.getElementById("svc-command").value = "";
+      }
+
+      function renderServiceChannelPicker(channels) {
+        const grid = document.getElementById("svc-channel-picker");
+        const noChannels = document.getElementById("svc-no-channels");
+        const names = Object.keys(channels);
+        if (names.length === 0) {
+          grid.innerHTML = "";
+          noChannels.style.display = "";
+          return;
+        }
+        noChannels.style.display = "none";
+        grid.innerHTML = names
+          .map((name) => {
+            const ch = channels[name];
+            const icon = channelIcons[ch.type] || "📨";
+            const detail = ch.number || ch.from_email || (ch.bot_token ? ch.bot_token.slice(0, 12) + "…" : "");
+            return `<div class="picker-card" data-ch="${escHtml(name)}" onclick="selectServiceChannel(this.dataset.ch)">
+              <div class="picker-icon">${icon}</div>
+              <div class="picker-label">${escHtml(name)}</div>
+              <div class="picker-sub">${escHtml(ch.type)}${detail ? " · " + escHtml(detail) : ""}</div>
+            </div>`;
+          })
+          .join("");
+      }
+
       function updateServiceForm() {
         const chName = document.getElementById("svc-channel").value;
         const ch = currentChannels[chName];
@@ -1793,14 +2039,38 @@
         },
       };
 
+      const CHANNEL_TYPE_LABELS = {
+        whatsapp: "WhatsApp",
+        telegram: "Telegram",
+        "sms-twilio": "SMS (Twilio)",
+        "voice-twilio": "Voice (Twilio)",
+        "email-resend": "Email (Resend)",
+      };
+
+      function selectChannelType(type) {
+        document.getElementById("ch-type").value = type;
+        document.getElementById("ch-step-pick").style.display = "none";
+        document.getElementById("ch-step-form").style.display = "";
+        document.getElementById("ch-step-hint").textContent =
+          "Configure your new " + (CHANNEL_TYPE_LABELS[type] || type) + " channel.";
+        renderChannelFields();
+        document.getElementById("ch-name").focus();
+      }
+
+      function backToChannelPicker() {
+        document.getElementById("ch-step-form").style.display = "none";
+        document.getElementById("ch-step-pick").style.display = "";
+        document.getElementById("ch-type").value = "";
+        document.getElementById("ch-fields").innerHTML = "";
+        document.getElementById("ch-name").value = "";
+      }
+
       function renderChannelFields() {
         const type = document.getElementById("ch-type").value;
         const container = document.getElementById("ch-fields");
-        const submitRow = document.getElementById("ch-submit-row");
         const note = document.getElementById("ch-note");
         if (!type) {
           container.innerHTML = "";
-          submitRow.style.display = "none";
           return;
         }
         const def = CHANNEL_FIELDS[type];
@@ -1847,7 +2117,6 @@
       </select>
     </div>`;
         note.textContent = def.note;
-        submitRow.style.display = "flex";
       }
 
       function updateChannelModeFields() {
@@ -1882,6 +2151,78 @@
             webhookInfo.innerHTML =
               '<svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:4px"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg> Twilio will send incoming SMS to your external address.';
           }
+        }
+      }
+
+      // ─── QR pairing modal ───────────────────────────────
+      let qrTimerInterval = null;
+      let qrPairingChannel = null;
+
+      function showQRModal(channelName) {
+        qrPairingChannel = channelName;
+        document.getElementById("qr-title").textContent =
+          "Pair WhatsApp — " + channelName;
+        document.getElementById("qr-body").innerHTML =
+          '<div class="qr-waiting">Waiting for QR code...</div>';
+        document.getElementById("qr-timer").textContent = "";
+        document.getElementById("qr-overlay").classList.add("open");
+        // Start 60s countdown
+        let remaining = 60;
+        document.getElementById("qr-timer").textContent = remaining + "s remaining";
+        qrTimerInterval = setInterval(() => {
+          remaining--;
+          document.getElementById("qr-timer").textContent =
+            remaining > 0 ? remaining + "s remaining" : "";
+          if (remaining <= 0) clearInterval(qrTimerInterval);
+        }, 1000);
+      }
+
+      function closeQRModal() {
+        document.getElementById("qr-overlay").classList.remove("open");
+        qrPairingChannel = null;
+        if (qrTimerInterval) {
+          clearInterval(qrTimerInterval);
+          qrTimerInterval = null;
+        }
+      }
+
+      function handleQRMessage(msg) {
+        if (msg.type === "whatsapp-qr" && msg.channel === qrPairingChannel) {
+          if (msg.dataUrl) {
+            document.getElementById("qr-body").innerHTML =
+              '<div class="qr-img-wrap"><img src="' + msg.dataUrl + '" alt="QR Code"></div>';
+          }
+        }
+        if (msg.type === "whatsapp-paired" && msg.channel === qrPairingChannel) {
+          if (qrTimerInterval) { clearInterval(qrTimerInterval); qrTimerInterval = null; }
+          document.getElementById("qr-timer").textContent = "";
+          document.getElementById("qr-body").innerHTML =
+            '<div class="qr-success"><svg xmlns="http://www.w3.org/2000/svg" height="48" width="48" viewBox="0 -960 960 960" fill="currentColor" style="margin-bottom:12px"><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z"/></svg><br>WhatsApp paired successfully!<br><span style="font-size:12px;font-weight:400;color:var(--dim)">Restart the server to start receiving messages.</span></div>';
+          document.getElementById("qr-sub").textContent = "";
+        }
+        if (msg.type === "whatsapp-pair-error" && msg.channel === qrPairingChannel) {
+          if (qrTimerInterval) { clearInterval(qrTimerInterval); qrTimerInterval = null; }
+          document.getElementById("qr-timer").textContent = "";
+          document.getElementById("qr-body").innerHTML =
+            '<div class="qr-error">' + escHtml(msg.error || "Pairing failed") + '</div>';
+        }
+      }
+
+      async function startWhatsAppPairing(channelName) {
+        showQRModal(channelName);
+        try {
+          const res = await fetch(
+            API + "/api/config/channels/" + encodeURIComponent(channelName) + "/pair",
+            { method: "POST" }
+          );
+          if (!res.ok) {
+            const d = await res.json().catch(() => ({}));
+            document.getElementById("qr-body").innerHTML =
+              '<div class="qr-error">' + escHtml(d.error || "Failed to start pairing") + '</div>';
+          }
+        } catch (e) {
+          document.getElementById("qr-body").innerHTML =
+            '<div class="qr-error">Failed to start pairing: ' + escHtml(e.message) + '</div>';
         }
       }
 
@@ -2016,11 +2357,15 @@
             console.error("Failed to update SMS settings:", e);
           }
         }
-        // Clear form
-        document.getElementById("ch-name").value = "";
-        document.getElementById("ch-type").value = "";
-        document.getElementById("ch-fields").innerHTML = "";
-        document.getElementById("ch-submit-row").style.display = "none";
+        // For WhatsApp channels, start QR pairing immediately
+        if (typeKey === "whatsapp") {
+          backToChannelPicker();
+          loadConfigData();
+          startWhatsAppPairing(name);
+          return;
+        }
+        // Reset to step 1
+        backToChannelPicker();
         loadConfigData();
       }
 
@@ -2200,9 +2545,8 @@
           alert(d.error || "Failed to add service");
           return;
         }
-        ["svc-name", "svc-webhook", "svc-code", "svc-command"].forEach((id) => {
-          document.getElementById(id).value = "";
-        });
+        // Reset to step 1
+        backToServicePicker();
         loadConfigData();
       }
 
@@ -2577,6 +2921,15 @@
               const active = document.querySelector(".tab.active")?.dataset.tab;
               if (active === "services" || active === "channels")
                 loadConfigData();
+            }
+
+            // WhatsApp QR pairing events
+            if (
+              msg.type === "whatsapp-qr" ||
+              msg.type === "whatsapp-paired" ||
+              msg.type === "whatsapp-pair-error"
+            ) {
+              handleQRMessage(msg);
             }
           } catch {}
         };

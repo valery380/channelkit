@@ -18,7 +18,7 @@ export class WhatsAppChannel extends Channel {
    * Creates a temporary Baileys connection, waits for successful pairing, then disconnects.
    * Auth state is persisted to authDir for later use by connect().
    */
-  static async pair(authDir: string): Promise<void> {
+  static async pair(authDir: string, onQR?: (qr: string) => void): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(authDir);
 
     // Check if already paired (has registered creds)
@@ -56,6 +56,7 @@ export class WhatsAppChannel extends Channel {
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
+          if (onQR) onQR(qr);
           import('qrcode-terminal').then(({ default: qrcode }) => {
             qrcode.generate(qr, { small: true }, (output: string) => {
               const indented = output.split('\n').map(line => '     ' + line).join('\n');
@@ -182,6 +183,7 @@ export class WhatsAppChannel extends Channel {
         }
       } else if (connection === 'open') {
         this.reconnectAttempts = 0;
+        this.emit('connected');
         console.log(`✅ WhatsApp connected: ${this.name}`);
       }
     });
