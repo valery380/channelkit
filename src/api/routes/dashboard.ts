@@ -1,6 +1,6 @@
-import { Express } from 'express';
+import express, { Express } from 'express';
 import { join } from 'path';
-import { readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { ServerContext } from '../types';
 
 export function registerDashboardRoutes(app: Express, ctx: ServerContext): void {
@@ -36,21 +36,17 @@ export function registerDashboardRoutes(app: Express, ctx: ServerContext): void 
     }
   });
 
-  // GET /dashboard — serve the HTML dashboard
-  app.get('/dashboard', (_req, res) => {
-    const htmlPath = join(__dirname, '..', '..', 'dashboard', 'index.html');
-    try {
-      const html = readFileSync(htmlPath, 'utf-8');
-      res.type('html').send(html);
-    } catch {
-      // Try source path (for tsx/dev mode)
-      try {
-        const devPath = join(__dirname, '..', '..', '..', 'src', 'dashboard', 'index.html');
-        const html = readFileSync(devPath, 'utf-8');
-        res.type('html').send(html);
-      } catch {
-        res.status(404).send('Dashboard HTML not found');
-      }
-    }
-  });
+  // Serve the entire dashboard directory as static files under /dashboard
+  // Try compiled path first, then source path for dev mode
+  const compiledDashboardDir = join(__dirname, '..', '..', 'dashboard');
+  const srcDashboardDir = join(__dirname, '..', '..', '..', 'src', 'dashboard');
+  const dashboardDir = existsSync(join(compiledDashboardDir, 'index.html'))
+    ? compiledDashboardDir
+    : srcDashboardDir;
+
+  // Serve static files (JS, CSS, etc.) under /dashboard/
+  app.use('/dashboard', express.static(dashboardDir, {
+    extensions: ['html'],
+    index: 'index.html',
+  }));
 }
