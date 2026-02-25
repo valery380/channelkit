@@ -7,6 +7,7 @@ import { TelegramChannel } from './channels/telegram';
 import { GmailChannel, ResendChannel } from './channels/email';
 import { TwilioSMSChannel } from './channels/sms';
 import { TwilioVoiceChannel } from './channels/voice';
+import { EndpointChannel } from './channels/endpoint';
 import { Onboarding } from './onboarding';
 import { Logger } from './core/logger';
 import { wireMessageHandler } from './core/messageHandler';
@@ -33,6 +34,7 @@ export class ChannelKit {
         elevenlabs_api_key: 'ELEVENLABS_API_KEY',
         openai_api_key: 'OPENAI_API_KEY',
         deepgram_api_key: 'DEEPGRAM_API_KEY',
+        anthropic_api_key: 'ANTHROPIC_API_KEY',
       };
       for (const [key, envVar] of Object.entries(map)) {
         const val = (config.settings as any)[key];
@@ -102,6 +104,10 @@ export class ChannelKit {
         }
         case 'voice': {
           channel = new TwilioVoiceChannel(name, channelConfig as any);
+          break;
+        }
+        case 'endpoint': {
+          channel = new EndpointChannel(name, channelConfig as any);
           break;
         }
         default:
