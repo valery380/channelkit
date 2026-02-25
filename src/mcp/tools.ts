@@ -1,0 +1,403 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { Channel } from '../channels/base';
+import { Logger } from '../core/logger';
+import { AppConfig } from '../config/types';
+import { loadConfig, saveConfig } from '../config/parser';
+
+export interface McpContext {
+  channels: Map<string, Channel>;
+  logger?: Logger;
+  configPath?: string;
+  config: AppConfig;
+  startTime: number;
+  getPublicUrl: () => string | null;
+}
+
+export function registerTools(mcp: McpServer, ctx: McpContext): void {
+  // ── Messaging ──────────────────────────────────────────────
+
+  mcp.tool(
+    'send_message',
+    'Send a message through a connected channel',
+    {
+      channel: z.string().describe('Channel name'),
+      to: z.string().describe('Recipient identifier (phone number, chat ID, email, etc.)'),
+      text: z.string().optional().describe('Message text'),
+      media: z.string().optional().describe('Media URL to attach'),
+    },
+    async ({ channel: channelName, to, text, media }) => {
+      const ch = ctx.channels.get(channelName);
+      if (!ch) {
+        return { content: [{ type: 'text', text: `Channel "${channelName}" not found. Available: ${[...ctx.channels.keys()].join(', ')}` }], isError: true };
+      }
+      if (!text && !media) {
+        return { content: [{ type: 'text', text: 'Must provide text and/or media' }], isError: true };
+      }
+      try {
+        await ch.send(to, { text, media: media ? { url: media } : undefined });
+        if (ctx.logger) {
+          ctx.logger.log({
+            id: `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            timestamp: Math.floor(Date.now() / 1000),
+            channel: channelName,
+            from: 'system (mcp)',
+            senderName: 'MCP',
+            text: text || '(media)',
+            type: 'mcp-outbound',
+            route: 'mcp:send_message',
+            status: 'success',
+            latency: 0,
+          });
+        }
+        return { content: [{ type: 'text', text: `Message sent via ${channelName} to ${to}` }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed to send: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'get_messages',
+    'Get message history from the logs',
+    {
+      channel: z.string().optional().describe('Filter by channel name'),
+      limit: z.number().optional().describe('Max number of messages (default 50)'),
+      search: z.string().optional().describe('Search text in messages'),
+    },
+    async ({ channel, limit, search }) => {
+      if (!ctx.logger) {
+        return { content: [{ type: 'text', text: 'Logger not available' }], isError: true };
+      }
+      const results = ctx.logger.search({
+        limit: limit || 50,
+        channel: channel || undefined,
+        search: search || undefined,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+    }
+  );
+
+  // ── Channel Management ─────────────────────────────────────
+
+  mcp.tool(
+    'list_channels',
+    'List all configured channels with their status',
+    {},
+    async () => {
+      const channels: Record<string, any> = {};
+      if (ctx.configPath) {
+        try {
+          const config = loadConfig(ctx.configPath, { validate: false });
+          for (const [name, cfg] of Object.entries(config.channels)) {
+            channels[name] = {
+              type: cfg.type,
+              mode: cfg.mode,
+              connected: ctx.channels.has(name),
+            };
+          }
+        } catch {
+          // Fall back to runtime channels
+          for (const [name, ch] of ctx.channels) {
+            channels[name] = { type: (ch as any).config?.type, connected: true };
+          }
+        }
+      } else {
+        for (const [name, ch] of ctx.channels) {
+          channels[name] = { type: (ch as any).config?.type, connected: true };
+        }
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(channels, null, 2) }] };
+    }
+  );
+
+  mcp.tool(
+    'add_channel',
+    'Add a new channel to the configuration (requires restart to take effect)',
+    {
+      name: z.string().describe('Channel name'),
+      type: z.enum(['whatsapp', 'telegram', 'email', 'sms', 'voice']).describe('Channel type'),
+      config: z.record(z.string(), z.any()).optional().describe('Channel-specific configuration (bot_token, api_key, etc.)'),
+    },
+    async ({ name, type, config: channelConfig }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (config.channels[name]) {
+          return { content: [{ type: 'text', text: `Channel "${name}" already exists` }], isError: true };
+        }
+        config.channels[name] = { type, ...channelConfig };
+        saveConfig(ctx.configPath, config);
+        return { content: [{ type: 'text', text: `Channel "${name}" (${type}) added. Restart ChannelKit to connect it.` }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'remove_channel',
+    'Remove a channel and its dependent services from the configuration',
+    { name: z.string().describe('Channel name to remove') },
+    async ({ name }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (!config.channels[name]) {
+          return { content: [{ type: 'text', text: `Channel "${name}" not found` }], isError: true };
+        }
+        delete config.channels[name];
+        const removedServices: string[] = [];
+        if (config.services) {
+          for (const [svcName, svc] of Object.entries(config.services)) {
+            if (svc.channel === name) {
+              delete config.services[svcName];
+              removedServices.push(svcName);
+            }
+          }
+        }
+        saveConfig(ctx.configPath, config);
+        let msg = `Channel "${name}" removed.`;
+        if (removedServices.length > 0) msg += ` Also removed services: ${removedServices.join(', ')}.`;
+        msg += ' Restart ChannelKit to apply.';
+        return { content: [{ type: 'text', text: msg }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  // ── Service Management ─────────────────────────────────────
+
+  mcp.tool(
+    'list_services',
+    'List all configured services',
+    {},
+    async () => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: JSON.stringify(ctx.config.services || {}, null, 2) }] };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        return { content: [{ type: 'text', text: JSON.stringify(config.services || {}, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'add_service',
+    'Create a new service',
+    {
+      name: z.string().describe('Service name'),
+      channel: z.string().describe('Channel name this service uses'),
+      webhook: z.string().describe('Webhook URL for this service'),
+      code: z.string().optional().describe('Magic code for onboarding (groups mode)'),
+      command: z.string().optional().describe('Slash command for Telegram multi-service'),
+      stt: z.object({
+        provider: z.enum(['google', 'whisper', 'deepgram']),
+        language: z.string().optional(),
+      }).optional().describe('Speech-to-text config'),
+      tts: z.object({
+        provider: z.enum(['google', 'elevenlabs', 'openai']),
+        voice: z.string().optional(),
+        language: z.string().optional(),
+      }).optional().describe('Text-to-speech config'),
+    },
+    async ({ name, channel, webhook, code, command, stt, tts }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (!config.services) config.services = {};
+        if (config.services[name]) {
+          return { content: [{ type: 'text', text: `Service "${name}" already exists` }], isError: true };
+        }
+        if (!config.channels[channel]) {
+          return { content: [{ type: 'text', text: `Channel "${channel}" does not exist` }], isError: true };
+        }
+        const svc: any = { channel, webhook };
+        if (code) svc.code = code;
+        if (command) svc.command = command;
+        if (stt) svc.stt = stt;
+        if (tts) svc.tts = tts;
+        config.services[name] = svc;
+        saveConfig(ctx.configPath, config);
+        return { content: [{ type: 'text', text: `Service "${name}" created. Restart ChannelKit to activate.` }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'update_service',
+    'Update an existing service',
+    {
+      name: z.string().describe('Service name to update'),
+      webhook: z.string().optional().describe('New webhook URL'),
+      code: z.string().optional().describe('New magic code'),
+      command: z.string().optional().describe('New slash command'),
+      stt: z.object({
+        provider: z.enum(['google', 'whisper', 'deepgram']),
+        language: z.string().optional(),
+      }).optional().describe('New STT config'),
+      tts: z.object({
+        provider: z.enum(['google', 'elevenlabs', 'openai']),
+        voice: z.string().optional(),
+        language: z.string().optional(),
+      }).optional().describe('New TTS config'),
+    },
+    async ({ name, webhook, code, command, stt, tts }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (!config.services?.[name]) {
+          return { content: [{ type: 'text', text: `Service "${name}" not found` }], isError: true };
+        }
+        if (webhook) config.services[name].webhook = webhook;
+        if (code !== undefined) {
+          if (code) config.services[name].code = code;
+          else delete config.services[name].code;
+        }
+        if (command !== undefined) {
+          if (command) config.services[name].command = command;
+          else delete config.services[name].command;
+        }
+        if (stt !== undefined) {
+          if (stt) config.services[name].stt = stt;
+          else delete config.services[name].stt;
+        }
+        if (tts !== undefined) {
+          if (tts) config.services[name].tts = tts;
+          else delete config.services[name].tts;
+        }
+        saveConfig(ctx.configPath, config);
+        return { content: [{ type: 'text', text: `Service "${name}" updated. Restart to apply changes.` }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'remove_service',
+    'Remove a service from the configuration',
+    { name: z.string().describe('Service name to remove') },
+    async ({ name }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (!config.services?.[name]) {
+          return { content: [{ type: 'text', text: `Service "${name}" not found` }], isError: true };
+        }
+        delete config.services![name];
+        saveConfig(ctx.configPath, config);
+        return { content: [{ type: 'text', text: `Service "${name}" removed. Restart to apply.` }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  // ── Status ─────────────────────────────────────────────────
+
+  mcp.tool(
+    'get_status',
+    'Get ChannelKit status: connected channels, uptime, message stats',
+    {},
+    async () => {
+      const channelStatus: Record<string, any> = {};
+      for (const [name, ch] of ctx.channels) {
+        channelStatus[name] = {
+          type: (ch as any).config?.type,
+          connected: true,
+        };
+      }
+
+      const stats = ctx.logger?.getStats() || { total: 0, byChannel: {}, avgLatency: 0, errorCount: 0 };
+      const uptime = Date.now() - ctx.startTime;
+
+      const status = {
+        uptime_ms: uptime,
+        uptime_human: formatUptime(uptime),
+        channels: channelStatus,
+        messages: stats,
+        public_url: ctx.getPublicUrl(),
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] };
+    }
+  );
+
+  mcp.tool(
+    'get_config',
+    'Get the current configuration (secrets are sanitized)',
+    {},
+    async () => {
+      if (!ctx.configPath) {
+        // Return in-memory config with sanitized settings
+        const sanitized = sanitizeConfig(ctx.config);
+        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        const sanitized = sanitizeConfig(config);
+        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+}
+
+function sanitizeConfig(config: AppConfig): any {
+  const clone = JSON.parse(JSON.stringify(config));
+  // Mask secrets in channels
+  for (const ch of Object.values(clone.channels || {})) {
+    const c = ch as any;
+    for (const key of ['bot_token', 'auth_token', 'api_key', 'client_secret', 'webhook_secret']) {
+      if (c[key] && typeof c[key] === 'string') {
+        c[key] = c[key].length > 4 ? '•'.repeat(c[key].length - 4) + c[key].slice(-4) : '••••';
+      }
+    }
+  }
+  // Mask settings
+  if (clone.settings) {
+    for (const [key, val] of Object.entries(clone.settings)) {
+      if (typeof val === 'string' && val.length > 0) {
+        clone.settings[key] = (val as string).length > 4
+          ? '•'.repeat((val as string).length - 4) + (val as string).slice(-4)
+          : '••••';
+      }
+    }
+  }
+  // Mask api_secret
+  if (clone.api_secret) {
+    clone.api_secret = clone.api_secret.length > 4
+      ? '•'.repeat(clone.api_secret.length - 4) + clone.api_secret.slice(-4)
+      : '••••';
+  }
+  return clone;
+}
+
+function formatUptime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  parts.push(`${m}m`);
+  return parts.join(' ');
+}
