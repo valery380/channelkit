@@ -3,6 +3,9 @@ import { useAppState, useDispatch } from '../context.jsx';
 import { API } from '../api.js';
 import { channelIcons, maskValue } from '../utils.jsx';
 
+const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
+const selectCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary';
+
 const CHANNEL_FIELDS = {
   whatsapp: { note: "After adding, you'll pair via QR code. Optionally buy a Twilio number below.", fields: [{ key: 'number', label: 'Phone Number (optional)', placeholder: '+12025551234' }] },
   telegram: { note: 'Create a bot at @BotFather and paste the token here.', fields: [{ key: 'bot_token', label: 'Bot Token', placeholder: '123456:ABC-DEF1234...' }] },
@@ -34,7 +37,6 @@ const channelTypeSvgs = {
   endpoint: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>,
 };
 
-// ── QR Modal ──
 function QRModal({ channel, qrMessage, onClose }) {
   const [timer, setTimer] = useState(60);
   const intervalRef = useRef(null);
@@ -53,36 +55,35 @@ function QRModal({ channel, qrMessage, onClose }) {
   let body;
   if (qrMessage?.type === 'whatsapp-paired' && qrMessage.channel === channel) {
     body = (
-      <div className="qr-success">
-        <svg xmlns="http://www.w3.org/2000/svg" height="48" width="48" viewBox="0 -960 960 960" fill="currentColor" style={{ marginBottom: 12 }}><path d="m424-296 282-282-56-56-226 226-114-114-56 56 170 170Zm56 216q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Z" /></svg>
-        <br />WhatsApp paired successfully!
-        <br /><span style={{ fontSize: 12, fontWeight: 400, color: 'var(--dim)' }}>Restart the server to start receiving messages.</span>
+      <div className="py-10 text-center text-green text-base font-semibold">
+        <span className="material-symbols-outlined text-5xl mb-3 block">check_circle</span>
+        WhatsApp paired successfully!
+        <br /><span className="text-xs font-normal text-dim">Restart the server to start receiving messages.</span>
       </div>
     );
   } else if (qrMessage?.type === 'whatsapp-pair-error' && qrMessage.channel === channel) {
-    body = <div className="qr-error">{qrMessage.error || 'Pairing failed'}</div>;
+    body = <div className="py-10 text-center text-red text-sm">{qrMessage.error || 'Pairing failed'}</div>;
   } else if (qrMessage?.type === 'whatsapp-qr' && qrMessage.channel === channel && qrMessage.dataUrl) {
-    body = <div className="qr-img-wrap"><img src={qrMessage.dataUrl} alt="QR Code" /></div>;
+    body = <div className="bg-white rounded-xl p-3 inline-block mb-4"><img src={qrMessage.dataUrl} alt="QR Code" className="block w-[280px] h-[280px]" /></div>;
   } else {
-    body = <div className="qr-waiting">Waiting for QR code...</div>;
+    body = <div className="py-16 text-dim text-sm">Waiting for QR code...</div>;
   }
 
   return (
-    <div className="qr-overlay open">
-      <div className="qr-modal">
-        <h3>Pair WhatsApp &mdash; {channel}</h3>
-        <div className="qr-sub">Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</div>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div className="bg-surface rounded-xl p-8 max-w-md w-[90%] text-center shadow-2xl">
+        <h3 className="text-base font-semibold mb-1">Pair WhatsApp &mdash; {channel}</h3>
+        <div className="text-sm text-dim mb-5">Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</div>
         {body}
         {timer > 0 && qrMessage?.type !== 'whatsapp-paired' && qrMessage?.type !== 'whatsapp-pair-error' && (
-          <div className="qr-timer">{timer}s remaining</div>
+          <div className="text-xs text-dim mb-4">{timer}s remaining</div>
         )}
-        <button className="qr-close" onClick={onClose}>Close</button>
+        <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Close</button>
       </div>
     </div>
   );
 }
 
-// ── SMS Settings Row ──
 function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfig }) {
   const { tunnelActive } = useAppState();
   const [mode, setMode] = useState(currentMode);
@@ -105,34 +106,30 @@ function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfi
   }
 
   return (
-    <tr className="sms-settings-row">
-      <td colSpan={6}>
-        <div style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, margin: '4px 0 8px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>SMS Inbound Settings</div>
-          <div className="form-row">
-            <select value={mode} onChange={e => setMode(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-              <option value="polling">Polling — fetch messages at regular intervals</option>
-              <option value="webhook">External Address — receive webhooks from Twilio</option>
-            </select>
-          </div>
+    <tr>
+      <td colSpan={6} className="px-6 py-4">
+        <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
+          <div className="text-sm font-semibold text-text">SMS Inbound Settings</div>
+          <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
+            <option value="polling">Polling — fetch messages at regular intervals</option>
+            <option value="webhook">External Address — receive webhooks from Twilio</option>
+          </select>
           {mode === 'polling' && (
-            <div className="form-row">
-              <input type="number" value={interval} onChange={e => setInterv(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds" style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }} />
-            </div>
+            <input type="number" value={interval} onChange={e => setInterv(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds" className={inputCls} />
           )}
           {mode === 'webhook' && !tunnelActive && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 10, background: '#fff8e1', color: '#9a6700', border: '1px solid #ffe082' }}>
+            <div className="p-3 rounded-lg text-xs bg-yellow-light text-yellow border border-yellow/20">
               Service is not externalized. Please <strong>Externalize</strong> first.
             </div>
           )}
           {mode === 'webhook' && tunnelActive && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 10, background: '#e8f5e9', color: '#1a7f37', border: '1px solid #a5d6a7' }}>
+            <div className="p-3 rounded-lg text-xs bg-green-light text-green border border-green/20">
               Twilio will send incoming SMS to your external address.
             </div>
           )}
-          <div className="form-row" style={{ marginTop: 8, gap: 8 }}>
-            <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving\u2026' : 'Save'}</button>
-            <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
+          <div className="flex items-center gap-2 pt-1">
+            <button onClick={save} disabled={saving} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50">{saving ? 'Saving\u2026' : 'Save'}</button>
+            <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Cancel</button>
           </div>
         </div>
       </td>
@@ -140,7 +137,6 @@ function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfi
   );
 }
 
-// ── Buy Number Panel ──
 function BuyNumberPanel({ typeKey, fieldValues, onNumberPurchased, onClose }) {
   const { twilioDefaults } = useAppState();
   const isWA = typeKey === 'whatsapp';
@@ -195,61 +191,68 @@ function BuyNumberPanel({ typeKey, fieldValues, onNumberPurchased, onClose }) {
   }
 
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px', marginBottom: 10, background: 'var(--surface)' }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Buy a Twilio Number</div>
+    <div className="border border-border rounded-xl p-4 mb-3 bg-surface space-y-3">
+      <div className="text-sm font-semibold text-text">Buy a Twilio Number</div>
       {isWA ? (
-        <>
-          <div className="form-row"><input value={buySid} onChange={e => setBuySid(e.target.value)} placeholder="Account SID — ACxxxxxxx" style={{ flex: 1 }} /></div>
-          <div className="form-row"><input value={buyTok} onChange={e => setBuyTok(e.target.value)} placeholder="Auth Token" style={{ flex: 1 }} /></div>
-        </>
+        <div className="space-y-2">
+          <input value={buySid} onChange={e => setBuySid(e.target.value)} placeholder="Account SID — ACxxxxxxx" className={inputCls} />
+          <input value={buyTok} onChange={e => setBuyTok(e.target.value)} placeholder="Auth Token" className={inputCls} />
+        </div>
       ) : (
-        <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 8 }}>Using the Account SID and Auth Token above.</div>
+        <div className="text-xs text-dim">Using the Account SID and Auth Token above.</div>
       )}
-      <div className="form-row">
-        <select value={country} onChange={e => setCountry(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
+      <div className="flex gap-3 flex-wrap">
+        <select value={country} onChange={e => setCountry(e.target.value)} className={selectCls + ' flex-1'}>
           {COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}
         </select>
-        <select value={numType} onChange={e => setNumType(e.target.value)} style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
+        <select value={numType} onChange={e => setNumType(e.target.value)} className={selectCls}>
           <option value="mobile">Mobile</option>
           <option value="local">Local</option>
         </select>
       </div>
-      <div className="form-row">
-        <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px' }} onClick={search} disabled={searching}>{searching ? 'Searching\u2026' : 'Search Numbers'}</button>
-        <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
+      <div className="flex gap-2">
+        <button onClick={search} disabled={searching} className="px-4 py-2 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50">{searching ? 'Searching\u2026' : 'Search Numbers'}</button>
+        <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-xs text-dim hover:bg-bg-light transition-colors">Cancel</button>
       </div>
-      {error && <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, color: 'var(--red)', background: '#ffeef0', border: '1px solid #ffc1c7', marginTop: 4 }}>{error}</div>}
+      {error && <div className="p-3 rounded-lg text-xs text-red bg-red-light border border-red/20">{error}</div>}
       {numbers && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Available Numbers</div>
-          <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}>
-            <table style={{ margin: 0 }}>
-              <thead><tr><th style={{ fontSize: 10 }}>Number</th><th style={{ fontSize: 10 }}>Location</th><th style={{ fontSize: 10 }}>Capabilities</th><th style={{ fontSize: 10 }}>Price</th><th style={{ width: 50 }}></th></tr></thead>
-              <tbody>
+        <div>
+          <div className="text-xs font-semibold text-text mb-2">Available Numbers</div>
+          <div className="max-h-60 overflow-y-auto border border-border rounded-lg">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-bg-light">
+                  <th className="px-3 py-2 text-[10px] font-bold text-dim uppercase">Number</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-dim uppercase">Location</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-dim uppercase">Capabilities</th>
+                  <th className="px-3 py-2 text-[10px] font-bold text-dim uppercase">Price</th>
+                  <th className="px-3 py-2 w-[50px]"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
                 {numbers.map(n => (
-                  <tr key={n.phoneNumber}>
-                    <td className="mono" style={{ fontWeight: 500, fontSize: 12 }}>{n.phoneNumber}</td>
-                    <td style={{ fontSize: 11, color: 'var(--dim)' }}>{[n.locality, n.region].filter(Boolean).join(', ') || n.isoCountry}</td>
-                    <td>
-                      {n.capabilities.sms && <span style={{ background: '#e8f5e9', color: '#1a7f37', padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, marginRight: 2 }}>SMS</span>}
-                      {n.capabilities.voice && <span style={{ background: '#e3f2fd', color: '#0969da', padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600, marginRight: 2 }}>Voice</span>}
-                      {n.capabilities.mms && <span style={{ background: '#fff3e0', color: '#9a6700', padding: '1px 6px', borderRadius: 4, fontSize: 11, fontWeight: 600 }}>MMS</span>}
+                  <tr key={n.phoneNumber} className="hover:bg-bg-light transition-colors">
+                    <td className="px-3 py-2 font-mono text-xs font-medium">{n.phoneNumber}</td>
+                    <td className="px-3 py-2 text-[11px] text-dim">{[n.locality, n.region].filter(Boolean).join(', ') || n.isoCountry}</td>
+                    <td className="px-3 py-2 space-x-1">
+                      {n.capabilities.sms && <span className="inline-block bg-green-light text-green px-1.5 py-0.5 rounded text-[10px] font-semibold">SMS</span>}
+                      {n.capabilities.voice && <span className="inline-block bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-semibold">Voice</span>}
+                      {n.capabilities.mms && <span className="inline-block bg-orange-light text-orange px-1.5 py-0.5 rounded text-[10px] font-semibold">MMS</span>}
                     </td>
-                    <td style={{ fontSize: 11, color: 'var(--dim)', whiteSpace: 'nowrap' }}>{n.price ? `${(n.priceUnit || 'USD').toUpperCase()} $${parseFloat(n.price).toFixed(2)}/mo` : ''}</td>
-                    <td><button className="btn btn-primary" style={{ padding: '3px 10px', fontSize: 11 }} onClick={() => buy(n.phoneNumber)}>Buy</button></td>
+                    <td className="px-3 py-2 text-[11px] text-dim whitespace-nowrap">{n.price ? `${(n.priceUnit || 'USD').toUpperCase()} $${parseFloat(n.price).toFixed(2)}/mo` : ''}</td>
+                    <td className="px-3 py-2"><button onClick={() => buy(n.phoneNumber)} className="px-2 py-1 bg-primary text-white rounded text-[11px] font-semibold hover:bg-primary-hover">Buy</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {purchaseError && <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, color: 'var(--red)', background: '#ffeef0', border: '1px solid #ffc1c7', marginTop: 6 }}>{purchaseError}</div>}
+          {purchaseError && <div className="p-3 rounded-lg text-xs text-red bg-red-light border border-red/20 mt-2">{purchaseError}</div>}
         </div>
       )}
     </div>
   );
 }
 
-// ── Fetch Existing Numbers Panel ──
 function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onSelect }) {
   const [numbers, setNumbers] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -258,8 +261,7 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
   function getCreds() {
     let sid, tok;
     if (typeKey === 'whatsapp') {
-      sid = twilioDefaults.sid;
-      tok = twilioDefaults.tok;
+      sid = twilioDefaults.sid; tok = twilioDefaults.tok;
     } else {
       sid = fieldValues.account_sid?.trim() || twilioDefaults.sid;
       tok = fieldValues.auth_token?.trim() || twilioDefaults.tok;
@@ -269,72 +271,63 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
 
   const { sid, tok } = getCreds();
   const hasCreds = !!(sid && tok);
-
-  // Collect all numbers already used by existing channels
-  const usedNumbers = new Set(
-    Object.values(channels).map(ch => ch.number).filter(Boolean)
-  );
+  const usedNumbers = new Set(Object.values(channels).map(ch => ch.number).filter(Boolean));
 
   async function fetchNumbers() {
-    setLoading(true);
-    setError('');
-    setNumbers(null);
+    setLoading(true); setError(''); setNumbers(null);
     try {
       const res = await fetch(API + '/api/twilio/list-numbers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_sid: sid, auth_token: tok }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to fetch numbers');
       if (!data.numbers?.length) { setError('No phone numbers found in this Twilio account.'); return; }
       setNumbers(data.numbers);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div style={{ margin: '0 0 10px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="mb-3">
+      <div className="flex items-center gap-2">
         <button
           onClick={fetchNumbers}
           disabled={!hasCreds || loading}
-          className="btn-edit"
-          style={{ fontSize: 12, padding: '4px 10px', opacity: hasCreds ? 1 : 0.5 }}
+          className="px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-lg hover:bg-primary/5 transition-colors disabled:opacity-50"
           title={hasCreds ? 'Fetch phone numbers from your Twilio account' : 'Set Account SID and Auth Token first'}
         >
           {loading ? 'Fetching\u2026' : 'Fetch my numbers'}
         </button>
         {!hasCreds && (
-          <span style={{ fontSize: 11, color: 'var(--dim)' }}>
+          <span className="text-[11px] text-dim">
             {typeKey === 'whatsapp'
               ? 'Set Twilio defaults in Settings to fetch numbers'
               : 'Enter Account SID and Auth Token above to fetch numbers'}
           </span>
         )}
       </div>
-      {error && <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>{error}</div>}
+      {error && <div className="text-xs text-red mt-2">{error}</div>}
       {numbers && (
-        <div style={{ marginTop: 8, border: '1px solid var(--border)', borderRadius: 6, maxHeight: 200, overflowY: 'auto' }}>
-          <table style={{ margin: 0 }}>
-            <tbody>
+        <div className="mt-2 border border-border rounded-lg max-h-[200px] overflow-y-auto">
+          <table className="w-full text-left border-collapse">
+            <tbody className="divide-y divide-border/50">
               {numbers.map(n => {
                 const isUsed = usedNumbers.has(n.phoneNumber);
                 return (
-                  <tr key={n.phoneNumber} style={{ cursor: isUsed ? 'default' : 'pointer', opacity: isUsed ? 0.6 : 1 }}
+                  <tr
+                    key={n.phoneNumber}
+                    className={`${isUsed ? 'opacity-60' : 'cursor-pointer hover:bg-bg-light'} transition-colors`}
                     onClick={() => { if (!isUsed) onSelect(n.phoneNumber); }}
                   >
-                    <td className="mono" style={{ fontWeight: 500, fontSize: 12, padding: '6px 10px' }}>
+                    <td className="px-3 py-2 font-mono text-xs font-medium">
                       {n.phoneNumber}
-                      {isUsed && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: 'var(--yellow)', background: '#fff8e1', padding: '1px 5px', borderRadius: 3, fontFamily: 'inherit' }}>used</span>}
+                      {isUsed && <span className="ml-2 text-[10px] font-semibold text-yellow bg-yellow-light px-1.5 py-0.5 rounded">used</span>}
                     </td>
-                    <td style={{ fontSize: 11, color: 'var(--dim)', padding: '6px 10px' }}>{n.friendlyName}</td>
-                    <td style={{ padding: '6px 10px' }}>
-                      {n.capabilities.sms && <span style={{ background: '#e8f5e9', color: '#1a7f37', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600, marginRight: 2 }}>SMS</span>}
-                      {n.capabilities.voice && <span style={{ background: '#e3f2fd', color: '#0969da', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 600 }}>Voice</span>}
+                    <td className="px-3 py-2 text-[11px] text-dim">{n.friendlyName}</td>
+                    <td className="px-3 py-2 space-x-1">
+                      {n.capabilities.sms && <span className="inline-block bg-green-light text-green px-1.5 py-0.5 rounded text-[10px] font-semibold">SMS</span>}
+                      {n.capabilities.voice && <span className="inline-block bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-semibold">Voice</span>}
                     </td>
                   </tr>
                 );
@@ -347,7 +340,6 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
   );
 }
 
-// ── Main Channels Component ──
 export default function Channels({ loadConfig }) {
   const { channels, services, twilioDefaults, tunnelActive, qrMessage } = useAppState();
   const dispatch = useDispatch();
@@ -369,27 +361,15 @@ export default function Channels({ loadConfig }) {
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
-  function selectType(type) {
-    setTypeKey(type);
-    setStep('form');
-    setFieldValues({});
-    setShowBuy(false);
-  }
+  function selectType(type) { setTypeKey(type); setStep('form'); setFieldValues({}); setShowBuy(false); }
 
   function backToPicker() {
-    setStep('pick');
-    setTypeKey('');
-    setChName('');
-    setFieldValues({});
-    setMode('service');
+    setStep('pick'); setTypeKey(''); setChName(''); setFieldValues({}); setMode('service');
   }
 
-  function updateField(key, val) {
-    setFieldValues(prev => ({ ...prev, [key]: val }));
-  }
+  function updateField(key, val) { setFieldValues(prev => ({ ...prev, [key]: val })); }
 
   function getPlaceholder(field) {
-    // Show twilio defaults hint
     if ((field.key === 'account_sid' || field.key === 'auth_token') && twilioDefaults.sid) {
       const val = field.key === 'account_sid' ? twilioDefaults.sid : twilioDefaults.tok;
       if (val) return field.label + ' \u2014 Using default (' + maskValue(val) + ')';
@@ -400,7 +380,6 @@ export default function Channels({ loadConfig }) {
   async function addChannel() {
     const name = chName.trim();
     if (!name || !typeKey) { alert('Channel name and type are required'); return; }
-
     const body = { name, mode };
     if (mode === 'groups') body.unmatched = unmatched;
 
@@ -448,7 +427,6 @@ export default function Channels({ loadConfig }) {
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Failed to add channel'); return; }
 
-    // Post-add settings for SMS/email
     if (typeKey === 'sms-twilio') {
       try {
         await fetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/sms-settings', {
@@ -467,13 +445,9 @@ export default function Channels({ loadConfig }) {
     }
 
     if (typeKey === 'whatsapp') {
-      backToPicker();
-      loadConfig();
-      startPairing(name);
-      return;
+      backToPicker(); loadConfig(); startPairing(name); return;
     }
-    backToPicker();
-    loadConfig();
+    backToPicker(); loadConfig();
   }
 
   async function startPairing(channelName) {
@@ -512,64 +486,76 @@ export default function Channels({ loadConfig }) {
 
   return (
     <>
-      <div className="table-wrap">
-        <table>
-          <thead><tr><th>Name</th><th>Type</th><th>Details</th><th>Services</th><th>Unmatched msgs</th><th style={{ width: 80 }}></th></tr></thead>
-          <tbody>
-            {chEntries.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--dim)', padding: 32 }}>No channels configured</td></tr>
-            ) : chEntries.map(([name, ch]) => {
-              const deps = Object.entries(services).filter(([, s]) => s.channel === name).map(([n]) => n);
-              const detail = ch.number || (ch.bot_token ? ch.bot_token.slice(0, 12) + '\u2026' : '') || ch.from_email || '';
-              const isSms = ch.type === 'sms';
-              const smsMode = isSms ? (ch.poll_interval ? 'polling' : 'webhook') : '';
-              const smsModeLabel = isSms ? (ch.poll_interval ? `Polling (${ch.poll_interval}s)` : 'External Address') : '';
+      {/* Channels Table */}
+      <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-bg-light border-b border-border">
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Details</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Services</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Unmatched msgs</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider w-[80px]"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {chEntries.length === 0 ? (
+                <tr><td colSpan={6} className="text-center text-dim py-8 text-sm">No channels configured</td></tr>
+              ) : chEntries.map(([name, ch]) => {
+                const deps = Object.entries(services).filter(([, s]) => s.channel === name).map(([n]) => n);
+                const detail = ch.number || (ch.bot_token ? ch.bot_token.slice(0, 12) + '\u2026' : '') || ch.from_email || '';
+                const isSms = ch.type === 'sms';
+                const smsMode = isSms ? (ch.poll_interval ? 'polling' : 'webhook') : '';
+                const smsModeLabel = isSms ? (ch.poll_interval ? `Polling (${ch.poll_interval}s)` : 'External Address') : '';
 
-              return (
-                <React.Fragment key={name}>
-                  <tr>
-                    <td style={{ fontWeight: 500 }}>{name}</td>
-                    <td>{ch.type}</td>
-                    <td className="mono" style={{ color: 'var(--dim)', fontSize: 12 }}>
-                      {detail}
-                      {isSms && <div style={{ marginTop: 3, fontFamily: 'inherit', color: 'var(--accent)', fontSize: 11 }}>{smsModeLabel}</div>}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--dim)' }}>{deps.length > 0 ? deps.join(', ') : '\u2014'}</td>
-                    <td>
-                      {ch.mode === 'groups' || deps.length > 1 ? (
-                        <select
-                          defaultValue={ch.unmatched || ''}
-                          onChange={e => setUnmatchedValue(name, e.target.value)}
-                          style={{ fontSize: 12, padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', color: 'var(--text)' }}
-                        >
-                          <option value="">Ignore (default)</option>
-                          <option value="list">List services</option>
-                          <option value="ignore">Ignore</option>
-                        </select>
-                      ) : <span style={{ color: 'var(--dim)', fontSize: 12 }}>{'\u2014'}</span>}
-                    </td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {isSms && <button className="btn-edit" onClick={() => setSmsSettingsTarget(smsSettingsTarget === name ? null : name)}>Settings</button>}
-                      {' '}
-                      <button className="btn-danger" onClick={() => removeChannel(name, deps)}>Remove</button>
-                    </td>
-                  </tr>
-                  {smsSettingsTarget === name && (
-                    <SmsSettingsRow name={name} currentMode={smsMode} currentInterval={ch.poll_interval || 60} onClose={() => setSmsSettingsTarget(null)} loadConfig={loadConfig} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                return (
+                  <React.Fragment key={name}>
+                    <tr className="hover:bg-bg-light transition-colors">
+                      <td className="px-6 py-4 text-sm font-medium text-text">{name}</td>
+                      <td className="px-6 py-4 text-sm text-dim">{ch.type}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-dim">
+                        {detail}
+                        {isSms && <div className="mt-0.5 font-sans text-primary text-[11px]">{smsModeLabel}</div>}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-dim">{deps.length > 0 ? deps.join(', ') : '\u2014'}</td>
+                      <td className="px-6 py-4">
+                        {ch.mode === 'groups' || deps.length > 1 ? (
+                          <select
+                            defaultValue={ch.unmatched || ''}
+                            onChange={e => setUnmatchedValue(name, e.target.value)}
+                            className="text-xs py-1 px-2 border border-border rounded bg-bg-light text-text focus:outline-none"
+                          >
+                            <option value="">Ignore (default)</option>
+                            <option value="list">List services</option>
+                            <option value="ignore">Ignore</option>
+                          </select>
+                        ) : <span className="text-xs text-dim">{'\u2014'}</span>}
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
+                        {isSms && <button onClick={() => setSmsSettingsTarget(smsSettingsTarget === name ? null : name)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Settings</button>}
+                        <button onClick={() => removeChannel(name, deps)} className="px-3 py-1 text-xs font-medium text-red border border-red/30 rounded hover:bg-red-light transition-colors">Remove</button>
+                      </td>
+                    </tr>
+                    {smsSettingsTarget === name && (
+                      <SmsSettingsRow name={name} currentMode={smsMode} currentInterval={ch.poll_interval || 60} onClose={() => setSmsSettingsTarget(null)} loadConfig={loadConfig} />
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      <div className="add-form">
-        <h3>Add Channel</h3>
+      {/* Add Channel Form */}
+      <div className="bg-surface border border-border rounded-xl p-5 shadow-sm mt-4">
+        <h3 className="text-sm font-semibold text-text mb-1">Add Channel</h3>
         {step === 'pick' ? (
           <div>
-            <p className="form-hint">Choose the type of channel to add.</p>
-            <div className="picker-grid">
+            <p className="text-xs text-dim mb-4">Choose the type of channel to add.</p>
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-3">
               {[
                 { type: 'whatsapp', label: 'WhatsApp', sub: 'Pair via QR code' },
                 { type: 'telegram', label: 'Telegram', sub: 'Bot via BotFather' },
@@ -578,129 +564,102 @@ export default function Channels({ loadConfig }) {
                 { type: 'email-resend', label: 'Email', sub: 'Resend' },
                 { type: 'endpoint', label: 'Endpoint', sub: 'HTTP Webhook' },
               ].map(t => (
-                <div key={t.type} className="picker-card" onClick={() => selectType(t.type)}>
-                  <div className="picker-icon">{channelTypeSvgs[t.type.split('-')[0]] || channelTypeSvgs[t.type]}</div>
-                  <div className="picker-label">{t.label}</div>
-                  <div className="picker-sub">{t.sub}</div>
+                <div
+                  key={t.type}
+                  onClick={() => selectType(t.type)}
+                  className="flex flex-col items-center gap-2 p-4 bg-bg-light border-2 border-border rounded-xl cursor-pointer transition-all hover:border-primary hover:bg-highlight text-center"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center">{channelTypeSvgs[t.type.split('-')[0]] || channelTypeSvgs[t.type]}</div>
+                  <div className="text-sm font-medium text-text">{t.label}</div>
+                  <div className="text-[11px] text-dim leading-tight">{t.sub}</div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
           <div>
-            <button className="step-back" onClick={backToPicker}>
-              <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z" /></svg>
+            <button onClick={backToPicker} className="flex items-center gap-1 text-sm text-primary hover:underline mb-3 bg-transparent border-none cursor-pointer p-0">
+              <span className="material-symbols-outlined text-[16px]">arrow_back</span>
               Back to channel types
             </button>
-            <p className="form-hint">Configure your new {TYPE_LABELS[typeKey] || typeKey} channel.</p>
-            <div className="form-row">
-              <input value={chName} onChange={e => setChName(e.target.value)} placeholder="Channel name (e.g. mywhatsapp)" autoFocus />
+            <p className="text-xs text-dim mb-3">Configure your new {TYPE_LABELS[typeKey] || typeKey} channel.</p>
+            <div className="space-y-3 mb-3">
+              <input value={chName} onChange={e => setChName(e.target.value)} placeholder="Channel name (e.g. mywhatsapp)" className={inputCls} autoFocus />
+              {def.fields.map(f => (
+                <input key={f.key} value={fieldValues[f.key] || ''} onChange={e => updateField(f.key, e.target.value)} placeholder={getPlaceholder(f)} className={inputCls} />
+              ))}
             </div>
-            {def.fields.map(f => (
-              <div className="form-row" key={f.key}>
-                <input value={fieldValues[f.key] || ''} onChange={e => updateField(f.key, e.target.value)} placeholder={getPlaceholder(f)} style={{ flex: 1 }} />
-              </div>
-            ))}
 
             {hasBuyOption && (
-              <FetchNumbersPanel
-                typeKey={typeKey}
-                fieldValues={fieldValues}
-                channels={channels}
-                twilioDefaults={twilioDefaults}
-                onSelect={num => updateField('number', num)}
-              />
+              <FetchNumbersPanel typeKey={typeKey} fieldValues={fieldValues} channels={channels} twilioDefaults={twilioDefaults} onSelect={num => updateField('number', num)} />
             )}
 
             {hasBuyOption && !showBuy && (
-              <div style={{ margin: '-4px 0 8px' }}>
-                <button onClick={() => setShowBuy(true)} style={{ background: 'none', border: 'none', color: 'var(--accent)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+              <div className="mb-3">
+                <button onClick={() => setShowBuy(true)} className="text-xs text-primary underline bg-transparent border-none cursor-pointer p-0">
                   or buy a new number from Twilio
                 </button>
               </div>
             )}
             {hasBuyOption && showBuy && (
-              <BuyNumberPanel
-                typeKey={typeKey}
-                fieldValues={fieldValues}
-                onNumberPurchased={num => { updateField('number', num); setShowBuy(false); }}
-                onClose={() => setShowBuy(false)}
-              />
+              <BuyNumberPanel typeKey={typeKey} fieldValues={fieldValues} onNumberPurchased={num => { updateField('number', num); setShowBuy(false); }} onClose={() => setShowBuy(false)} />
             )}
 
             {typeKey === 'sms-twilio' && (
-              <>
-                <div className="form-row">
-                  <select value={smsInbound} onChange={e => setSmsInbound(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-                    <option value="polling">Polling — fetch messages at regular intervals</option>
-                    <option value="webhook">External Address — receive webhooks from Twilio</option>
-                  </select>
-                </div>
+              <div className="space-y-3 mb-3">
+                <select value={smsInbound} onChange={e => setSmsInbound(e.target.value)} className={selectCls}>
+                  <option value="polling">Polling — fetch messages at regular intervals</option>
+                  <option value="webhook">External Address — receive webhooks from Twilio</option>
+                </select>
                 {smsInbound === 'polling' && (
-                  <div className="form-row">
-                    <input type="number" value={smsPollInterval} onChange={e => setSmsPollInterval(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds (default: 60)" style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }} />
-                  </div>
+                  <input type="number" value={smsPollInterval} onChange={e => setSmsPollInterval(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds (default: 60)" className={inputCls} />
                 )}
                 {smsInbound === 'webhook' && !tunnelActive && (
-                  <div style={{ padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 10, background: '#fff8e1', color: '#9a6700', border: '1px solid #ffe082' }}>Service is not externalized. Please <strong>Externalize</strong> first.</div>
+                  <div className="p-3 rounded-lg text-xs bg-yellow-light text-yellow border border-yellow/20">Service is not externalized. Please <strong>Externalize</strong> first.</div>
                 )}
-              </>
+              </div>
             )}
 
             {typeKey === 'email-resend' && (
-              <>
-                <div className="form-row">
-                  <select value={emailInbound} onChange={e => setEmailInbound(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-                    <option value="webhook">Webhook — Resend forwards emails to your endpoint</option>
-                    <option value="polling">Polling — fetch emails at regular intervals</option>
-                  </select>
-                </div>
+              <div className="space-y-3 mb-3">
+                <select value={emailInbound} onChange={e => setEmailInbound(e.target.value)} className={selectCls}>
+                  <option value="webhook">Webhook — Resend forwards emails to your endpoint</option>
+                  <option value="polling">Polling — fetch emails at regular intervals</option>
+                </select>
                 {emailInbound === 'polling' && (
-                  <div className="form-row">
-                    <input type="number" value={emailPollInterval} onChange={e => setEmailPollInterval(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds (default: 30)" style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }} />
-                  </div>
+                  <input type="number" value={emailPollInterval} onChange={e => setEmailPollInterval(e.target.value)} min="5" max="3600" placeholder="Poll interval in seconds (default: 30)" className={inputCls} />
                 )}
-              </>
+              </div>
             )}
 
             {typeKey === 'endpoint' && (
-              <>
-                <div className="form-row">
-                  <select value={endpointResponseMode} onChange={e => setEndpointResponseMode(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-                    <option value="sync">Sync — wait for service response and return it</option>
-                    <option value="async">Async — return 200 immediately (fire-and-forget)</option>
-                  </select>
-                </div>
+              <div className="space-y-3 mb-3">
+                <select value={endpointResponseMode} onChange={e => setEndpointResponseMode(e.target.value)} className={selectCls}>
+                  <option value="sync">Sync — wait for service response and return it</option>
+                  <option value="async">Async — return 200 immediately (fire-and-forget)</option>
+                </select>
                 {endpointResponseMode === 'sync' && (
-                  <div className="form-row">
-                    <input type="number" value={endpointTimeout} onChange={e => setEndpointTimeout(e.target.value)} min="5" max="120" placeholder="Response timeout in seconds (default: 30)" style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }} />
-                  </div>
+                  <input type="number" value={endpointTimeout} onChange={e => setEndpointTimeout(e.target.value)} min="5" max="120" placeholder="Response timeout in seconds (default: 30)" className={inputCls} />
                 )}
-              </>
+              </div>
             )}
 
-            {typeKey !== 'endpoint' && (
-              <>
-                <div className="form-row">
-                  <select value={mode} onChange={e => setMode(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-                    <option value="service">Service mode — single service, no codes needed</option>
-                    <option value="groups">Groups mode — multiple services via codes or commands</option>
-                  </select>
-                </div>
-                {mode === 'groups' && (
-                  <div className="form-row">
-                    <select value={unmatched} onChange={e => setUnmatched(e.target.value)} style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }}>
-                      <option value="ignore">Unmatched messages: Ignore silently</option>
-                      <option value="list">Unmatched messages: Reply with service list</option>
-                    </select>
-                  </div>
-                )}
-              </>
-            )}
+            {typeKey !== 'endpoint' && <div className="space-y-3 mb-3">
+              <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
+                <option value="service">Service mode — single service, no codes needed</option>
+                <option value="groups">Groups mode — multiple services via codes or commands</option>
+              </select>
+              {mode === 'groups' && (
+                <select value={unmatched} onChange={e => setUnmatched(e.target.value)} className={selectCls}>
+                  <option value="ignore">Unmatched messages: Ignore silently</option>
+                  <option value="list">Unmatched messages: Reply with service list</option>
+                </select>
+              )}
+            </div>}
 
-            <div className="form-row">
-              <button className="btn btn-primary" onClick={addChannel}>Add Channel</button>
-              <span style={{ fontSize: 12, color: 'var(--dim)' }}>{def.note}</span>
+            <div className="flex items-center gap-3">
+              <button onClick={addChannel} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors">Add Channel</button>
+              <span className="text-xs text-dim">{def.note}</span>
             </div>
           </div>
         )}
