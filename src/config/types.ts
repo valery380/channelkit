@@ -129,6 +129,12 @@ export interface SettingsConfig {
   deepgram_api_key?: string;
 }
 
+export interface McpConfig {
+  enabled?: boolean;
+  port?: number;       // HTTP transport port (default 4100)
+  stdio?: boolean;     // Enable stdio transport
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -140,4 +146,5 @@ export interface AppConfig {
   tunnel?: TunnelConfig;
   settings?: SettingsConfig;
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
+  mcp?: McpConfig;             // MCP server configuration
 }
