@@ -8,7 +8,9 @@ export interface ServerContext {
   configPath?: string;
   publicUrl: string | null;
   exposeDashboard: boolean;
+  exposeMcp: boolean;
   apiSecret: string | null;
+  mcpSecret: string | null;
   startTime: number;
   serverLogBuffer: Array<{ level: string; text: string; ts: number }>;
   latestQR: string | null;
@@ -18,9 +20,13 @@ export interface ServerContext {
   tunnelStart?: () => Promise<{ url: string }>;
   tunnelStop?: () => Promise<void>;
   tunnelStatus?: () => { active: boolean; url: string | null };
+  mcpStart?: () => Promise<{ url: string }>;
+  mcpStop?: () => Promise<void>;
+  mcpStatus?: () => { active: boolean; url: string | null };
   setPublicUrl: (url: string) => void;
   clearPublicUrl: () => void;
   getBaseUrl: () => string;
   getReplyUrl: (channelName: string, jid: string) => string;
   setExposeDashboard: (value: boolean) => void;
+  setExposeMcp: (value: boolean) => void;
 }

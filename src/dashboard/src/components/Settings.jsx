@@ -10,6 +10,7 @@ const FIELDS = [
   { key: 'openai_api_key', label: 'OpenAI API Key', placeholder: 'sk-...', sub: '(Whisper STT & TTS)', group: 'api' },
   { key: 'deepgram_api_key', label: 'Deepgram API Key', placeholder: 'Deepgram API key', sub: '(STT)', group: 'api' },
   { key: 'anthropic_api_key', label: 'Anthropic API Key', placeholder: 'sk-ant-...', sub: '(AI Formatting)', group: 'api' },
+  { key: 'mcp_secret', label: 'MCP Secret', placeholder: 'Bearer token for MCP access', sub: '(required for external access)', group: 'security' },
 ];
 
 function SettingsInput({ label, placeholder, sub, value, onChange }) {
@@ -105,6 +106,7 @@ export default function Settings() {
 
   const twilioFields = FIELDS.filter(f => f.group === 'twilio');
   const apiFields = FIELDS.filter(f => f.group === 'api');
+  const securityFields = FIELDS.filter(f => f.group === 'security');
 
   return (
     <div className="max-w-xl mx-auto py-6">
@@ -124,6 +126,16 @@ export default function Settings() {
           <p className="text-xs text-dim mb-4">Keys for speech-to-text and text-to-speech providers.</p>
           <div className="space-y-3">
             {apiFields.map(f => (
+              <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
+            ))}
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="text-sm font-semibold text-text mb-1">Security</h3>
+          <p className="text-xs text-dim mb-4">Authentication for MCP server access. Clients must pass this as a Bearer token.</p>
+          <div className="space-y-3">
+            {securityFields.map(f => (
               <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
             ))}
           </div>

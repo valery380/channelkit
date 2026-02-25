@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
 import { ServerContext } from './types';
-import { externalAccessGuard } from './middleware/auth';
+import { externalAccessGuard, mcpAuthCheck } from './middleware/auth';
 import { registerSendRoutes } from './routes/send';
 import { registerInboundRoutes } from './routes/inbound';
 import { registerConfigRoutes } from './routes/config';
@@ -14,6 +14,7 @@ import { registerTwilioRoutes } from './routes/twilio';
 import { registerLogRoutes } from './routes/logs';
 import { registerDashboardRoutes } from './routes/dashboard';
 import { registerRestartRoutes } from './routes/restart';
+import { registerMcpRoutes } from './routes/mcp';
 
 export class ApiServer {
   private app = express();
@@ -39,7 +40,9 @@ export class ApiServer {
       configPath: undefined,
       publicUrl: null,
       exposeDashboard: false,
+      exposeMcp: false,
       apiSecret: null,
+      mcpSecret: null,
       startTime: Date.now(),
       serverLogBuffer: [],
       latestQR: null,
@@ -49,16 +52,21 @@ export class ApiServer {
       tunnelStart: undefined,
       tunnelStop: undefined,
       tunnelStatus: undefined,
+      mcpStart: undefined,
+      mcpStop: undefined,
+      mcpStatus: undefined,
       setPublicUrl: (url: string) => { this.ctx.publicUrl = url.replace(/\/$/, ''); },
       clearPublicUrl: () => { this.ctx.publicUrl = null; },
       getBaseUrl: () => this.ctx.publicUrl || `http://localhost:${this.port}`,
       getReplyUrl: (channelName: string, jid: string) =>
         `${this.ctx.getBaseUrl()}/api/send/${channelName}/${encodeURIComponent(jid)}`,
       setExposeDashboard: (value: boolean) => { this.ctx.exposeDashboard = value; },
+      setExposeMcp: (value: boolean) => { this.ctx.exposeMcp = value; },
     };
 
     this.app.use(express.json());
     this.app.use(externalAccessGuard(this.ctx));
+    this.app.use(mcpAuthCheck(this.ctx));
 
     // Register all route modules
     registerSendRoutes(this.app, this.ctx);
@@ -70,12 +78,14 @@ export class ApiServer {
     registerLogRoutes(this.app, this.ctx);
     registerDashboardRoutes(this.app, this.ctx);
     registerRestartRoutes(this.app, this.ctx);
+    registerMcpRoutes(this.app, this.ctx);
   }
 
   // Proxy getters/setters that delegate to ctx for backward compat with index.ts
   setExposeDashboard(value: boolean): void { this.ctx.setExposeDashboard(value); }
   getExposeDashboard(): boolean { return this.ctx.exposeDashboard; }
   setApiSecret(secret: string | undefined): void { this.ctx.apiSecret = secret || null; }
+  setMcpSecret(secret: string | undefined): void { this.ctx.mcpSecret = secret || null; }
 
   setLogger(logger: Logger): void {
     this.ctx.logger = logger;
@@ -122,6 +132,12 @@ export class ApiServer {
   set tunnelStart(fn: (() => Promise<{ url: string }>) | undefined) { this.ctx.tunnelStart = fn; }
   set tunnelStop(fn: (() => Promise<void>) | undefined) { this.ctx.tunnelStop = fn; }
   set tunnelStatus(fn: (() => { active: boolean; url: string | null }) | undefined) { this.ctx.tunnelStatus = fn; }
+  set mcpStart(fn: (() => Promise<{ url: string }>) | undefined) { this.ctx.mcpStart = fn; }
+  set mcpStop(fn: (() => Promise<void>) | undefined) { this.ctx.mcpStop = fn; }
+  set mcpStatus(fn: (() => { active: boolean; url: string | null }) | undefined) { this.ctx.mcpStatus = fn; }
+  setExposeMcp(value: boolean): void { this.ctx.setExposeMcp(value); }
+  broadcast(msg: any): void { this.ctx.broadcast(msg); }
+  getExpressApp() { return this.app; }
 
   async start(): Promise<void> {
     const portInUse = await this.isPortInUse(this.port);
@@ -169,17 +185,28 @@ export class ApiServer {
 
     const pidInfo = pid ? ` (PID ${pid})` : '';
 
-    // If stdin is not a TTY (e.g. running under tsx watch), auto-kill
-    // the existing process instead of prompting — readline won't work
-    // and would cause an infinite restart loop.
-    const autoKill = !process.stdin.isTTY;
+    // Detect environments where stdin is unavailable or intercepted:
+    // - Not a TTY (piped, CI, etc.)
+    // - tsx watch / node --watch: inherits TTY handles so isTTY is true,
+    //   but stdin is consumed by the watch runner — readline never receives input.
+    const isWatchMode = process.execArgv.some(a => a.includes('--watch'))
+      || process.argv.some(a => a === '--watch')
+      || !!process.env.TSX_WATCH;
+    const autoKill = !process.stdin.isTTY || isWatchMode;
 
     if (!autoKill) {
       console.error(`\n⚠️  Port ${port} is already in use${pidInfo}.`);
       const { createInterface } = await import('readline');
       const rl = createInterface({ input: process.stdin, output: process.stderr });
       const answer = await new Promise<string>((res) => {
-        rl.question(`   Kill the existing process and continue? [y/N] `, (ans) => {
+        // Timeout: if readline is broken (e.g. stdin intercepted), auto-kill
+        const timeout = setTimeout(() => {
+          rl.close();
+          console.error(`   No response received — auto-killing process on port ${port}...`);
+          res('y');
+        }, 5000);
+        rl.question(`   Kill the existing process and continue? [y/N] (auto-yes in 5s) `, (ans) => {
+          clearTimeout(timeout);
           rl.close();
           res(ans.trim().toLowerCase());
         });

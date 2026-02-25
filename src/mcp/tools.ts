@@ -22,7 +22,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
     'Send a message through a connected channel',
     {
       channel: z.string().describe('Channel name'),
-      to: z.string().describe('Recipient identifier (phone number, chat ID, email, etc.)'),
+      to: z.string().describe('Recipient identifier. For WhatsApp: phone number (e.g. +972541234567) — automatically converted to JID format. For other channels: chat ID, email, etc.'),
       text: z.string().optional().describe('Message text'),
       media: z.string().optional().describe('Media URL to attach'),
     },
@@ -34,8 +34,15 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
       if (!text && !media) {
         return { content: [{ type: 'text', text: 'Must provide text and/or media' }], isError: true };
       }
+
+      // Normalize WhatsApp recipient: convert phone numbers to JID format
+      let recipient = to;
+      if ((ch as any).config?.type === 'whatsapp' && !to.includes('@')) {
+        recipient = to.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+      }
+
       try {
-        await ch.send(to, { text, media: media ? { url: media } : undefined });
+        await ch.send(recipient, { text, media: media ? { url: media } : undefined });
         if (ctx.logger) {
           ctx.logger.log({
             id: `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -340,54 +347,45 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
   );
 
   mcp.tool(
-    'get_config',
-    'Get the current configuration (secrets are sanitized)',
-    {},
-    async () => {
+    'set_config',
+    'Set a configuration value using a dot-separated path. Examples: set_config("apiPort", 5000), set_config("tunnel.expose_dashboard", true), set_config("settings.openai_api_key", "sk-..."), set_config("mcp.enabled", true). Changes are saved to config.yaml. Some changes require a restart to take effect.',
+    {
+      path: z.string().describe('Dot-separated config path (e.g. "apiPort", "tunnel.token", "settings.openai_api_key", "mcp.enabled")'),
+      value: z.any().describe('Value to set (string, number, boolean, or null to delete the key)'),
+    },
+    async ({ path, value }) => {
       if (!ctx.configPath) {
-        // Return in-memory config with sanitized settings
-        const sanitized = sanitizeConfig(ctx.config);
-        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+        return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
       }
       try {
         const config = loadConfig(ctx.configPath, { validate: false });
-        const sanitized = sanitizeConfig(config);
-        return { content: [{ type: 'text', text: JSON.stringify(sanitized, null, 2) }] };
+        const parts = path.split('.');
+        let target: any = config;
+
+        // Navigate to parent
+        for (let i = 0; i < parts.length - 1; i++) {
+          if (target[parts[i]] === undefined || target[parts[i]] === null) {
+            target[parts[i]] = {};
+          }
+          target = target[parts[i]];
+        }
+
+        const key = parts[parts.length - 1];
+
+        if (value === null) {
+          delete target[key];
+        } else {
+          target[key] = value;
+        }
+
+        saveConfig(ctx.configPath, config);
+        const display = value === null ? '(deleted)' : JSON.stringify(value);
+        return { content: [{ type: 'text', text: `Set ${path} = ${display}. Restart ChannelKit if needed to apply.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
       }
     }
   );
-}
-
-function sanitizeConfig(config: AppConfig): any {
-  const clone = JSON.parse(JSON.stringify(config));
-  // Mask secrets in channels
-  for (const ch of Object.values(clone.channels || {})) {
-    const c = ch as any;
-    for (const key of ['bot_token', 'auth_token', 'api_key', 'client_secret', 'webhook_secret']) {
-      if (c[key] && typeof c[key] === 'string') {
-        c[key] = c[key].length > 4 ? '•'.repeat(c[key].length - 4) + c[key].slice(-4) : '••••';
-      }
-    }
-  }
-  // Mask settings
-  if (clone.settings) {
-    for (const [key, val] of Object.entries(clone.settings)) {
-      if (typeof val === 'string' && val.length > 0) {
-        clone.settings[key] = (val as string).length > 4
-          ? '•'.repeat((val as string).length - 4) + (val as string).slice(-4)
-          : '••••';
-      }
-    }
-  }
-  // Mask api_secret
-  if (clone.api_secret) {
-    clone.api_secret = clone.api_secret.length > 4
-      ? '•'.repeat(clone.api_secret.length - 4) + clone.api_secret.slice(-4)
-      : '••••';
-  }
-  return clone;
 }
 
 function formatUptime(ms: number): string {

@@ -133,6 +133,7 @@ export interface TunnelConfig {
   public_url?: string;
   token?: string;              // Cloudflare Tunnel token for stable URLs
   expose_dashboard?: boolean;  // allow dashboard access via tunnel (default: false)
+  auto_start?: boolean;        // remember tunnel state across restarts
 }
 
 export interface SettingsConfig {
@@ -149,6 +150,8 @@ export interface McpConfig {
   enabled?: boolean;
   port?: number;       // HTTP transport port (default 4100)
   stdio?: boolean;     // Enable stdio transport
+  expose?: boolean;    // allow MCP access via tunnel (default: false)
+  secret?: string;     // Bearer token required for MCP access
 }
 
 export interface AppConfig {

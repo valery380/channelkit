@@ -1,11 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API } from '../api.js';
+import McpConnectModal from './McpConnectModal.jsx';
 
 export default function Header() {
-  const { wsConnected, tunnelActive, tunnelUrl } = useAppState();
+  const { wsConnected, tunnelActive, tunnelUrl, mcpActive, mcpUrl } = useAppState();
   const dispatch = useDispatch();
   const [tunnelLoading, setTunnelLoading] = useState(false);
+  const [mcpLoading, setMcpLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [connectOpen, setConnectOpen] = useState(false);
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   async function toggleTunnel() {
     setTunnelLoading(true);
@@ -29,80 +40,119 @@ export default function Header() {
     }
   }
 
+  async function toggleMcp() {
+    setMcpLoading(true);
+    try {
+      if (mcpActive) {
+        await fetch(API + '/api/mcp/stop', { method: 'POST' });
+        dispatch({ type: 'SET_MCP', payload: { active: false, url: null } });
+      } else {
+        const res = await fetch(API + '/api/mcp/start', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          dispatch({ type: 'SET_MCP', payload: { active: true, url: data.url } });
+          setToast(`MCP server is running on ${data.url}`);
+        } else {
+          alert('Failed to start MCP: ' + (data.error || 'Unknown error'));
+        }
+      }
+    } catch (err) {
+      alert('MCP error: ' + err.message);
+    } finally {
+      setMcpLoading(false);
+    }
+  }
+
   return (
-    <header className="flex items-center justify-between whitespace-nowrap border-b border-border bg-surface px-6 lg:px-10 py-3">
-      <div className="flex items-center gap-8">
-        {/* Logo */}
-        <div className="flex items-center gap-3 text-primary">
-          <div className="size-8 flex items-center justify-center bg-primary/10 rounded-lg">
-            <span className="material-symbols-outlined text-primary">hub</span>
-          </div>
-          <h2 className="text-text text-lg font-bold leading-tight tracking-tight">ChannelKit</h2>
-        </div>
-
-        {/* Live Badge */}
-        <div className={`hidden md:flex items-center gap-2 px-3 py-1 rounded-full border ${
-          wsConnected
-            ? 'bg-green-light text-green border-green/20'
-            : 'bg-red-light text-red border-red/20'
-        }`}>
-          <span className="relative flex h-2 w-2">
-            {wsConnected && (
-              <span className="animate-ping-dot absolute inline-flex h-full w-full rounded-full bg-green opacity-75" />
-            )}
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${wsConnected ? 'bg-green' : 'bg-red'}`} />
-          </span>
-          <span className="text-xs font-bold uppercase tracking-wider">
-            {wsConnected ? 'Live' : 'Offline'}
-          </span>
-        </div>
-
-        {/* Search */}
-        <label className="hidden md:flex flex-col min-w-40 h-9 max-w-64">
-          <div className="flex w-full flex-1 items-stretch rounded-lg h-full border border-border">
-            <div className="text-dim flex items-center justify-center pl-3 rounded-l-lg bg-bg-light">
-              <span className="material-symbols-outlined text-[20px]">search</span>
+    <>
+      <header className="flex items-center justify-between whitespace-nowrap border-b border-border bg-surface px-6 lg:px-10 py-3">
+        <div className="flex items-center gap-8">
+          {/* Logo */}
+          <div className="flex items-center gap-3 text-primary">
+            <div className="size-8 flex items-center justify-center bg-primary/10 rounded-lg">
+              <span className="material-symbols-outlined text-primary">hub</span>
             </div>
-            <input
-              className="flex w-full min-w-0 flex-1 border-none bg-bg-light text-text focus:ring-0 focus:outline-none text-sm placeholder:text-dim px-3"
-              placeholder="Search logs..."
-            />
+            <h2 className="text-text text-lg font-bold leading-tight tracking-tight">ChannelKit</h2>
           </div>
-        </label>
-      </div>
 
-      <div className="flex items-center gap-4">
-        {/* Externalize button */}
-        <button
-          onClick={toggleTunnel}
-          disabled={tunnelLoading}
-          className={`hidden sm:flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium transition-colors ${
-            tunnelActive
-              ? 'bg-green text-white hover:bg-green/90'
-              : 'border border-border text-dim hover:text-primary hover:border-primary'
-          } disabled:opacity-50 disabled:cursor-not-allowed`}
-        >
-          <span className="material-symbols-outlined text-[18px]">public</span>
-          <span>
-            {tunnelLoading
-              ? (tunnelActive ? 'Stopping\u2026' : 'Starting\u2026')
-              : (tunnelActive ? 'External' : 'Externalize')}
-          </span>
-        </button>
-
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          <button className="flex size-9 cursor-pointer items-center justify-center rounded-lg bg-bg-light text-dim hover:bg-border transition-colors">
-            <span className="material-symbols-outlined text-[20px]">notifications</span>
-          </button>
-          <button className="flex size-9 cursor-pointer items-center justify-center rounded-lg bg-bg-light text-dim hover:bg-border transition-colors">
-            <span className="material-symbols-outlined text-[20px]">add</span>
-          </button>
-          <div className="h-9 w-9 rounded-full bg-primary/10 border border-primary/20 overflow-hidden flex items-center justify-center">
-            <span className="material-symbols-outlined text-primary text-[20px]">person</span>
+          {/* Live Badge */}
+          <div className={`hidden md:flex items-center gap-2 px-3 py-1 rounded-full border ${
+            wsConnected
+              ? 'bg-green-light text-green border-green/20'
+              : 'bg-red-light text-red border-red/20'
+          }`}>
+            <span className="relative flex h-2 w-2">
+              {wsConnected && (
+                <span className="animate-ping-dot absolute inline-flex h-full w-full rounded-full bg-green opacity-75" />
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${wsConnected ? 'bg-green' : 'bg-red'}`} />
+            </span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {wsConnected ? 'Live' : 'Offline'}
+            </span>
           </div>
+
         </div>
-      </div>
-    </header>
+
+        <div className="flex items-center gap-4">
+          {/* MCP toggle + connect */}
+          <div className="hidden sm:flex items-center gap-1">
+            <label className={`flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium cursor-pointer select-none transition-colors ${
+              mcpActive
+                ? 'bg-primary/10 text-primary border border-primary/30 rounded-r-none'
+                : 'border border-border text-dim hover:text-primary hover:border-primary'
+            } ${mcpLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              <input
+                type="checkbox"
+                checked={mcpActive}
+                onChange={toggleMcp}
+                disabled={mcpLoading}
+                className="accent-primary"
+              />
+              <span>MCP</span>
+            </label>
+            {mcpActive && (
+              <button
+                onClick={() => setConnectOpen(true)}
+                className="flex items-center justify-center h-9 w-9 rounded-lg rounded-l-none bg-primary/10 text-primary border border-primary/30 border-l-0 hover:bg-primary/20 transition-colors cursor-pointer"
+                title="Connection config"
+              >
+                <span className="material-symbols-outlined text-[18px]">integration_instructions</span>
+              </button>
+            )}
+          </div>
+
+          {/* Externalize toggle */}
+          <label className={`hidden sm:flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium cursor-pointer select-none transition-colors ${
+            tunnelActive
+              ? 'bg-primary/10 text-primary border border-primary/30'
+              : 'border border-border text-dim hover:text-primary hover:border-primary'
+          } ${tunnelLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <input
+              type="checkbox"
+              checked={tunnelActive}
+              onChange={toggleTunnel}
+              disabled={tunnelLoading}
+              className="accent-primary"
+            />
+            <span>External</span>
+          </label>
+
+        </div>
+      </header>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 bg-surface border border-primary/30 rounded-xl shadow-lg animate-slide-up">
+          <span className="material-symbols-outlined text-primary text-[20px]">check_circle</span>
+          <span className="text-sm text-text">{toast}</span>
+          <button onClick={() => setToast(null)} className="text-dim hover:text-text ml-2">
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      )}
+
+      {connectOpen && <McpConnectModal onClose={() => setConnectOpen(false)} />}
+    </>
   );
 }

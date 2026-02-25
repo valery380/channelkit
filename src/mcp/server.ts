@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { randomUUID } from 'crypto';
 import express from 'express';
 import { createServer } from 'http';
@@ -14,16 +15,18 @@ export interface McpServerConfig {
 
 /**
  * ChannelKit MCP Server — exposes ChannelKit functionality as MCP tools.
- * 
- * Supports two transports:
+ *
+ * Supports three transports:
  * - stdio: for local integrations (Claude Desktop, etc.)
- * - HTTP + SSE (Streamable HTTP): for remote access
+ * - Streamable HTTP (/mcp): for newer clients
+ * - SSE (/sse + /messages): for older clients (Antigravity, etc.)
  */
 export class ChannelKitMcpServer {
   private mcpServer: McpServer;
   private httpApp?: ReturnType<typeof express>;
   private httpServer?: ReturnType<typeof createServer>;
-  private transport?: StreamableHTTPServerTransport;
+  private httpSessions: Map<string, StreamableHTTPServerTransport> = new Map();
+  private sseTransports: Map<string, SSEServerTransport> = new Map();
 
   constructor(private ctx: McpContext, private config: McpServerConfig = {}) {
     this.mcpServer = new McpServer(
@@ -38,6 +41,16 @@ export class ChannelKitMcpServer {
       }
     );
     registerTools(this.mcpServer, ctx);
+  }
+
+  /** Create a fresh McpServer instance with the same tools (for per-connection SSE) */
+  private createMcpServer(): McpServer {
+    const server = new McpServer(
+      { name: 'channelkit', version: '0.1.0' },
+      { capabilities: { tools: {} } }
+    );
+    registerTools(server, this.ctx);
+    return server;
   }
 
   /**
@@ -59,16 +72,14 @@ export class ChannelKitMcpServer {
     this.httpApp = express();
     this.httpApp.use(express.json());
 
-    // Single stateful transport per server instance
-    this.transport = new StreamableHTTPServerTransport({
+    const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
 
-    await this.mcpServer.connect(this.transport);
+    await this.mcpServer.connect(transport);
 
-    // Route all MCP requests through /mcp
     this.httpApp.all('/mcp', async (req, res) => {
-      await this.transport!.handleRequest(req, res, req.body);
+      await transport.handleRequest(req, res, req.body);
     });
 
     // Health check
@@ -90,22 +101,68 @@ export class ChannelKitMcpServer {
 
   /**
    * Mount MCP routes on an existing Express app (shares port with API server).
+   * Supports both Streamable HTTP (/mcp) and legacy SSE (/sse + /messages).
+   * Each client session gets its own McpServer + transport pair.
    */
-  mountOnExpress(app: ReturnType<typeof express>): void {
-    this.transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: () => randomUUID(),
-    });
-
-    // Connect async — fire and forget (tools are already registered)
-    this.mcpServer.connect(this.transport).catch((err) => {
-      console.error('[mcp] Failed to connect transport:', err);
-    });
-
+  async mountOnExpress(app: ReturnType<typeof express>): Promise<void> {
+    // ── Streamable HTTP transport (newer clients like Claude Desktop) ──
     app.all('/mcp', async (req, res) => {
-      await this.transport!.handleRequest(req, res, req.body);
+      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+      if (sessionId) {
+        // Existing session — route to its transport
+        const transport = this.httpSessions.get(sessionId);
+        if (transport) {
+          await transport.handleRequest(req, res, req.body);
+        } else {
+          res.status(400).json({
+            jsonrpc: '2.0',
+            error: { code: -32600, message: 'Invalid Request: session not found' },
+            id: null,
+          });
+        }
+        return;
+      }
+
+      // New session — create a dedicated transport + server
+      const id = randomUUID();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => id,
+      });
+
+      const server = this.createMcpServer();
+      await server.connect(transport);
+
+      this.httpSessions.set(id, transport);
+      transport.onclose = () => { this.httpSessions.delete(id); };
+
+      await transport.handleRequest(req, res, req.body);
     });
 
-    console.log('[mcp] MCP endpoint mounted at /mcp');
+    // ── Legacy SSE transport (Antigravity, older clients) ──
+    app.get('/sse', async (req, res) => {
+      const transport = new SSEServerTransport('/messages', res);
+      this.sseTransports.set(transport.sessionId, transport);
+
+      res.on('close', () => {
+        this.sseTransports.delete(transport.sessionId);
+      });
+
+      const server = this.createMcpServer();
+      await server.connect(transport);
+    });
+
+    app.post('/messages', async (req, res) => {
+      const sessionId = req.query.sessionId as string;
+      const transport = this.sseTransports.get(sessionId);
+      if (transport) {
+        await transport.handlePostMessage(req, res, req.body);
+      } else {
+        res.status(400).json({ error: 'No active SSE session for this sessionId' });
+      }
+    });
+
+    console.log('[mcp] MCP endpoints mounted: /mcp (Streamable HTTP), /sse (SSE)');
   }
 
   async stop(): Promise<void> {

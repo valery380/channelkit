@@ -21,7 +21,9 @@
       "Bash(git push:*)",
       "Bash(npx vite build:*)",
       "Bash(lsof:*)",
-      "Bash(kill:*)"
+      "Bash(kill:*)",
+      "Bash(npx @modelcontextprotocol/inspector:*)",
+      "Bash(timeout:*)"
     ]
   }
 }

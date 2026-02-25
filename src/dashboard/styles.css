@@ -49,12 +49,20 @@ body {
   to { background: transparent; }
 }
 
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 @layer utilities {
   .animate-ping-dot {
     animation: ping-dot 1s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
   .animate-fade-in-row {
     animation: fade-in-row 0.5s ease;
+  }
+  .animate-slide-up {
+    animation: slide-up 0.3s ease-out;
   }
 }
 
@@ -88,6 +96,38 @@ body {
 }
 .toggle-switch:checked::after {
   transform: translateX(20px);
+}
+
+/* Small toggle for inline use */
+.toggle-switch-sm {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: #cbd5e1;
+  border-radius: 9999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 2px;
+  border: none;
+}
+.toggle-switch-sm::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease;
+}
+.toggle-switch-sm:checked {
+  background: var(--color-primary);
+}
+.toggle-switch-sm:checked::after {
+  transform: translateX(16px);
 }
 
 /* Server log scrollbar */

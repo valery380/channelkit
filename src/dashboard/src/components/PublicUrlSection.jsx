@@ -1,33 +1,30 @@
 import { useState } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API } from '../api.js';
+import McpConnectModal from './McpConnectModal.jsx';
 
 export default function PublicUrlSection() {
-  const { tunnelActive, tunnelUrl, tunnelHasToken, hasSmsWebhookChannels, tunnelExposeDashboard } = useAppState();
+  const { tunnelActive, tunnelUrl, tunnelHasToken, hasSmsWebhookChannels, tunnelExposeDashboard, mcpActive, mcpExpose, mcpHasSecret, mcpUrl: mcpLocalUrl } = useAppState();
   const dispatch = useDispatch();
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
   const [token, setToken] = useState('');
   const [hostname, setHostname] = useState('');
   const [hasClearable, setHasClearable] = useState(false);
 
   if (!tunnelActive || !tunnelUrl) return null;
 
-  function copyUrl() {
-    navigator.clipboard.writeText(tunnelUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
+  const dashboardUrl = tunnelUrl + '/dashboard';
+  const mcpPublicUrl = tunnelUrl + '/mcp';
+  const mcpDisplayUrl = mcpExpose ? mcpPublicUrl : mcpLocalUrl;
 
-  async function stopTunnel() {
-    try {
-      await fetch(API + '/api/tunnel/stop', { method: 'POST' });
-      dispatch({ type: 'SET_TUNNEL', payload: { active: false, url: null } });
-    } catch (err) {
-      alert('Failed to stop tunnel: ' + err.message);
-    }
+  function copyText(text, field) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    });
   }
 
   async function updateEndpoints() {
@@ -99,69 +96,130 @@ export default function PublicUrlSection() {
     dispatch({ type: 'SET_TUNNEL', payload: { exposeDashboard: checked } });
   }
 
+  async function toggleExposeMcp(checked) {
+    await fetch(API + '/api/mcp/expose', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: checked }),
+    });
+    dispatch({ type: 'SET_MCP', payload: { exposeMcp: checked } });
+  }
+
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Public URL Card */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              <p className="text-text text-base font-bold leading-tight">Public URL</p>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                tunnelHasToken
-                  ? 'bg-primary/10 text-primary'
-                  : 'bg-orange-light text-orange'
-              }`}>
-                {tunnelHasToken ? 'Stable' : 'Temporary'}
-              </span>
-            </div>
-            <p className="text-dim text-sm font-mono truncate max-w-[280px]">{tunnelUrl}</p>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+      <div className="rounded-xl border border-border bg-surface shadow-sm divide-y divide-border">
+        {/* Public URL row */}
+        <div className="flex items-center gap-4 px-5 h-14">
+          <span className="text-dim text-sm font-medium w-28 shrink-0">Public URL</span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+            tunnelHasToken
+              ? 'bg-primary/10 text-primary'
+              : 'bg-orange-light text-orange'
+          }`}>
+            {tunnelHasToken ? 'Stable' : 'Temporary'}
+          </span>
+          <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{tunnelUrl}</span>
+          <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={copyUrl}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-medium hover:bg-primary-hover transition-colors"
+              onClick={() => copyText(tunnelUrl, 'url')}
+              className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+              title="Copy URL"
             >
-              <span className="material-symbols-outlined text-[18px]">content_copy</span>
-              <span>{copied ? 'Copied!' : 'Copy URL'}</span>
+              <span className="material-symbols-outlined text-[18px]">{copiedField === 'url' ? 'check' : 'content_copy'}</span>
             </button>
             <a
               href={tunnelUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 sm:flex-none flex items-center justify-center rounded-lg h-9 w-9 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+              className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+              title="Open URL"
             >
-              <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+              <span className="material-symbols-outlined text-[18px]">open_in_new</span>
             </a>
-            <button
-              onClick={stopTunnel}
-              className="flex items-center justify-center rounded-lg h-9 px-3 text-red text-sm font-medium border border-border hover:bg-red-light transition-colors"
-            >
-              Stop
-            </button>
           </div>
         </div>
 
-        {/* Dashboard Access Card */}
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-text flex items-center justify-center rounded-lg bg-bg-light size-10">
-                <span className="material-symbols-outlined">public</span>
+        {/* Dashboard Access row */}
+        <div className="flex items-center gap-4 px-5 h-14">
+          <span className="text-dim text-sm font-medium w-28 shrink-0">Dashboard</span>
+          <input
+            type="checkbox"
+            className="toggle-switch-sm shrink-0"
+            checked={tunnelExposeDashboard}
+            onChange={e => toggleExpose(e.target.checked)}
+          />
+          {tunnelExposeDashboard ? (
+            <>
+              <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{dashboardUrl}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => copyText(dashboardUrl, 'dashboard')}
+                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                  title="Copy dashboard URL"
+                >
+                  <span className="material-symbols-outlined text-[18px]">{copiedField === 'dashboard' ? 'check' : 'content_copy'}</span>
+                </button>
+                <a
+                  href={dashboardUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                  title="Open dashboard"
+                >
+                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                </a>
               </div>
-              <p className="text-text text-sm font-semibold">Dashboard Access</p>
-            </div>
-            <input
-              type="checkbox"
-              className="toggle-switch"
-              checked={tunnelExposeDashboard}
-              onChange={e => toggleExpose(e.target.checked)}
-            />
-          </div>
+            </>
+          ) : (
+            <span className="text-dim/50 text-sm italic flex-1">Disabled</span>
+          )}
+        </div>
 
-          {/* Stable URL setup link */}
+        {/* MCP Access row */}
+        {mcpActive && (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-4 px-5 h-14">
+              <span className="text-dim text-sm font-medium w-28 shrink-0">MCP</span>
+              <input
+                type="checkbox"
+                className="toggle-switch-sm shrink-0"
+                checked={mcpExpose}
+                onChange={e => toggleExposeMcp(e.target.checked)}
+                style={{ width: 36, height: 20 }}
+              />
+              <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{mcpDisplayUrl}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => copyText(mcpDisplayUrl, 'mcp')}
+                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                  title="Copy MCP URL"
+                >
+                  <span className="material-symbols-outlined text-[18px]">{copiedField === 'mcp' ? 'check' : 'content_copy'}</span>
+                </button>
+                <button
+                  onClick={() => setConnectOpen(true)}
+                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                  title="Connection config"
+                >
+                  <span className="material-symbols-outlined text-[18px]">integration_instructions</span>
+                </button>
+              </div>
+            </div>
+            {!mcpHasSecret && (
+              <div className="flex items-center gap-2 px-5 pb-3 text-xs text-orange">
+                <span className="material-symbols-outlined text-[16px]">warning</span>
+                <span>MCP is accessible without authentication. <a href="#settings" className="text-primary underline">Add a secret</a> in Settings to secure it.</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Stable URL warning & SMS update - below the box */}
+      {(!tunnelHasToken || (!tunnelHasToken && hasSmsWebhookChannels)) && (
+        <div className="flex items-center gap-3 flex-wrap text-xs text-dim mt-2">
           {!tunnelHasToken && (
-            <div className="flex items-center gap-2 text-xs text-dim">
+            <>
               <span className="material-symbols-outlined text-[16px] text-yellow">warning</span>
               <span>URL changes each restart.</span>
               <button onClick={openSetup} className="text-primary underline cursor-pointer bg-transparent border-none text-xs">
@@ -170,25 +228,23 @@ export default function PublicUrlSection() {
               <button onClick={() => setHelpOpen(true)} className="text-dim hover:text-text bg-transparent border-none cursor-pointer p-0">
                 <span className="material-symbols-outlined text-[16px]">help</span>
               </button>
-            </div>
+            </>
           )}
-
-          {/* SMS endpoint update button */}
           {!tunnelHasToken && hasSmsWebhookChannels && (
             <button
               onClick={updateEndpoints}
-              className="flex items-center gap-2 text-xs text-dim border border-border rounded-lg px-3 py-1.5 hover:bg-bg-light transition-colors bg-transparent cursor-pointer self-start"
+              className="flex items-center gap-1 text-xs text-dim border border-border rounded-lg px-2 py-1 hover:bg-bg-light transition-colors bg-transparent cursor-pointer"
             >
               <span className="material-symbols-outlined text-[14px]">sync</span>
               Update SMS endpoints
             </button>
           )}
         </div>
-      </div>
+      )}
 
       {/* Setup Form */}
       {setupOpen && (
-        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm space-y-3 mt-4">
+        <div className="bg-surface border border-border rounded-xl p-5 shadow-sm space-y-3 mt-3">
           <p className="text-sm text-dim">
             For a stable URL, create a free{' '}
             <a href="https://one.dash.cloudflare.com" target="_blank" rel="noreferrer" className="text-primary underline">
@@ -225,6 +281,8 @@ export default function PublicUrlSection() {
           </div>
         </div>
       )}
+
+      {connectOpen && <McpConnectModal onClose={() => setConnectOpen(false)} />}
 
       {/* Help Modal */}
       {helpOpen && (

@@ -199,11 +199,17 @@ export class ChannelKit {
     if (this.config.api_secret) {
       this.apiServer.setApiSecret(this.config.api_secret);
     }
+    if (this.config.mcp?.secret) {
+      this.apiServer.setMcpSecret(this.config.mcp.secret);
+    }
     this.apiServer.captureConsole();
 
-    // Set initial dashboard external access from config
+    // Set initial external access from config
     if (this.config.tunnel?.expose_dashboard) {
       this.apiServer.setExposeDashboard(true);
+    }
+    if (this.config.mcp?.expose) {
+      this.apiServer.setExposeMcp(true);
     }
 
     // Wire up tunnel callbacks for dashboard control
@@ -244,8 +250,41 @@ export class ChannelKit {
       }
     };
 
-    // Start tunnel if configured
-    if (this.config.tunnel) {
+    // Wire up MCP callbacks for dashboard control
+    const apiPort = this.config.apiPort || 4000;
+    this.apiServer.mcpStatus = () => ({
+      active: this.mcpServer != null,
+      url: this.mcpServer ? `http://localhost:${apiPort}/mcp` : null,
+    });
+
+    this.apiServer.mcpStart = async () => {
+      if (this.mcpServer) {
+        return { url: `http://localhost:${apiPort}/mcp` };
+      }
+      const mcpCtx = {
+        channels: this.channelMap,
+        logger: this.logger,
+        configPath: this.configPath,
+        config: this.config,
+        startTime: Date.now(),
+        getPublicUrl: () => this.tunnel?.getPublicUrl() || null,
+      };
+      this.mcpServer = new ChannelKitMcpServer(mcpCtx, this.config.mcp || {});
+      await this.mcpServer.mountOnExpress(this.apiServer.getExpressApp());
+      this.apiServer.setExposeMcp(true);
+      return { url: `http://localhost:${apiPort}/mcp` };
+    };
+
+    this.apiServer.mcpStop = async () => {
+      if (this.mcpServer) {
+        await this.mcpServer.stop();
+        this.mcpServer = undefined;
+        this.apiServer.setExposeMcp(false);
+      }
+    };
+
+    // Start tunnel if configured and auto_start not explicitly disabled
+    if (this.config.tunnel && this.config.tunnel.auto_start !== false) {
       const port = this.config.apiPort || 4000;
       this.tunnel = new TunnelManager(this.config.tunnel, port);
       try {
@@ -255,6 +294,13 @@ export class ChannelKit {
           this.apiServer.setPublicUrl(publicUrl);
           this.tunnelStartedBy = 'cli';
           await this.autoConfigureWebhooks(publicUrl);
+          // Broadcast so any already-connected dashboard gets the updated state
+          this.apiServer.broadcast({
+            type: 'tunnelStatus',
+            active: true,
+            url: publicUrl,
+            exposeDashboard: !!this.config.tunnel?.expose_dashboard,
+          });
         }
       } catch (err: any) {
         console.error(`[tunnel] Failed to start tunnel: ${err.message}`);
@@ -286,18 +332,25 @@ export class ChannelKit {
         this.mcpServer.startStdio().catch((err) => {
           console.error(`[mcp] Stdio transport failed: ${err.message}`);
         });
-      }
-
-      // HTTP transport
-      const mcpPort = this.config.mcp.port || 4100;
-      try {
-        await this.mcpServer.startHttp(mcpPort);
+      } else {
+        // Mount on main Express app (shares port with API server + tunnel)
+        await this.mcpServer.mountOnExpress(this.apiServer.getExpressApp());
+        // Respect the mcp.expose config (already set earlier at line ~211, but ensure it's set)
+        if (this.config.mcp?.expose) {
+          this.apiServer.setExposeMcp(true);
+        }
         const publicUrl = this.tunnel?.getPublicUrl();
         if (publicUrl) {
-          console.log(`[mcp] MCP also available at ${publicUrl}/mcp (via tunnel)`);
+          console.log(`[mcp] MCP available at ${publicUrl}/mcp (via tunnel)`);
         }
-      } catch (err: any) {
-        console.error(`[mcp] HTTP transport failed: ${err.message}`);
+        // Broadcast so any already-connected dashboard gets the updated state
+        this.apiServer.broadcast({
+          type: 'mcpStatus',
+          active: true,
+          url: `http://localhost:${apiPort}/mcp`,
+          exposeMcp: !!this.config.mcp?.expose,
+          hasSecret: !!this.config.mcp?.secret,
+        });
       }
     }
   }

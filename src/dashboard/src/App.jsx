@@ -44,15 +44,17 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Load initial data
+  // Load/reload data on mount and on WebSocket reconnect (e.g. after server restart)
   useEffect(() => {
+    if (!state.wsConnected) return;
+
     // Twilio defaults
     fetch(API + '/api/settings/twilio-defaults')
       .then(r => r.json())
       .then(d => dispatch({ type: 'SET_TWILIO_DEFAULTS', payload: { sid: d.account_sid || '', tok: d.auth_token || '' } }))
       .catch(() => {});
 
-    // Initial config for SMS webhook detection
+    // Config for SMS webhook detection
     fetch(API + '/api/config')
       .then(r => r.json())
       .then(data => {
@@ -68,6 +70,12 @@ export default function App() {
       .then(s => dispatch({ type: 'SET_TUNNEL', payload: { active: s.active, url: s.url } }))
       .catch(() => {});
 
+    // MCP state
+    fetch(API + '/api/mcp/status')
+      .then(r => r.json())
+      .then(s => dispatch({ type: 'SET_MCP', payload: { active: s.active, url: s.url, exposeMcp: s.exposeMcp, hasSecret: s.hasSecret } }))
+      .catch(() => {});
+
     fetch(API + '/api/tunnel/config')
       .then(r => r.json())
       .then(cfg => {
@@ -77,7 +85,7 @@ export default function App() {
         }
       })
       .catch(() => {});
-  }, [dispatch]);
+  }, [state.wsConnected, dispatch]);
 
   // Reload config when configChanged is set via WebSocket
   useEffect(() => {
@@ -124,8 +132,8 @@ export default function App() {
         <div className="w-full max-w-7xl space-y-6">
           <StatsGrid />
           <RestartBanner />
-          <Tabs tabs={TABS} active={tab} />
           <PublicUrlSection />
+          <Tabs tabs={TABS} active={tab} />
           {page}
         </div>
       </main>

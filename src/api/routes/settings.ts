@@ -16,6 +16,11 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
           masked[key] = '';
         }
       }
+      // Include mcp_secret from mcp.secret
+      const mcpSecret = config.mcp?.secret || '';
+      if (mcpSecret) {
+        masked['mcp_secret'] = mcpSecret.length > 4 ? '•'.repeat(mcpSecret.length - 4) + mcpSecret.slice(-4) : '••••';
+      }
       res.json({ settings: masked });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -63,6 +68,18 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
         }
       }
       if (Object.keys(config.settings).length === 0) delete config.settings;
+      // Handle mcp_secret → config.mcp.secret
+      if ('mcp_secret' in req.body) {
+        const val = req.body['mcp_secret']?.trim() || '';
+        if (!config.mcp) config.mcp = {};
+        if (val) {
+          config.mcp.secret = val;
+          ctx.mcpSecret = val;
+        } else {
+          delete config.mcp.secret;
+          ctx.mcpSecret = null;
+        }
+      }
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });

@@ -18,6 +18,15 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
     }
     try {
       const result = await ctx.tunnelStart();
+      // Persist auto_start state
+      if (ctx.configPath) {
+        try {
+          const config = loadConfig(ctx.configPath, { validate: false });
+          if (!config.tunnel) config.tunnel = {};
+          config.tunnel.auto_start = true;
+          saveConfig(ctx.configPath, config);
+        } catch {}
+      }
       ctx.broadcast({ type: 'tunnelStatus', active: true, url: result.url });
       res.json({ ok: true, url: result.url });
     } catch (err: any) {
@@ -33,6 +42,15 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
     }
     try {
       await ctx.tunnelStop();
+      // Persist auto_start state
+      if (ctx.configPath) {
+        try {
+          const config = loadConfig(ctx.configPath, { validate: false });
+          if (!config.tunnel) config.tunnel = {};
+          config.tunnel.auto_start = false;
+          saveConfig(ctx.configPath, config);
+        } catch {}
+      }
       ctx.broadcast({ type: 'tunnelStatus', active: false, url: null });
       res.json({ ok: true });
     } catch (err: any) {

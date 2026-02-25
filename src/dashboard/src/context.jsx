@@ -9,6 +9,10 @@ const initialState = {
   tunnelActive: false,
   tunnelUrl: null,
   tunnelHasToken: false,
+  mcpActive: false,
+  mcpUrl: null,
+  mcpExpose: false,
+  mcpHasSecret: false,
   tunnelExposeDashboard: false,
   hasSmsWebhookChannels: false,
   twilioDefaults: { sid: '', tok: '' },
@@ -51,6 +55,14 @@ function reducer(state, action) {
         tunnelActive: action.payload.active ?? state.tunnelActive,
         tunnelUrl: action.payload.url ?? state.tunnelUrl,
         tunnelExposeDashboard: action.payload.exposeDashboard ?? state.tunnelExposeDashboard,
+      };
+    case 'SET_MCP':
+      return {
+        ...state,
+        mcpActive: action.payload.active ?? state.mcpActive,
+        mcpUrl: action.payload.url ?? state.mcpUrl,
+        mcpExpose: action.payload.exposeMcp ?? state.mcpExpose,
+        mcpHasSecret: action.payload.hasSecret ?? state.mcpHasSecret,
       };
     case 'SET_TUNNEL_HAS_TOKEN':
       return { ...state, tunnelHasToken: action.payload };

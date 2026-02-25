@@ -44,6 +44,18 @@ export function useWebSocket(dispatch) {
             });
           }
 
+          if (msg.type === 'mcpStatus') {
+            dispatch({
+              type: 'SET_MCP',
+              payload: {
+                active: msg.active,
+                url: msg.url || null,
+                exposeMcp: msg.exposeMcp,
+                hasSecret: msg.hasSecret,
+              },
+            });
+          }
+
           if (msg.type === 'configChanged') {
             dispatch({ type: 'SET_CONFIG_CHANGED', payload: true });
           }
