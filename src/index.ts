@@ -13,6 +13,7 @@ import { Logger } from './core/logger';
 import { processInbound, processOutbound } from './media/processor';
 import { TunnelManager } from './core/tunnel';
 import { loadConfig, saveConfig } from './config/parser';
+import { ChannelKitMcpServer } from './mcp';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -23,6 +24,7 @@ export class ChannelKit {
   private onboarding?: Onboarding;
   private tunnel?: TunnelManager;
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
+  private mcpServer?: ChannelKitMcpServer;
 
   constructor(private config: AppConfig, private configPath?: string) {
     // Populate process.env from config.settings (existing env vars take precedence)
@@ -404,6 +406,38 @@ export class ChannelKit {
       }
     });
     console.log('Listening for messages...');
+
+    // Start MCP server if enabled
+    if (this.config.mcp?.enabled) {
+      const mcpCtx = {
+        channels: this.channelMap,
+        logger: this.logger,
+        configPath: this.configPath,
+        config: this.config,
+        startTime: Date.now(),
+        getPublicUrl: () => this.tunnel?.getPublicUrl() || null,
+      };
+      this.mcpServer = new ChannelKitMcpServer(mcpCtx, this.config.mcp);
+
+      if (this.config.mcp.stdio) {
+        // stdio transport — for subprocess usage
+        this.mcpServer.startStdio().catch((err) => {
+          console.error(`[mcp] Stdio transport failed: ${err.message}`);
+        });
+      }
+
+      // HTTP transport
+      const mcpPort = this.config.mcp.port || 4100;
+      try {
+        await this.mcpServer.startHttp(mcpPort);
+        const publicUrl = this.tunnel?.getPublicUrl();
+        if (publicUrl) {
+          console.log(`[mcp] MCP also available at ${publicUrl}/mcp (via tunnel)`);
+        }
+      } catch (err: any) {
+        console.error(`[mcp] HTTP transport failed: ${err.message}`);
+      }
+    }
   }
 
   private async autoConfigureWebhooks(publicUrl: string): Promise<void> {
@@ -489,6 +523,9 @@ export class ChannelKit {
   }
 
   async stop(): Promise<void> {
+    if (this.mcpServer) {
+      await this.mcpServer.stop();
+    }
     if (this.tunnel) {
       await this.tunnel.stop();
     }
