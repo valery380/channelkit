@@ -15,20 +15,20 @@ function SettingsInput({ label, placeholder, sub, value, onChange }) {
   const [visible, setVisible] = useState(false);
   return (
     <div>
-      <label style={{ fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 3 }}>
-        {label}{sub && <span style={{ color: 'var(--dim)', fontWeight: 400 }}> {sub}</span>}
+      <label className="text-xs font-medium block mb-1 text-text">
+        {label}{sub && <span className="text-dim font-normal"> {sub}</span>}
       </label>
-      <div style={{ position: 'relative' }}>
+      <div className="relative">
         <input
           type={visible ? 'text' : 'password'}
           placeholder={placeholder}
           value={value}
           onChange={e => onChange(e.target.value)}
-          style={{ width: '100%', padding: '7px 36px 7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, fontFamily: 'inherit' }}
+          className="w-full py-2 pl-3 pr-14 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
         />
         <button
           onClick={() => setVisible(!visible)}
-          style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: 'var(--dim)', fontSize: 11 }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-dim hover:text-text bg-transparent border-none cursor-pointer px-2 py-1"
         >
           {visible ? 'hide' : 'show'}
         </button>
@@ -72,7 +72,7 @@ export default function Settings() {
     }
     if (Object.keys(body).length === 0) {
       setStatus('No changes to save');
-      setStatusColor('var(--dim)');
+      setStatusColor('text-dim');
       setTimeout(() => setStatus(''), 2000);
       return;
     }
@@ -84,10 +84,9 @@ export default function Settings() {
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
       setStatus('Saved');
-      setStatusColor('var(--green)');
+      setStatusColor('text-green');
       setTimeout(() => setStatus(''), 2000);
       loadSettings();
-      // Refresh twilio defaults
       try {
         const r = await fetch(API + '/api/settings/twilio-defaults');
         const d = await r.json();
@@ -95,7 +94,7 @@ export default function Settings() {
       } catch {}
     } catch (e) {
       setStatus(e.message);
-      setStatusColor('var(--red)');
+      setStatusColor('text-red');
     }
   }
 
@@ -107,32 +106,37 @@ export default function Settings() {
   const apiFields = FIELDS.filter(f => f.group === 'api');
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '24px 0' }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Twilio Defaults</div>
-        <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 12 }}>Default credentials used when adding SMS or Voice channels.</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {twilioFields.map(f => (
-            <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
-          ))}
+    <div className="max-w-xl mx-auto py-6">
+      <div className="bg-surface border border-border rounded-xl p-6 shadow-sm space-y-6">
+        <div>
+          <h3 className="text-sm font-semibold text-text mb-1">Twilio Defaults</h3>
+          <p className="text-xs text-dim mb-4">Default credentials used when adding SMS or Voice channels.</p>
+          <div className="space-y-3">
+            {twilioFields.map(f => (
+              <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20, marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>API Keys</div>
-        <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 12 }}>Keys for speech-to-text and text-to-speech providers.</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {apiFields.map(f => (
-            <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
-          ))}
+        <div className="border-t border-border pt-6">
+          <h3 className="text-sm font-semibold text-text mb-1">API Keys</h3>
+          <p className="text-xs text-dim mb-4">Keys for speech-to-text and text-to-speech providers.</p>
+          <div className="space-y-3">
+            {apiFields.map(f => (
+              <SettingsInput key={f.key} label={f.label} placeholder={f.placeholder} sub={f.sub} value={values[f.key] || ''} onChange={v => update(f.key, v)} />
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button onClick={save} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          Save Settings
-        </button>
-        {status && <span style={{ fontSize: 12, color: statusColor }}>{status}</span>}
+        <div className="flex items-center gap-3 pt-2">
+          <button
+            onClick={save}
+            className="px-5 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors"
+          >
+            Save Settings
+          </button>
+          {status && <span className={`text-xs ${statusColor}`}>{status}</span>}
+        </div>
       </div>
     </div>
   );
