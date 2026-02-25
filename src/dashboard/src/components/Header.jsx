@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API } from '../api.js';
-import McpConnectModal from './McpConnectModal.jsx';
 
 export default function Header() {
   const { wsConnected, tunnelActive, tunnelUrl, mcpActive, mcpUrl } = useAppState();
@@ -9,7 +8,6 @@ export default function Header() {
   const [tunnelLoading, setTunnelLoading] = useState(false);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [toast, setToast] = useState(null);
-  const [connectOpen, setConnectOpen] = useState(false);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -95,32 +93,21 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* MCP toggle + connect */}
-          <div className="hidden sm:flex items-center gap-1">
-            <label className={`flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium cursor-pointer select-none transition-colors ${
-              mcpActive
-                ? 'bg-primary/10 text-primary border border-primary/30 rounded-r-none'
-                : 'border border-border text-dim hover:text-primary hover:border-primary'
-            } ${mcpLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              <input
-                type="checkbox"
-                checked={mcpActive}
-                onChange={toggleMcp}
-                disabled={mcpLoading}
-                className="accent-primary"
-              />
-              <span>MCP</span>
-            </label>
-            {mcpActive && (
-              <button
-                onClick={() => setConnectOpen(true)}
-                className="flex items-center justify-center h-9 w-9 rounded-lg rounded-l-none bg-primary/10 text-primary border border-primary/30 border-l-0 hover:bg-primary/20 transition-colors cursor-pointer"
-                title="Connection config"
-              >
-                <span className="material-symbols-outlined text-[18px]">integration_instructions</span>
-              </button>
-            )}
-          </div>
+          {/* MCP toggle */}
+          <label className={`hidden sm:flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium cursor-pointer select-none transition-colors ${
+            mcpActive
+              ? 'bg-primary/10 text-primary border border-primary/30'
+              : 'border border-border text-dim hover:text-primary hover:border-primary'
+          } ${mcpLoading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <input
+              type="checkbox"
+              checked={mcpActive}
+              onChange={toggleMcp}
+              disabled={mcpLoading}
+              className="accent-primary"
+            />
+            <span>MCP</span>
+          </label>
 
           {/* Externalize toggle */}
           <label className={`hidden sm:flex items-center gap-2 px-4 h-9 rounded-lg text-sm font-medium cursor-pointer select-none transition-colors ${
@@ -151,8 +138,6 @@ export default function Header() {
           </button>
         </div>
       )}
-
-      {connectOpen && <McpConnectModal onClose={() => setConnectOpen(false)} />}
     </>
   );
 }

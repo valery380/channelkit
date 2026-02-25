@@ -14,11 +14,14 @@ export default function PublicUrlSection() {
   const [hostname, setHostname] = useState('');
   const [hasClearable, setHasClearable] = useState(false);
 
-  if (!tunnelActive || !tunnelUrl) return null;
+  const hasTunnel = tunnelActive && tunnelUrl;
 
-  const dashboardUrl = tunnelUrl + '/dashboard';
-  const mcpPublicUrl = tunnelUrl + '/mcp';
-  const mcpDisplayUrl = mcpExpose ? mcpPublicUrl : mcpLocalUrl;
+  // Show section if tunnel is active OR MCP is active
+  if (!hasTunnel && !mcpActive) return null;
+
+  const dashboardUrl = hasTunnel ? tunnelUrl + '/dashboard' : '';
+  const mcpPublicUrl = hasTunnel ? tunnelUrl + '/mcp' : '';
+  const mcpDisplayUrl = hasTunnel && mcpExpose ? mcpPublicUrl : mcpLocalUrl;
 
   function copyText(text, field) {
     navigator.clipboard.writeText(text).then(() => {
@@ -108,85 +111,93 @@ export default function PublicUrlSection() {
   return (
     <>
       <div className="rounded-xl border border-border bg-surface shadow-sm divide-y divide-border">
-        {/* Public URL row */}
-        <div className="flex items-center gap-4 px-5 h-14">
-          <span className="text-dim text-sm font-medium w-28 shrink-0">Public URL</span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
-            tunnelHasToken
-              ? 'bg-primary/10 text-primary'
-              : 'bg-orange-light text-orange'
-          }`}>
-            {tunnelHasToken ? 'Stable' : 'Temporary'}
-          </span>
-          <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{tunnelUrl}</span>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => copyText(tunnelUrl, 'url')}
-              className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
-              title="Copy URL"
-            >
-              <span className="material-symbols-outlined text-[18px]">{copiedField === 'url' ? 'check' : 'content_copy'}</span>
-            </button>
-            <a
-              href={tunnelUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
-              title="Open URL"
-            >
-              <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-            </a>
+        {/* Public URL row — only when tunnel is active */}
+        {hasTunnel && (
+          <div className="flex items-center gap-4 px-5 h-14">
+            <span className="text-dim text-sm font-medium w-28 shrink-0">Public URL</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+              tunnelHasToken
+                ? 'bg-primary/10 text-primary'
+                : 'bg-orange-light text-orange'
+            }`}>
+              {tunnelHasToken ? 'Stable' : 'Temporary'}
+            </span>
+            <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{tunnelUrl}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => copyText(tunnelUrl, 'url')}
+                className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                title="Copy URL"
+              >
+                <span className="material-symbols-outlined text-[18px]">{copiedField === 'url' ? 'check' : 'content_copy'}</span>
+              </button>
+              <a
+                href={tunnelUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                title="Open URL"
+              >
+                <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+              </a>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Dashboard Access row */}
-        <div className="flex items-center gap-4 px-5 h-14">
-          <span className="text-dim text-sm font-medium w-28 shrink-0">Dashboard</span>
-          <input
-            type="checkbox"
-            className="toggle-switch-sm shrink-0"
-            checked={tunnelExposeDashboard}
-            onChange={e => toggleExpose(e.target.checked)}
-          />
-          {tunnelExposeDashboard ? (
-            <>
-              <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{dashboardUrl}</span>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => copyText(dashboardUrl, 'dashboard')}
-                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
-                  title="Copy dashboard URL"
-                >
-                  <span className="material-symbols-outlined text-[18px]">{copiedField === 'dashboard' ? 'check' : 'content_copy'}</span>
-                </button>
-                <a
-                  href={dashboardUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
-                  title="Open dashboard"
-                >
-                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                </a>
-              </div>
-            </>
-          ) : (
-            <span className="text-dim/50 text-sm italic flex-1">Disabled</span>
-          )}
-        </div>
+        {/* Dashboard Access row — only when tunnel is active */}
+        {hasTunnel && (
+          <div className="flex items-center gap-4 px-5 h-14">
+            <span className="text-dim text-sm font-medium w-28 shrink-0">Dashboard</span>
+            <input
+              type="checkbox"
+              className="toggle-switch-sm shrink-0"
+              checked={tunnelExposeDashboard}
+              onChange={e => toggleExpose(e.target.checked)}
+            />
+            {tunnelExposeDashboard ? (
+              <>
+                <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{dashboardUrl}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => copyText(dashboardUrl, 'dashboard')}
+                    className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                    title="Copy dashboard URL"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{copiedField === 'dashboard' ? 'check' : 'content_copy'}</span>
+                  </button>
+                  <a
+                    href={dashboardUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center rounded-lg h-8 w-8 bg-bg-light text-dim border border-border hover:bg-border transition-colors"
+                    title="Open dashboard"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                  </a>
+                </div>
+              </>
+            ) : (
+              <span className="text-dim/50 text-sm italic flex-1">Disabled</span>
+            )}
+          </div>
+        )}
 
-        {/* MCP Access row */}
+        {/* MCP Access row — always shown when MCP is active */}
         {mcpActive && (
           <div className="flex flex-col">
             <div className="flex items-center gap-4 px-5 h-14">
               <span className="text-dim text-sm font-medium w-28 shrink-0">MCP</span>
-              <input
-                type="checkbox"
-                className="toggle-switch-sm shrink-0"
-                checked={mcpExpose}
-                onChange={e => toggleExposeMcp(e.target.checked)}
-                style={{ width: 36, height: 20 }}
-              />
+              {hasTunnel ? (
+                <input
+                  type="checkbox"
+                  className="toggle-switch-sm shrink-0"
+                  checked={mcpExpose}
+                  onChange={e => toggleExposeMcp(e.target.checked)}
+                  style={{ width: 36, height: 20 }}
+                />
+              ) : (
+                <span className="w-[36px] shrink-0" />
+              )}
               <span className="text-text text-sm font-mono truncate flex-1 min-w-0">{mcpDisplayUrl}</span>
               <div className="flex items-center gap-2 shrink-0">
                 <button
@@ -215,8 +226,8 @@ export default function PublicUrlSection() {
         )}
       </div>
 
-      {/* Stable URL warning & SMS update - below the box */}
-      {(!tunnelHasToken || (!tunnelHasToken && hasSmsWebhookChannels)) && (
+      {/* Stable URL warning & SMS update - below the box (tunnel only) */}
+      {hasTunnel && (!tunnelHasToken || (!tunnelHasToken && hasSmsWebhookChannels)) && (
         <div className="flex items-center gap-3 flex-wrap text-xs text-dim mt-2">
           {!tunnelHasToken && (
             <>
