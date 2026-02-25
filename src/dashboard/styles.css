@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1162d4;
+  --color-primary-hover: #0e52b5;
+  --color-bg-light: #f6f7f8;
+  --color-bg-dark: #101822;
+  --color-surface: #ffffff;
+  --color-surface-dark: #0f172a;
+  --color-border: #e2e8f0;
+  --color-border-dark: #1e293b;
+  --color-text: #0f172a;
+  --color-text-light: #f1f5f9;
+  --color-dim: #64748b;
+  --color-dim-light: #94a3b8;
+  --color-green: #16a34a;
+  --color-green-light: #dcfce7;
+  --color-red: #dc2626;
+  --color-red-light: #fef2f2;
+  --color-orange: #ea580c;
+  --color-orange-light: #fff7ed;
+  --color-yellow: #ca8a04;
+  --color-yellow-light: #fefce8;
+  --color-highlight: rgba(17, 98, 212, 0.06);
+
+  --font-family-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-mono: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+/* Custom animations */
+@keyframes ping-dot {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in-row {
+  from { background: rgba(17, 98, 212, 0.15); }
+  to { background: transparent; }
+}
+
+@layer utilities {
+  .animate-ping-dot {
+    animation: ping-dot 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .animate-fade-in-row {
+    animation: fade-in-row 0.5s ease;
+  }
+}
+
+/* Toggle switch */
+.toggle-switch {
+  appearance: none;
+  width: 48px;
+  height: 28px;
+  background: #cbd5e1;
+  border-radius: 9999px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 2px;
+  border: none;
+}
+.toggle-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease;
+}
+.toggle-switch:checked {
+  background: var(--color-primary);
+}
+.toggle-switch:checked::after {
+  transform: translateX(20px);
+}
+
+/* Server log scrollbar */
+.server-log-area::-webkit-scrollbar { width: 8px; }
+.server-log-area::-webkit-scrollbar-track { background: transparent; }
+.server-log-area::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }

@@ -1,6 +1,7 @@
 import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
+  fetchLatestBaileysVersion,
   WASocket,
   proto,
   makeCacheableSignalKeyStore,
@@ -36,12 +37,16 @@ export class WhatsAppChannel extends Channel {
       fatal: () => {},
     };
 
+    const { version } = await fetchLatestBaileysVersion();
     const sock = makeWASocket({
+      version,
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, silentLogger as any),
       },
       logger: silentLogger as any,
+      browser: ['ChannelKit', 'Desktop', '1.0.0'],
+      syncFullHistory: false,
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -140,12 +145,16 @@ export class WhatsAppChannel extends Channel {
       fatal: () => {},
     };
 
+    const { version } = await fetchLatestBaileysVersion();
     this.sock = makeWASocket({
+      version,
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, silentLogger as any),
       },
       logger: silentLogger as any,
+      browser: ['ChannelKit', 'Desktop', '1.0.0'],
+      syncFullHistory: false,
     });
 
     this.sock.ev.on('creds.update', saveCreds);

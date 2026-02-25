@@ -33,6 +33,23 @@ export class TwilioProvisioner {
     this.client = Twilio(config.accountSid, config.authToken);
   }
 
+  async listOwnedNumbers(): Promise<{ phoneNumber: string; friendlyName: string; capabilities: { sms: boolean; mms: boolean; voice: boolean } }[]> {
+    try {
+      const numbers = await this.client.incomingPhoneNumbers.list({ limit: 100 });
+      return numbers.map(n => ({
+        phoneNumber: n.phoneNumber,
+        friendlyName: n.friendlyName,
+        capabilities: {
+          sms: n.capabilities?.sms || false,
+          mms: n.capabilities?.mms || false,
+          voice: n.capabilities?.voice || false,
+        },
+      }));
+    } catch (err: any) {
+      throw new Error(`Failed to list numbers: ${err.message}`);
+    }
+  }
+
   async searchNumbers(countryCode: string, options?: { type?: 'mobile' | 'local'; limit?: number; smsEnabled?: boolean; voiceEnabled?: boolean }): Promise<AvailableNumber[]> {
     const type = options?.type || 'mobile';
     const limit = options?.limit || 5;
