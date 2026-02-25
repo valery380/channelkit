@@ -4,7 +4,8 @@ import { useWebSocket } from './hooks/useWebSocket.js';
 import { useStats } from './hooks/useStats.js';
 import { API } from './api.js';
 import Header from './components/Header.jsx';
-import TunnelBar from './components/TunnelBar.jsx';
+import StatsGrid from './components/StatsGrid.jsx';
+import PublicUrlSection from './components/PublicUrlSection.jsx';
 import RestartBanner from './components/RestartBanner.jsx';
 import Tabs from './components/Tabs.jsx';
 import Logs from './components/Logs.jsx';
@@ -13,13 +14,14 @@ import Channels from './components/Channels.jsx';
 import ServerLogs from './components/ServerLogs.jsx';
 import Settings from './components/Settings.jsx';
 import SendModal from './components/SendModal.jsx';
+import Footer from './components/Footer.jsx';
 
 const TABS = [
-  { hash: '#logs', label: 'Messages' },
-  { hash: '#services', label: 'Services' },
-  { hash: '#channels', label: 'Channels' },
-  { hash: '#server-logs', label: 'Server Log' },
-  { hash: '#settings', label: 'Settings' },
+  { hash: '#logs', label: 'Messages', icon: 'chat' },
+  { hash: '#services', label: 'Services', icon: 'dns' },
+  { hash: '#channels', label: 'Channels', icon: 'alt_route' },
+  { hash: '#server-logs', label: 'Server Log', icon: 'terminal' },
+  { hash: '#settings', label: 'Settings', icon: 'settings' },
 ];
 
 function getHash() {
@@ -116,13 +118,19 @@ export default function App() {
   }
 
   return (
-    <>
+    <div className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-bg-light text-text">
       <Header />
-      <TunnelBar />
-      <RestartBanner />
-      <Tabs tabs={TABS} active={tab} />
-      <div id="app">{page}</div>
+      <main className="flex-1 flex flex-col items-center px-6 lg:px-10 py-6">
+        <div className="w-full max-w-7xl space-y-6">
+          <StatsGrid />
+          <RestartBanner />
+          <Tabs tabs={TABS} active={tab} />
+          <PublicUrlSection />
+          {page}
+        </div>
+      </main>
+      <Footer />
       {sendOpen && <SendModal onClose={() => setSendOpen(false)} />}
-    </>
+    </div>
   );
 }

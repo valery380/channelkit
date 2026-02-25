@@ -30,13 +30,13 @@ export default function SendModal({ onClose }) {
   }, []);
 
   async function send() {
-    if (!channel) { setStatus('Select a channel'); setStatusColor('var(--red)'); return; }
-    if (!phone) { setStatus('Enter a phone number'); setStatusColor('var(--red)'); return; }
-    if (!text) { setStatus('Enter a message'); setStatusColor('var(--red)'); return; }
+    if (!channel) { setStatus('Select a channel'); setStatusColor('text-red'); return; }
+    if (!phone) { setStatus('Enter a phone number'); setStatusColor('text-red'); return; }
+    if (!text) { setStatus('Enter a message'); setStatusColor('text-red'); return; }
 
     setSending(true);
     setStatus('Sending...');
-    setStatusColor('var(--dim)');
+    setStatusColor('text-dim');
 
     const jid = phoneToJid(phone);
     const headers = { 'Content-Type': 'application/json' };
@@ -49,15 +49,15 @@ export default function SendModal({ onClose }) {
       const data = await res.json();
       if (res.ok) {
         setStatus('Message sent!');
-        setStatusColor('var(--green)');
+        setStatusColor('text-green');
         setText('');
       } else {
         setStatus(data.error || 'Failed to send');
-        setStatusColor('var(--red)');
+        setStatusColor('text-red');
       }
     } catch (e) {
       setStatus('Error: ' + e.message);
-      setStatusColor('var(--red)');
+      setStatusColor('text-red');
     } finally {
       setSending(false);
     }
@@ -76,32 +76,69 @@ export default function SendModal({ onClose }) {
 });`;
 
   return (
-    <div className="send-overlay open" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="send-modal">
-        <h3>Send WhatsApp Message</h3>
-        <label>Channel</label>
-        <select value={channel} onChange={e => setChannel(e.target.value)}>
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-surface rounded-xl p-7 max-w-lg w-[90%] shadow-2xl">
+        <h3 className="text-base font-semibold text-text mb-4">Send WhatsApp Message</h3>
+
+        <label className="block text-[11px] font-semibold text-dim uppercase tracking-wider mb-1">Channel</label>
+        <select
+          value={channel}
+          onChange={e => setChannel(e.target.value)}
+          className="w-full mb-3 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary"
+        >
           {channels.length === 0 && <option value="">No WhatsApp channels</option>}
           {channels.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
-        <label>Phone number</label>
-        <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+972542688963" autoFocus />
-        <label>Message</label>
-        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Type your message..." />
-        <div className="send-actions">
-          <button className="btn-cancel" onClick={onClose}>Cancel</button>
-          <button className="btn-send" onClick={send} disabled={sending}>Send</button>
+
+        <label className="block text-[11px] font-semibold text-dim uppercase tracking-wider mb-1">Phone number</label>
+        <input
+          type="tel"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="+972542688963"
+          autoFocus
+          className="w-full mb-3 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary"
+        />
+
+        <label className="block text-[11px] font-semibold text-dim uppercase tracking-wider mb-1">Message</label>
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="Type your message..."
+          className="w-full mb-4 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary resize-y min-h-[80px]"
+        />
+
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={send}
+            disabled={sending}
+            className="px-5 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50"
+          >
+            Send
+          </button>
         </div>
-        {status && <div className="send-status" style={{ color: statusColor }}>{status}</div>}
-        <div className="api-examples">
+
+        {status && <div className={`text-xs mt-3 min-h-[18px] ${statusColor}`}>{status}</div>}
+
+        <div className="mt-4 border-t border-border pt-3">
           <details>
-            <summary>API Examples</summary>
-            <h4>cURL</h4>
-            <pre><code>{curlExample}</code></pre>
-            <h4>JavaScript</h4>
-            <pre><code>{jsExample}</code></pre>
-            <p style={{ fontSize: 11, color: 'var(--dim)', marginTop: 8 }}>
-              JID format: strip non-digits from phone number, append <code>@s.whatsapp.net</code>
+            <summary className="text-xs text-dim font-semibold cursor-pointer">API Examples</summary>
+            <h4 className="text-[11px] font-semibold text-dim mt-3 mb-1">cURL</h4>
+            <pre className="bg-bg-light border border-border rounded-lg p-3 text-[11px] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+              <code className="font-mono">{curlExample}</code>
+            </pre>
+            <h4 className="text-[11px] font-semibold text-dim mt-3 mb-1">JavaScript</h4>
+            <pre className="bg-bg-light border border-border rounded-lg p-3 text-[11px] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+              <code className="font-mono">{jsExample}</code>
+            </pre>
+            <p className="text-[11px] text-dim mt-2">
+              JID format: strip non-digits from phone number, append <code className="bg-bg-light px-1 py-0.5 rounded font-mono">@s.whatsapp.net</code>
             </p>
           </details>
         </div>

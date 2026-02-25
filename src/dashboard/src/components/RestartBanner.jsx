@@ -27,15 +27,17 @@ export default function RestartBanner() {
   }
 
   return (
-    <div className="restart-banner" style={{ display: 'block' }}>
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor" style={{ verticalAlign: 'middle', marginRight: 5 }}>
-        <path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z" />
-      </svg>
-      Config changed — restart ChannelKit to apply changes
-      <button onClick={restart} disabled={restarting} style={{ marginLeft: 16, background: '#fff', color: '#9a6700', border: 'none', padding: '4px 12px', borderRadius: 4, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+    <div className="bg-yellow-light border border-yellow/20 text-yellow rounded-xl p-4 flex items-center gap-3 text-sm font-medium">
+      <span className="material-symbols-outlined text-[20px]">warning</span>
+      <span className="flex-1">Config changed — restart ChannelKit to apply changes</span>
+      <button
+        onClick={restart}
+        disabled={restarting}
+        className="px-4 py-1.5 bg-yellow text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
+      >
         {restarting ? 'Restarting\u2026' : 'Restart Now'}
       </button>
-      {status && <span style={{ marginLeft: 10, fontSize: 12 }}>{status}</span>}
+      {status && <span className="text-xs">{status}</span>}
     </div>
   );
 }
