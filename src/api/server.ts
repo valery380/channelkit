@@ -160,7 +160,6 @@ export class ApiServer {
 
   private async promptKillExistingProcess(port: number): Promise<boolean> {
     const { execSync } = await import('child_process');
-    const { createInterface } = await import('readline');
 
     let pid: string | undefined;
     try {
@@ -169,37 +168,45 @@ export class ApiServer {
     } catch {}
 
     const pidInfo = pid ? ` (PID ${pid})` : '';
-    console.error(`\n⚠️  Port ${port} is already in use${pidInfo}.`);
 
-    const rl = createInterface({ input: process.stdin, output: process.stderr });
-    const answer = await new Promise<string>((res) => {
-      rl.question(`   Kill the existing process and continue? [y/N] `, (ans) => {
-        rl.close();
-        res(ans.trim().toLowerCase());
+    // If stdin is not a TTY (e.g. running under tsx watch), auto-kill
+    // the existing process instead of prompting — readline won't work
+    // and would cause an infinite restart loop.
+    const autoKill = !process.stdin.isTTY;
+
+    if (!autoKill) {
+      console.error(`\n⚠️  Port ${port} is already in use${pidInfo}.`);
+      const { createInterface } = await import('readline');
+      const rl = createInterface({ input: process.stdin, output: process.stderr });
+      const answer = await new Promise<string>((res) => {
+        rl.question(`   Kill the existing process and continue? [y/N] `, (ans) => {
+          rl.close();
+          res(ans.trim().toLowerCase());
+        });
       });
-    });
+      if (answer !== 'y' && answer !== 'yes') return false;
+    } else {
+      console.error(`\n⚠️  Port ${port} is already in use${pidInfo}. Auto-killing...`);
+    }
 
-    if (answer === 'y' || answer === 'yes') {
+    try {
       try {
+        execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
+      } catch {}
+      console.log(`   Killed process on port ${port}. Waiting for port to be released...`);
+      for (let i = 0; i < 20; i++) {
+        await new Promise((r) => setTimeout(r, 500));
+        if (!(await this.isPortInUse(port))) return true;
         try {
           execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
         } catch {}
-        console.log(`   Killed process on port ${port}. Waiting for port to be released...`);
-        for (let i = 0; i < 20; i++) {
-          await new Promise((r) => setTimeout(r, 500));
-          if (!(await this.isPortInUse(port))) return true;
-          try {
-            execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
-          } catch {}
-        }
-        console.error(`   Port ${port} is still in use after waiting.`);
-        return false;
-      } catch (killErr: any) {
-        console.error(`   Failed to kill process: ${killErr.message}`);
-        return false;
       }
+      console.error(`   Port ${port} is still in use after waiting.`);
+      return false;
+    } catch (killErr: any) {
+      console.error(`   Failed to kill process: ${killErr.message}`);
+      return false;
     }
-    return false;
   }
 
   async stop(): Promise<void> {

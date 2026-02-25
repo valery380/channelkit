@@ -85,7 +85,7 @@ export class EndpointChannel extends Channel {
       waitForResponse = new Promise<WebhookResponse>((resolve) => {
         const timer = setTimeout(() => {
           this.pendingResponses.delete(fromId);
-          resolve({ text: 'Response timeout' });
+          resolve({ text: 'Response timeout', _error: true });
         }, timeout);
         this.pendingResponses.set(fromId, { resolve, timer });
       });

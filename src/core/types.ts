@@ -48,4 +48,6 @@ export interface WebhookResponse {
     subject?: string;       // reply subject (default: Re: original)
     html?: string;          // HTML body (text used as fallback)
   };
+  // Internal: signals an error for endpoint channels (not sent to external channels)
+  _error?: boolean;
 }

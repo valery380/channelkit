@@ -135,7 +135,12 @@ export function registerInboundRoutes(app: Express, ctx: ServerContext): void {
 
       if (waitForResponse) {
         const response = await waitForResponse;
-        res.json(response);
+        if (response._error) {
+          const { _error, ...body } = response;
+          res.status(502).json({ error: body.text });
+        } else {
+          res.json(response);
+        }
       } else {
         res.json({ ok: true, id: message.id });
       }

@@ -121,6 +121,13 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       }
     }
 
+    // For endpoint channels in sync mode: if no response, send an error so the HTTP request doesn't hang
+    if (!response && message.channel === 'endpoint') {
+      response = routedWebhook
+        ? { text: `Webhook ${routedWebhook} failed to respond`, _error: true }
+        : { text: 'No service matched for this endpoint', _error: true };
+    }
+
     // Send the response
     let sendError: string | undefined;
     if (response) {
@@ -157,7 +164,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       groupName: message.groupName,
       route: routedWebhook,
       responseText: logResponseText,
-      status: (sendError || ttsError) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
+      status: (sendError || ttsError || response?._error) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
       latency,
       sttTranscription,
       ttsGenerated: ttsGenerated || undefined,

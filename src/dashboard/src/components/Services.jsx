@@ -1,10 +1,88 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API } from '../api.js';
 import { channelIcons, maskValue } from '../utils.jsx';
 
 const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
 const selectCls = 'py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary';
+
+const modelsByProvider = {
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'o3-mini', 'o1', 'o1-mini'],
+  anthropic: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'],
+  google: ['gemini-2.0-flash', 'gemini-2.0-pro', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+};
+
+function ModelCombobox({ value, onChange, provider }) {
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const wrapRef = useRef(null);
+  const listRef = useRef(null);
+
+  const suggestions = (modelsByProvider[provider] || []).filter(
+    m => !value || m.toLowerCase().includes(value.toLowerCase())
+  );
+
+  useEffect(() => { setHighlightIdx(-1); }, [value, provider]);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (highlightIdx >= 0 && listRef.current) {
+      const el = listRef.current.children[highlightIdx];
+      if (el) el.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightIdx]);
+
+  function handleKeyDown(e) {
+    if (!open || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx(i => (i + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx(i => (i - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Enter' && highlightIdx >= 0) {
+      e.preventDefault();
+      onChange(suggestions[highlightIdx]);
+      setOpen(false);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        placeholder="Model (optional, e.g. gpt-4o-mini)"
+        className={inputCls}
+      />
+      {open && suggestions.length > 0 && (
+        <ul ref={listRef} className="absolute z-10 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-surface border border-border rounded-lg shadow-lg py-1">
+          {suggestions.map((m, i) => (
+            <li
+              key={m}
+              onMouseDown={() => { onChange(m); setOpen(false); }}
+              onMouseEnter={() => setHighlightIdx(i)}
+              className={`px-3 py-1.5 text-sm cursor-pointer ${i === highlightIdx ? 'bg-primary/10 text-primary' : 'text-text hover:bg-bg-light'}`}
+            >
+              {m}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 const sttProviderMap = {
   google: { label: 'Google', key: 'google_api_key' },
@@ -121,7 +199,7 @@ function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
           <ProviderSelect map={formatProviderMap} value={provider} onChange={setProvider} settings={settings} />
           {provider && (
             <div className="space-y-2">
-              <input value={model} onChange={e => setModel(e.target.value)} placeholder="Model (optional, e.g. gpt-4o-mini, claude-sonnet-4-20250514)" className={inputCls} />
+              <ModelCombobox value={model} onChange={setModel} provider={provider} />
               <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Prompt: instructions for how to format the message (e.g. Extract name and amount. Return JSON.)" rows={3} className={inputCls + ' resize-y'} />
             </div>
           )}
@@ -136,12 +214,124 @@ function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
   );
 }
 
-function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget, formatTarget, setFormatTarget }) {
+function ExampleModal({ channelName, channelConfig, onClose }) {
+  const { tunnelActive, tunnelUrl } = useAppState();
+  const [tab, setTab] = useState('curl');
+  const [usePublicUrl, setUsePublicUrl] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const method = (channelConfig.method || 'POST').toUpperCase();
+  const baseUrl = usePublicUrl && tunnelUrl ? tunnelUrl.replace(/\/$/, '') : window.location.origin;
+  const url = `${baseUrl}/inbound/endpoint/${encodeURIComponent(channelName)}`;
+  const secret = channelConfig.secret || '';
+  const isGet = method === 'GET';
+
+  const curlUrl = isGet ? `${url}?text=Hello+from+cURL` : url;
+  const curlParts = [`curl -X ${method} "${curlUrl}"`, `  -H "Content-Type: application/json"`];
+  if (secret) curlParts.push(`  -H "X-Channel-Secret: ${secret}"`);
+  if (!isGet) curlParts.push(`  -d '{"text": "Hello from cURL"}'`);
+  const curlExample = curlParts.join(' \\\n');
+
+  const jsHeaders = [`    "Content-Type": "application/json"`, ...(secret ? [`    "X-Channel-Secret": "${secret}"`] : [])].join(',\n');
+  const jsBody = isGet ? '' : `,\n  body: JSON.stringify({ text: "Hello from Node.js" })`;
+  const jsUrl = isGet ? `${url}?text=Hello+from+Node.js` : url;
+  const jsExample = `const response = await fetch("${jsUrl}", {
+  method: "${method}",
+  headers: {
+${jsHeaders}
+  }${jsBody}
+});
+const data = await response.json();`;
+
+  const pyHeaders = [`        "Content-Type": "application/json"`, ...(secret ? [`        "X-Channel-Secret": "${secret}"`] : [])].join(',\n');
+  const pyMethod = method.toLowerCase();
+  const pyBody = isGet ? `\n    params={"text": "Hello from Python"},` : `\n    json={"text": "Hello from Python"},`;
+  const pyExample = `import requests
+
+response = requests.${pyMethod}(
+    "${url}",${pyBody}
+    headers={
+${pyHeaders},
+    },
+)
+data = response.json()`;
+
+  const tabs = [
+    { id: 'curl', label: 'cURL' },
+    { id: 'node', label: 'Node.js' },
+    { id: 'python', label: 'Python' },
+  ];
+  const examples = { curl: curlExample, node: jsExample, python: pyExample };
+
+  function copyToClipboard() {
+    navigator.clipboard.writeText(examples[tab]).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-surface rounded-xl p-7 max-w-lg w-[90%] shadow-2xl">
+        <h3 className="text-base font-semibold text-text mb-1">Endpoint Example</h3>
+        <p className="text-xs text-dim mb-4">
+          {method} <span className="font-mono">/inbound/endpoint/{channelName}</span>
+          {channelConfig.response_mode === 'async' && <span className="ml-2 text-yellow">(async)</span>}
+        </p>
+
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex gap-1">
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${tab === t.id ? 'bg-primary text-white' : 'text-dim hover:bg-bg-light border border-border'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={copyToClipboard}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-dim border border-border rounded-lg hover:bg-bg-light transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">{copied ? 'check' : 'content_copy'}</span>
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+
+        <pre className="bg-bg-light border border-border rounded-lg p-3 text-[11px] overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
+          <code className="font-mono">{examples[tab]}</code>
+        </pre>
+
+        <div className="flex items-center justify-between mt-4">
+          <div>
+            {tunnelActive && tunnelUrl && (
+              <label className="flex items-center gap-2 text-xs text-dim cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={usePublicUrl}
+                  onChange={e => setUsePublicUrl(e.target.checked)}
+                  className="accent-primary"
+                />
+                Use public URL
+              </label>
+            )}
+          </div>
+          <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget, formatTarget, setFormatTarget, channels }) {
   const [editing, setEditing] = useState(false);
   const [webhook, setWebhook] = useState(svc.webhook);
   const [code, setCode] = useState(svc.code || '');
   const [command, setCommand] = useState(svc.command || '');
+  const [showExample, setShowExample] = useState(false);
   const showAudio = audioTarget === name;
+  const isEndpoint = channels[svc.channel]?.type === 'endpoint';
 
   async function save() {
     if (!webhook) { alert('Webhook URL is required'); return; }
@@ -195,6 +385,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
           <td className="px-6 py-4 max-w-[280px]"><span className="block truncate text-xs text-dim font-mono">{svc.webhook}</span></td>
           <td className="px-6 py-4 text-xs text-dim">{svc.code || svc.command || '\u2014'}</td>
           <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
+            {isEndpoint && <button onClick={() => setShowExample(true)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Example</button>}
             <button onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Audio</button>
             <button onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Format</button>
             <button onClick={() => setEditing(true)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Edit</button>
@@ -207,6 +398,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
       )}
       {showFormat && (
         <FormatSettingsRow name={name} svc={svc} settings={settings} onClose={() => setFormatTarget(null)} loadConfig={loadConfig} />
+      )}
+      {showExample && isEndpoint && (
+        <ExampleModal channelName={svc.channel} channelConfig={channels[svc.channel]} onClose={() => setShowExample(false)} />
       )}
     </>
   );
@@ -295,6 +489,7 @@ export default function Services({ loadConfig }) {
                   setAudioTarget={setAudioTarget}
                   formatTarget={formatTarget}
                   setFormatTarget={setFormatTarget}
+                  channels={channels}
                 />
               ))}
             </tbody>
