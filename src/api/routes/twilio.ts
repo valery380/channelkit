@@ -3,6 +3,21 @@ import { ServerContext } from '../types';
 import { TwilioProvisioner } from '../../provisioning/twilio';
 
 export function registerTwilioRoutes(app: Express, ctx: ServerContext): void {
+  app.post('/api/twilio/list-numbers', async (req, res) => {
+    const { account_sid, auth_token } = req.body;
+    if (!account_sid || !auth_token) {
+      res.status(400).json({ error: 'account_sid and auth_token are required' });
+      return;
+    }
+    try {
+      const provisioner = new TwilioProvisioner({ accountSid: account_sid, authToken: auth_token });
+      const numbers = await provisioner.listOwnedNumbers();
+      res.json({ numbers });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.post('/api/twilio/search-numbers', async (req, res) => {
     const { account_sid, auth_token, country_code, type, limit } = req.body;
     if (!account_sid || !auth_token || !country_code) {

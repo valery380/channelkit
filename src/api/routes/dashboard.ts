@@ -36,13 +36,13 @@ export function registerDashboardRoutes(app: Express, ctx: ServerContext): void 
     }
   });
 
-  // Serve the entire dashboard directory as static files under /dashboard
-  // Try compiled path first, then source path for dev mode
-  const compiledDashboardDir = join(__dirname, '..', '..', 'dashboard');
-  const srcDashboardDir = join(__dirname, '..', '..', '..', 'src', 'dashboard');
-  const dashboardDir = existsSync(join(compiledDashboardDir, 'index.html'))
-    ? compiledDashboardDir
-    : srcDashboardDir;
+  // Serve the built React dashboard from dist/dashboard/
+  // In both dev (tsx) and production, resolve from project root
+  const projectRoot = join(__dirname, '..', '..', '..');
+  const builtDashboardDir = join(projectRoot, 'dist', 'dashboard');
+  const dashboardDir = existsSync(join(builtDashboardDir, 'index.html'))
+    ? builtDashboardDir
+    : join(projectRoot, 'src', 'dashboard');
 
   // Serve static files (JS, CSS, etc.) under /dashboard/
   app.use('/dashboard', express.static(dashboardDir, {

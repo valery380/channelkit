@@ -4,97 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ChannelKit Dashboard</title>
-    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header>
-      <h1>
-        <svg xmlns="http://www.w3.org/2000/svg" height="26" width="26" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:6px"><path d="M480-80q-33 0-56.5-23.5T400-160q0-23 11-42t29-30v-108h-80q-33 0-56.5-23.5T280-420v-80q-23-11-34.5-29.5T234-570q-2-33 19.5-56.5T309-650q33 0 56.5 23.5T389-570q0 23-11.5 41.5T348-500v80h264v-80q-18-10-29.5-28.5T571-570q0-33 23.5-56.5T651-650q33 0 54.5 23.5T727-570q0 23-11.5 41.5T686-500v80q0 33-23.5 56.5T606-340h-86v108q18 11 29 30t11 42q0 33-23.5 56.5T480-80ZM480-760q-33 0-56.5-23.5T400-840q0-33 23.5-56.5T480-920q33 0 56.5 23.5T560-840q0 33-23.5 56.5T480-760Z"/></svg><span>ChannelKit</span> Dashboard
-      </h1>
-      <div class="stats">
-        <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Messages</div></div>
-        <div class="stat"><div class="stat-value" id="stat-errors" style="color:var(--red)">0</div><div class="stat-label">Errors</div></div>
-        <div class="stat"><div class="stat-value" id="stat-latency">0ms</div><div class="stat-label">Avg Latency</div></div>
-        <div class="stat"><div class="stat-value" id="stat-uptime">0s</div><div class="stat-label">Uptime</div></div>
-        <div class="stat">
-          <button class="btn-tunnel" id="tunnel-btn" title="Start/stop public access via cloudflared tunnel">
-            <span id="tunnel-btn-icon"><svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle"><path d="M480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm-40-82v-78q-33 0-56.5-23.5T360-320v-40L168-552q-3 18-5.5 36t-2.5 36q0 121 79.5 212T440-162Zm276-102q20-22 36-47.5t26.5-53q10.5-27.5 16-56.5t5.5-59q0-98-54.5-179.5T600-776v16q0 33-23.5 56.5T520-680h-80v80q0 17-11.5 28.5T400-560h-80v80h240q17 0 28.5 11.5T600-440v120h40q26 0 47 15.5t29 40.5Z"/></svg></span>
-            <span id="tunnel-btn-text">Externalize</span>
-          </button>
-        </div>
-        <div class="stat"><span class="badge badge-live" id="ws-status">● LIVE</span></div>
-      </div>
-    </header>
-
-    <!-- Tunnel bar -->
-    <div class="tunnel-bar" id="tunnel-bar">
-      <div style="display:flex;align-items:center;gap:12px;flex:1;flex-wrap:wrap">
-        <span>Public URL:</span>
-        <span class="tunnel-url" id="tunnel-url" title="Click to copy"></span>
-        <button title="Copy URL" style="background:none;border:none;cursor:pointer;padding:2px 6px;color:#fff;display:inline-flex;align-items:center"><svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor"><path d="M360-240q-33 0-56.5-23.5T280-320v-480q0-33 23.5-56.5T360-880h360q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H360Zm0-80h360v-480H360v480ZM200-80q-33 0-56.5-23.5T120-160v-560h80v560h440v80H200Zm160-240v-480 480Z"/></svg></button>
-        <span id="tunnel-copied" style="font-size:11px;opacity:0;transition:opacity 0.3s">Copied!</span>
-        <span style="flex:1"></span>
-        <span class="tunnel-has-token" id="tunnel-has-token" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:3px"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Zm-120 480v-400 400Z"/></svg> Stable URL</span>
-        <span class="tunnel-warn" id="tunnel-warn"><svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:3px"><path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"/></svg> URL changes each restart. <a id="tunnel-setup-link" style="color:#fff;text-decoration:underline;cursor:pointer">Set up stable URL</a><button class="help-btn" id="tunnel-help-btn" title="How to get a stable URL"><svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor"><path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-36 8-53t42-47q42-32 62.5-64t20.5-77q0-65-43.5-103.5T480-776q-69 0-114.5 38.5T312-636l66 26q7-37 33-61t69-24q38 0 63 21t25 57q0 26-14.5 47.5T510-516q-40 33-54 61t-14 61Z"/></svg></button></span>
-        <button id="update-endpoints-btn" style="display:none;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer;align-items:center;gap:5px"><svg xmlns="http://www.w3.org/2000/svg" height="14" width="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M440-122q-121-15-200.5-105.5T160-440q0-66 26-126t72-104l57 57q-38 34-56.5 79T240-440q0 88 56 155.5T440-202v80Zm80 0v-80q87-15 143.5-82.5T720-440q0-100-70-170t-170-70h-3l44 44-56 56-140-140 140-140 56 57-44 43h3q134 0 227 93t93 227q0 121-79.5 211.5T520-122Z"/></svg> Update SMS endpoints</button>
-        <label class="tunnel-toggle" title="Allow dashboard access from the external URL">
-          <input type="checkbox" id="tunnel-expose" />
-          <span>Dashboard access</span>
-        </label>
-        <button id="tunnel-bar-stop-btn" style="background:rgba(255,255,255,0.2);border:none;color:#fff;padding:4px 12px;border-radius:4px;font-size:12px;cursor:pointer">Stop</button>
-      </div>
-      <div class="tunnel-setup" id="tunnel-setup">
-        <div style="opacity:0.9">For a stable URL, create a free <a href="https://one.dash.cloudflare.com" target="_blank" style="color:#fff">Cloudflare Tunnel</a>, then paste the token and hostname below:</div>
-        <div class="ts-row">
-          <input id="ts-token" placeholder="Tunnel token (eyJh...)" style="flex:2;min-width:200px" />
-          <input id="ts-hostname" placeholder="Public hostname (e.g. channelkit.example.com)" style="flex:1;min-width:180px" />
-        </div>
-        <div class="ts-row">
-          <button id="ts-save-btn" style="background:#fff;color:#1a7f37;font-weight:600">Save</button>
-          <button id="ts-cancel-btn" style="background:rgba(255,255,255,0.2);color:#fff">Cancel</button>
-          <button id="ts-clear-btn" style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);display:none">Clear token</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tunnel help modal -->
-    <div class="help-overlay" id="tunnel-help-overlay">
-      <div class="help-modal" role="dialog" aria-modal="true" aria-label="How to get a stable URL">
-        <button class="help-close" id="tunnel-help-close-btn" title="Close"><svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M256-192 192-256l224-224-224-224 64-64 224 224 224-224 64 64-224 224 224 224-64 64-224-224-224 224Z"/></svg></button>
-        <h2><svg xmlns="http://www.w3.org/2000/svg" height="20" width="20" viewBox="0 -960 960 960" fill="currentColor" style="color:var(--accent)"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm0-80h480v-400H240v400Zm240-120q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Zm-120 480v-400 400Z"/></svg> Get a Stable Public URL</h2>
-        <p class="help-sub">Use a free Cloudflare Tunnel to keep the same URL across restarts.</p>
-        <div class="help-steps">
-          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-body"><strong>Create a Cloudflare account</strong><br>Go to <a href="https://one.dash.cloudflare.com" target="_blank" style="color:var(--accent)">one.dash.cloudflare.com</a> and sign up for free.</div></div>
-          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-body"><strong>Add your domain to Cloudflare</strong><br>Click <strong>Add a site</strong>, choose <strong>Free</strong> plan, update nameservers at your registrar.</div></div>
-          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-body"><strong>Create a tunnel</strong><br>Go to <strong>Zero Trust → Networks → Connectors</strong>, click <strong>Create a tunnel</strong>, choose <code>Cloudflared</code>.</div></div>
-          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-body"><strong>Copy the tunnel token</strong><br>Copy the long token after <code>--token</code> (starts with <code>eyJh…</code>).</div></div>
-          <div class="help-step"><div class="help-step-num">5</div><div class="help-step-body"><strong>Add a public hostname</strong><br>Point it to <code>localhost:4000</code> with HTTP service type.</div></div>
-          <div class="help-step"><div class="help-step-num">6</div><div class="help-step-body"><strong>Paste token &amp; hostname here</strong><br>Click <strong>Set up stable URL</strong>, paste, save, then <strong>Externalize</strong>.</div></div>
-        </div>
-        <p style="margin-top:18px;font-size:12px;color:var(--dim)">The tunnel stays active as long as ChannelKit is running.</p>
-      </div>
-    </div>
-
-    <!-- Restart banner -->
-    <div class="restart-banner" id="restart-banner">
-      <svg xmlns="http://www.w3.org/2000/svg" height="16" width="16" viewBox="0 -960 960 960" fill="currentColor" style="vertical-align:middle;margin-right:5px"><path d="m40-120 440-760 440 760H40Zm138-80h604L480-720 178-200Zm302-40q17 0 28.5-11.5T520-280q0-17-11.5-28.5T480-320q-17 0-28.5 11.5T440-280q0 17 11.5 28.5T480-240Zm-40-120h80v-200h-80v200Zm40-100Z"/></svg>
-      Config changed — restart ChannelKit to apply changes
-      <button id="restart-btn" style="margin-left:16px;background:#fff;color:#9a6700;border:none;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer">Restart Now</button>
-      <span id="restart-status" style="margin-left:10px;font-size:12px"></span>
-    </div>
-
-    <!-- Nav tabs -->
-    <div class="tabs">
-      <button class="tab active" data-route="#logs">Messages</button>
-      <button class="tab" data-route="#services">Services</button>
-      <button class="tab" data-route="#channels">Channels</button>
-      <button class="tab" data-route="#server-logs">Server Log</button>
-      <button class="tab" data-route="#settings">Settings</button>
-    </div>
-
-    <!-- Main content -->
-    <div id="app"></div>
-
-    <script type="module" src="app.js"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
