@@ -7,9 +7,10 @@
     "channelkit": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc && cp -r src/dashboard dist/",
+    "build": "tsc && cd src/dashboard && npx vite build",
+    "build:dashboard": "cd src/dashboard && npx vite build",
     "start": "NODE_NO_WARNINGS=1 tsx src/cli.ts start",
-    "dev": "NODE_NO_WARNINGS=1 tsx watch src/cli.ts start",
+    "dev": "npm run build:dashboard && NODE_NO_WARNINGS=1 tsx watch src/cli.ts start",
     "init": "NODE_NO_WARNINGS=1 tsx src/cli.ts init",
     "service": "NODE_NO_WARNINGS=1 tsx src/cli.ts service",
     "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel",
@@ -42,6 +43,8 @@
     "grammy": "^1.40.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tsx": "^4.21.0",
     "twilio": "^5.12.2",
     "typescript": "^5.9.3",
@@ -49,6 +52,8 @@
     "yaml": "^2.8.2"
   },
   "devDependencies": {
-    "@types/qrcode": "^1.5.6"
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.4.1"
   }
 }

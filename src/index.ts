@@ -1,6 +1,6 @@
 import { AppConfig, TunnelConfig } from './config/types';
 import { Router } from './core/router';
-import { ApiServer } from './core/apiServer';
+import { ApiServer } from './api/server';
 import { Channel } from './channels/base';
 import { WhatsAppChannel } from './channels/whatsapp';
 import { TelegramChannel } from './channels/telegram';
@@ -8,9 +8,8 @@ import { GmailChannel, ResendChannel } from './channels/email';
 import { TwilioSMSChannel } from './channels/sms';
 import { TwilioVoiceChannel } from './channels/voice';
 import { Onboarding } from './onboarding';
-import { UnifiedMessage } from './core/types';
 import { Logger } from './core/logger';
-import { processInbound, processOutbound } from './media/processor';
+import { wireMessageHandler } from './core/messageHandler';
 import { TunnelManager } from './core/tunnel';
 import { loadConfig, saveConfig } from './config/parser';
 
@@ -166,158 +165,15 @@ export class ChannelKit {
     }
 
     // Wire up message handlers
+    const handlerDeps = {
+      router: this.router,
+      apiServer: this.apiServer,
+      logger: this.logger,
+      onboarding: this.onboarding,
+      config: this.config,
+    };
     for (const channel of this.channels) {
-      channel.on('message', async (message: UnifiedMessage) => {
-        // Attach channel name
-        message.channelName = channel.name;
-
-        // Try onboarding first for DMs (only in groups mode).
-        // Skip if the channel already pre-resolved a webhook (e.g. Telegram slash commands).
-        const mode = this.router.getChannelMode(channel.name);
-        if (this.onboarding && !message.groupId && mode === 'groups' && !(message as any)._resolvedWebhook) {
-          const channelUnmatched = (this.config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
-          const handled = await this.onboarding.handleDirectMessage(message, channelUnmatched);
-          if (handled) {
-            this.logger.log({
-              id: message.id,
-              timestamp: Date.now(),
-              channel: message.channel,
-              from: message.from,
-              senderName: message.senderName,
-              text: message.text,
-              type: message.type,
-              route: 'onboarding',
-              status: 'success',
-              latency: 0,
-            });
-            return;
-          }
-
-          // Check if Telegram user has a service mapping
-          if (message.channel === 'telegram') {
-            const webhook = this.onboarding.getTelegramServiceWebhook(message.from);
-            if (webhook) {
-              const replyTo = message.from;
-              const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
-              const { dispatchWebhook } = await import('./core/webhook');
-              const startTime = Date.now();
-              const response = await dispatchWebhook(webhook, message, replyUrl);
-              this.logger.log({
-                id: message.id,
-                timestamp: Date.now(),
-                channel: message.channel,
-                from: message.from,
-                senderName: message.senderName,
-                text: message.text,
-                type: message.type,
-                route: webhook,
-                responseText: response?.text,
-                status: response ? 'success' : 'error',
-                latency: Date.now() - startTime,
-              });
-              if (response) {
-                await channel.send(replyTo, response);
-              }
-              return;
-            }
-          }
-        }
-
-        // STT: transcribe audio if configured for this service
-        const serviceConfig = this.router.findServiceConfig(message);
-        let sttTranscription: string | undefined;
-        if (serviceConfig) {
-          const originalText = message.text;
-          await processInbound(message, serviceConfig);
-          if (message.type === 'audio' && message.text && message.text !== originalText) {
-            sttTranscription = message.text;
-          }
-        }
-
-        const replyTo = message.groupId || message.from;
-        const replyUrl = this.apiServer.getReplyUrl(message.channel, replyTo);
-        const { response: routedResponse, webhook: routedWebhook, latency } = await this.router.route(message, replyUrl);
-        let response = routedResponse;
-
-        // If no service matched, check channel's unmatched policy.
-        // Only applies to DMs (no groupId) — group messages imply a pre-existing
-        // service mapping that is simply unavailable (e.g. after restart), so
-        // sending a service list there would be confusing.
-        if (!response && !message.groupId) {
-          const channelCfg = this.config.channels[channel.name];
-          if (channelCfg?.unmatched === 'list') {
-            const svcs = this.router.getNamedServicesForChannel(channel.name);
-            if (svcs.length > 0) {
-              const lines = svcs.map(({ name, config: svc }) => {
-                if (svc.command) {
-                  const cmd = svc.command.startsWith('/') ? svc.command : `/${svc.command}`;
-                  return `• ${name} — use ${cmd}`;
-                }
-                if (svc.code) return `• ${name} — send "${svc.code.toUpperCase()}" to connect`;
-                return `• ${name}`;
-              });
-              await channel.send(replyTo, { text: `Available services:\n${lines.join('\n')}` });
-            }
-          }
-        }
-
-        // TTS: convert text to speech when TTS is configured on the service
-        let ttsGenerated = false;
-        let ttsError: string | undefined;
-        if (response && serviceConfig) {
-          const hadMedia = response.media;
-          const result = await processOutbound(response, serviceConfig);
-          response = result.response;
-          ttsError = result.ttsError;
-          if (!hadMedia && response.media) {
-            ttsGenerated = true;
-          }
-        }
-
-        // Send the response and capture any delivery error
-        let sendError: string | undefined;
-        if (response) {
-          // Voice calls: route response to TwiML redirect flow
-          if (message.channel === 'voice' && (message as any)._callSid && channel instanceof TwilioVoiceChannel) {
-            channel.setCallResponse((message as any)._callSid, response);
-          } else {
-            try {
-              await channel.send(replyTo, response);
-            } catch (sendErr: any) {
-              sendError = sendErr?.message || String(sendErr);
-              console.error(`[${channel.name}] Failed to send reply to ${replyTo}: ${sendError}`);
-            }
-          }
-        }
-
-        // Build response text for logging, including any errors
-        let logResponseText = response?.text;
-        if (ttsError) {
-          logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[TTS failed: ${ttsError}]`;
-        }
-        if (sendError) {
-          logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[Delivery failed: ${sendError}]`;
-        }
-
-        // Single log entry: inbound message + webhook result + delivery outcome
-        this.logger.log({
-          id: message.id,
-          timestamp: Date.now(),
-          channel: message.channel,
-          from: message.from,
-          senderName: message.senderName,
-          text: message.text,
-          type: message.type,
-          groupId: message.groupId,
-          groupName: message.groupName,
-          route: routedWebhook,
-          responseText: logResponseText,
-          status: (sendError || ttsError) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
-          latency,
-          sttTranscription,
-          ttsGenerated: ttsGenerated || undefined,
-        });
-      });
+      wireMessageHandler(channel, handlerDeps);
     }
 
     // Wire up voice config lookup for API server
