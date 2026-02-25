@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(xargs:*)",
-      "WebFetch(domain:resend.com)"
+      "WebFetch(domain:resend.com)",
+      "Bash(curl:*)",
+      "Bash(python3:*)",
+      "Bash(node -e:*)",
+      "Bash(npm view:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(git -C /Users/naamasha/development/channelkit checkout --theirs src/channels/whatsapp/index.ts)",
+      "Bash(git -C /Users/naamasha/development/channelkit restore --staged src/channels/whatsapp/index.ts .claude/settings.json)",
+      "Bash(git -C /Users/naamasha/development/channelkit checkout:*)",
+      "Bash(git -C /Users/naamasha/development/channelkit stash drop:*)",
+      "Bash(npx vite build)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

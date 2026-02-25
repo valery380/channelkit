@@ -9,6 +9,7 @@ const FIELDS = [
   { key: 'elevenlabs_api_key', label: 'ElevenLabs API Key', placeholder: 'sk_...', sub: '(TTS)', group: 'api' },
   { key: 'openai_api_key', label: 'OpenAI API Key', placeholder: 'sk-...', sub: '(Whisper STT & TTS)', group: 'api' },
   { key: 'deepgram_api_key', label: 'Deepgram API Key', placeholder: 'Deepgram API key', sub: '(STT)', group: 'api' },
+  { key: 'anthropic_api_key', label: 'Anthropic API Key', placeholder: 'sk-ant-...', sub: '(AI Formatting)', group: 'api' },
 ];
 
 function SettingsInput({ label, placeholder, sub, value, onChange }) {

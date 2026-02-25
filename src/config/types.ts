@@ -59,6 +59,14 @@ export interface TwilioVoiceChannelConfig extends ChannelConfig {
   number: string;             // Twilio phone number
 }
 
+export interface EndpointChannelConfig extends ChannelConfig {
+  type: 'endpoint';
+  method?: string;              // HTTP method: 'POST' | 'GET' | 'PUT' | 'PATCH' (default: 'POST')
+  secret?: string;              // Optional secret validated against X-Channel-Secret header
+  response_mode?: 'sync' | 'async';  // default: 'sync'
+  response_timeout?: number;    // seconds, sync mode only (default: 30)
+}
+
 export interface STTServiceConfig {
   provider: 'google' | 'whisper' | 'deepgram';
   language?: string;                // e.g. 'he-IL', 'en-US' — primary language
@@ -81,6 +89,12 @@ export interface VoiceServiceConfig {
   conversational?: boolean; // true = loop (record→respond→record), false = single exchange + hangup
 }
 
+export interface FormatServiceConfig {
+  provider: 'openai' | 'anthropic' | 'google';
+  model?: string;             // optional, uses sensible defaults per provider
+  prompt: string;             // instructions for how to format/transform the text
+}
+
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
@@ -89,6 +103,7 @@ export interface ServiceConfig {
   stt?: STTServiceConfig;   // speech-to-text config
   tts?: TTSServiceConfig;   // text-to-speech config
   voice?: VoiceServiceConfig; // voice call settings
+  format?: FormatServiceConfig; // AI data formatting config
 }
 
 // Legacy support
@@ -127,6 +142,7 @@ export interface SettingsConfig {
   elevenlabs_api_key?: string;
   openai_api_key?: string;
   deepgram_api_key?: string;
+  anthropic_api_key?: string;
 }
 
 export interface McpConfig {
