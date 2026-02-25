@@ -91,6 +91,60 @@ export function registerInboundRoutes(app: Express, ctx: ServerContext): void {
     }
   });
 
+  // ALL /inbound/endpoint/:channel — Endpoint channel inbound
+  app.all('/inbound/endpoint/:channel', async (req, res) => {
+    const channelName = req.params.channel;
+    const channel = ctx.channels.get(channelName);
+    if (!channel || !(channel as any).handleRequest) {
+      res.status(404).json({ error: `Endpoint channel "${channelName}" not found` });
+      return;
+    }
+
+    const endpointChannel = channel as any;
+    const cfg = endpointChannel.cfg;
+
+    // Validate HTTP method
+    const allowedMethod = (cfg.method || 'POST').toUpperCase();
+    if (req.method !== allowedMethod) {
+      res.status(405).json({ error: `Method ${req.method} not allowed. Expected ${allowedMethod}` });
+      return;
+    }
+
+    // Validate secret
+    if (cfg.secret) {
+      const provided = req.headers['x-channel-secret'];
+      if (provided !== cfg.secret) {
+        res.status(401).json({ error: 'Invalid or missing X-Channel-Secret header' });
+        return;
+      }
+    }
+
+    try {
+      const query = req.query as Record<string, string>;
+      const headers: Record<string, string> = {};
+      for (const [k, v] of Object.entries(req.headers)) {
+        if (typeof v === 'string') headers[k] = v;
+      }
+
+      const { message, waitForResponse } = endpointChannel.handleRequest(
+        req.body,
+        query,
+        headers,
+        req.method,
+      );
+
+      if (waitForResponse) {
+        const response = await waitForResponse;
+        res.json(response);
+      } else {
+        res.json({ ok: true, id: message.id });
+      }
+    } catch (err: any) {
+      console.error(`[endpoint-inbound] Error:`, err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // POST /inbound/resend/:channel — Resend inbound email webhook
   app.post('/inbound/resend/:channel', (req, res) => {
     const channelName = req.params.channel;

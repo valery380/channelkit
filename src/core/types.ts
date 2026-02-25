@@ -26,6 +26,13 @@ export interface UnifiedMessage {
     messageId?: string;     // RFC Message-ID for threading
     attachments?: { filename: string; mimetype: string; buffer: Buffer }[];
   };
+  // Endpoint-specific fields
+  endpoint?: {
+    body?: any;               // raw parsed request body (JSON object, form data, etc.)
+    query?: Record<string, string>; // query parameters
+    headers?: Record<string, string>; // selected request headers
+    method?: string;          // HTTP method used
+  };
 }
 
 export interface WebhookResponse {

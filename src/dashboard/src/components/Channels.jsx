@@ -12,9 +12,10 @@ const CHANNEL_FIELDS = {
   'sms-twilio': { note: 'Twilio console: Account SID and Auth Token from the dashboard.', fields: [{ key: 'account_sid', label: 'Account SID', placeholder: 'ACxxxxxxx' }, { key: 'auth_token', label: 'Auth Token', placeholder: '' }, { key: 'number', label: 'Phone Number', placeholder: '+12025551234' }] },
   'voice-twilio': { note: 'Same credentials as SMS. Voice and SMS can share credentials but need separate channels.', fields: [{ key: 'account_sid', label: 'Account SID', placeholder: 'ACxxxxxxx' }, { key: 'auth_token', label: 'Auth Token', placeholder: '' }, { key: 'number', label: 'Phone Number', placeholder: '+12025551234' }] },
   'email-resend': { note: 'Get your API key from resend.com.', fields: [{ key: 'api_key', label: 'API Key', placeholder: 're_xxxxxxx' }, { key: 'from_email', label: 'From Email', placeholder: 'support@yourdomain.com' }] },
+  'endpoint': { note: 'Expose a URL that external systems can call.', fields: [{ key: 'method', label: 'HTTP Method', placeholder: 'POST' }, { key: 'secret', label: 'Secret Key (optional)', placeholder: 'A secret for X-Channel-Secret header' }] },
 };
 
-const TYPE_LABELS = { whatsapp: 'WhatsApp', telegram: 'Telegram', 'sms-twilio': 'SMS (Twilio)', 'voice-twilio': 'Voice (Twilio)', 'email-resend': 'Email (Resend)' };
+const TYPE_LABELS = { whatsapp: 'WhatsApp', telegram: 'Telegram', 'sms-twilio': 'SMS (Twilio)', 'voice-twilio': 'Voice (Twilio)', 'email-resend': 'Email (Resend)', 'endpoint': 'Endpoint (Webhook)' };
 
 const COUNTRIES = [
   { code: 'US', label: 'United States (+1)' }, { code: 'GB', label: 'United Kingdom (+44)' },
@@ -33,6 +34,7 @@ const channelTypeSvgs = {
   sms: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/><path fill="#6B7280" d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>,
   voice: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/></svg>,
   email: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>,
+  endpoint: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>,
 };
 
 function QRModal({ channel, qrMessage, onClose }) {
@@ -354,6 +356,8 @@ export default function Channels({ loadConfig }) {
   const [showBuy, setShowBuy] = useState(false);
   const [qrChannel, setQrChannel] = useState(null);
   const [smsSettingsTarget, setSmsSettingsTarget] = useState(null);
+  const [endpointResponseMode, setEndpointResponseMode] = useState('sync');
+  const [endpointTimeout, setEndpointTimeout] = useState('30');
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
@@ -406,6 +410,16 @@ export default function Channels({ loadConfig }) {
       if (!key || !from) { alert('API Key and From Email are required'); return; }
       Object.assign(body, { type: 'email', provider: 'resend', api_key: key, from_email: from });
       if (emailInbound === 'polling') body.poll_interval = parseInt(emailPollInterval) || 30;
+    } else if (typeKey === 'endpoint') {
+      const method = (fieldValues.method?.trim().toUpperCase()) || 'POST';
+      const secret = fieldValues.secret?.trim();
+      Object.assign(body, {
+        type: 'endpoint',
+        ...(method !== 'POST' && { method }),
+        ...(secret && { secret }),
+        response_mode: endpointResponseMode,
+        ...(endpointResponseMode === 'sync' && endpointTimeout && endpointTimeout !== '30' && { response_timeout: parseInt(endpointTimeout) }),
+      });
     }
 
     const res = await fetch(API + '/api/config/channels', {
@@ -548,6 +562,7 @@ export default function Channels({ loadConfig }) {
                 { type: 'sms-twilio', label: 'SMS', sub: 'Twilio' },
                 { type: 'voice-twilio', label: 'Voice', sub: 'Twilio' },
                 { type: 'email-resend', label: 'Email', sub: 'Resend' },
+                { type: 'endpoint', label: 'Endpoint', sub: 'HTTP Webhook' },
               ].map(t => (
                 <div
                   key={t.type}
@@ -617,7 +632,19 @@ export default function Channels({ loadConfig }) {
               </div>
             )}
 
-            <div className="space-y-3 mb-3">
+            {typeKey === 'endpoint' && (
+              <div className="space-y-3 mb-3">
+                <select value={endpointResponseMode} onChange={e => setEndpointResponseMode(e.target.value)} className={selectCls}>
+                  <option value="sync">Sync — wait for service response and return it</option>
+                  <option value="async">Async — return 200 immediately (fire-and-forget)</option>
+                </select>
+                {endpointResponseMode === 'sync' && (
+                  <input type="number" value={endpointTimeout} onChange={e => setEndpointTimeout(e.target.value)} min="5" max="120" placeholder="Response timeout in seconds (default: 30)" className={inputCls} />
+                )}
+              </div>
+            )}
+
+            {typeKey !== 'endpoint' && <div className="space-y-3 mb-3">
               <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
                 <option value="service">Service mode — single service, no codes needed</option>
                 <option value="groups">Groups mode — multiple services via codes or commands</option>
@@ -628,7 +655,7 @@ export default function Channels({ loadConfig }) {
                   <option value="list">Unmatched messages: Reply with service list</option>
                 </select>
               )}
-            </div>
+            </div>}
 
             <div className="flex items-center gap-3">
               <button onClick={addChannel} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors">Add Channel</button>
