@@ -50,16 +50,21 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/services/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { webhook, code, command, stt, tts } = req.body;
+    const { webhook, code, command, stt, tts, format } = req.body;
     if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
     const validSttProviders = ['google', 'whisper', 'deepgram'];
     const validTtsProviders = ['google', 'elevenlabs', 'openai'];
+    const validFormatProviders = ['openai', 'anthropic', 'google'];
     if (stt && !validSttProviders.includes(stt.provider)) {
       res.status(400).json({ error: `Invalid STT provider. Must be one of: ${validSttProviders.join(', ')}` });
       return;
     }
     if (tts && !validTtsProviders.includes(tts.provider)) {
       res.status(400).json({ error: `Invalid TTS provider. Must be one of: ${validTtsProviders.join(', ')}` });
+      return;
+    }
+    if (format && format.provider && !validFormatProviders.includes(format.provider)) {
+      res.status(400).json({ error: `Invalid format provider. Must be one of: ${validFormatProviders.join(', ')}` });
       return;
     }
     try {
@@ -84,6 +89,12 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         if (tts.voice) config.services[name].tts.voice = tts.voice;
       } else {
         delete config.services[name].tts;
+      }
+      if (format && format.provider) {
+        config.services[name].format = { provider: format.provider, prompt: format.prompt || '' };
+        if (format.model) config.services[name].format!.model = format.model;
+      } else {
+        delete config.services[name].format;
       }
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });

@@ -13,6 +13,11 @@ const ttsProviderMap = {
   elevenlabs: { label: 'ElevenLabs', key: 'elevenlabs_api_key' },
   openai: { label: 'OpenAI', key: 'openai_api_key' },
 };
+const formatProviderMap = {
+  openai: { label: 'OpenAI', key: 'openai_api_key' },
+  anthropic: { label: 'Anthropic (Claude)', key: 'anthropic_api_key' },
+  google: { label: 'Google (Gemini)', key: 'google_api_key' },
+};
 
 function ProviderSelect({ map, value, onChange, settings }) {
   return (
@@ -43,7 +48,7 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
       const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhook: svc.webhook, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal }),
+        body: JSON.stringify({ webhook: svc.webhook, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, format: svc.format || null }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
       setStatus('Saved');
@@ -69,6 +74,62 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
               {ttsProvider && <div className="form-row"><input value={ttsVoice} onChange={e => setTtsVoice(e.target.value)} placeholder="Voice (optional, e.g. alloy, Rachel)" style={{ flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' }} /></div>}
             </div>
           </div>
+          <div className="form-row" style={{ marginTop: 12, gap: 8 }}>
+            <button className="btn btn-primary" onClick={save}>Save</button>
+            <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
+            {status && <span style={{ fontSize: 12, marginLeft: 8, color: status === 'Saved' ? 'var(--green)' : 'var(--red)' }}>{status}</span>}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
+  const fmt = svc.format || {};
+  const [provider, setProvider] = useState(fmt.provider || '');
+  const [model, setModel] = useState(fmt.model || '');
+  const [prompt, setPrompt] = useState(fmt.prompt || '');
+  const [status, setStatus] = useState('');
+
+  async function save() {
+    const formatVal = provider ? { provider, ...(model && { model }), prompt } : null;
+    try {
+      const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webhook: svc.webhook, code: svc.code || null, command: svc.command || null,
+          stt: svc.stt || null, tts: svc.tts || null, format: formatVal,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
+      setStatus('Saved');
+      setTimeout(() => { onClose(); loadConfig(); }, 600);
+    } catch (e) { setStatus(e.message); }
+  }
+
+  const inputStyle = { flex: 1, padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, background: 'var(--bg)', color: 'var(--text)' };
+
+  return (
+    <tr className="format-settings-row">
+      <td colSpan={5}>
+        <div style={{ padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, margin: '4px 0 8px' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>AI Format Settings &mdash; {name}</div>
+          <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 10 }}>Run an AI model on incoming messages to transform or extract data before sending to the webhook.</div>
+          <div className="form-row">
+            <ProviderSelect map={formatProviderMap} value={provider} onChange={setProvider} settings={settings} />
+          </div>
+          {provider && (
+            <>
+              <div className="form-row">
+                <input value={model} onChange={e => setModel(e.target.value)} placeholder="Model (optional, e.g. gpt-4o-mini, claude-sonnet-4-20250514)" style={inputStyle} />
+              </div>
+              <div className="form-row">
+                <textarea value={prompt} onChange={e => setPrompt(e.target.value)} placeholder="Prompt: instructions for how to format the message (e.g. Extract name and amount. Return JSON.)" rows={3} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+            </>
+          )}
           <div className="form-row" style={{ marginTop: 12, gap: 8 }}>
             <button className="btn btn-primary" onClick={save}>Save</button>
             <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--border)', padding: '6px 12px', borderRadius: 6, fontSize: 13, cursor: 'pointer', color: 'var(--dim)' }}>Cancel</button>
@@ -149,6 +210,7 @@ export default function Services({ loadConfig }) {
   const { services, channels, settings } = useAppState();
   const dispatch = useDispatch();
   const [audioTarget, setAudioTarget] = useState(null);
+  const [formatTarget, setFormatTarget] = useState(null);
   const [step, setStep] = useState('pick');
   const [selectedChannel, setSelectedChannel] = useState('');
   const [svcName, setSvcName] = useState('');
@@ -224,6 +286,8 @@ export default function Services({ loadConfig }) {
                 settings={settings}
                 audioTarget={audioTarget}
                 setAudioTarget={setAudioTarget}
+                formatTarget={formatTarget}
+                setFormatTarget={setFormatTarget}
               />
             ))}
           </tbody>
@@ -282,12 +346,13 @@ export default function Services({ loadConfig }) {
   );
 }
 
-function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget }) {
+function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget, formatTarget, setFormatTarget }) {
   const [editing, setEditing] = useState(false);
   const [webhook, setWebhook] = useState(svc.webhook);
   const [code, setCode] = useState(svc.code || '');
   const [command, setCommand] = useState(svc.command || '');
   const showAudio = audioTarget === name;
+  const showFormat = formatTarget === name;
 
   async function save() {
     if (!webhook) { alert('Webhook URL is required'); return; }
@@ -308,9 +373,10 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
     loadConfig();
   }
 
-  const audioParts = [];
-  if (svc.stt) audioParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ''));
-  if (svc.tts) audioParts.push('TTS: ' + svc.tts.provider + (svc.tts.language ? ' (' + svc.tts.language + ')' : ''));
+  const infoParts = [];
+  if (svc.stt) infoParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ''));
+  if (svc.tts) infoParts.push('TTS: ' + svc.tts.provider + (svc.tts.language ? ' (' + svc.tts.language + ')' : ''));
+  if (svc.format) infoParts.push('Format: ' + svc.format.provider);
 
   return (
     <>
@@ -332,13 +398,14 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
         <tr>
           <td style={{ fontWeight: 500 }}>
             {name}
-            {audioParts.length > 0 && <div style={{ marginTop: 3, fontSize: 11, color: 'var(--dim)' }}>{audioParts.join(' \u00b7 ')}</div>}
+            {infoParts.length > 0 && <div style={{ marginTop: 3, fontSize: 11, color: 'var(--dim)' }}>{infoParts.join(' \u00b7 ')}</div>}
           </td>
           <td>{svc.channel}</td>
           <td className="webhook-cell"><span className="webhook-text mono">{svc.webhook}</span></td>
           <td style={{ color: 'var(--dim)', fontSize: 12 }}>{svc.code || svc.command || '\u2014'}</td>
           <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-            <button className="btn-edit" onClick={() => setAudioTarget(showAudio ? null : name)}>Audio</button>
+            <button className="btn-edit" onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); }}>Audio</button>
+            <button className="btn-edit" onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); }}>Format</button>
             <button className="btn-edit" onClick={() => setEditing(true)}>Edit</button>
             <button className="btn-danger" onClick={remove}>Remove</button>
           </td>
@@ -346,6 +413,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
       )}
       {showAudio && (
         <AudioSettingsRow name={name} svc={svc} settings={settings} onClose={() => setAudioTarget(null)} loadConfig={loadConfig} />
+      )}
+      {showFormat && (
+        <FormatSettingsRow name={name} svc={svc} settings={settings} onClose={() => setFormatTarget(null)} loadConfig={loadConfig} />
       )}
     </>
   );

@@ -1,7 +1,7 @@
 /**
- * MediaProcessor: handles STT/TTS for the message pipeline
- * 
- * Inbound:  voice message → STT → adds text to UnifiedMessage
+ * MediaProcessor: handles STT/TTS/AI-formatting for the message pipeline
+ *
+ * Inbound:  voice message → STT → AI format → adds text to UnifiedMessage
  * Outbound: webhook returns { voice: true } → TTS → sends audio
  */
 
@@ -9,15 +9,18 @@ import { ServiceConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from '../core/types';
 import { createSTTProvider, STTProvider } from './stt';
 import { createTTSProvider, TTSProvider } from './tts';
+import { createFormatProvider, FormatProvider } from './formatter';
 
 interface ProcessorCache {
-  stt: Map<string, STTProvider>;   // key = provider+language
-  tts: Map<string, TTSProvider>;   // key = provider+voice
+  stt: Map<string, STTProvider>;       // key = provider+language
+  tts: Map<string, TTSProvider>;       // key = provider+voice
+  format: Map<string, FormatProvider>; // key = provider+model
 }
 
 const cache: ProcessorCache = {
   stt: new Map(),
   tts: new Map(),
+  format: new Map(),
 };
 
 function getSTT(config: ServiceConfig): STTProvider | null {
@@ -38,32 +41,58 @@ function getTTS(config: ServiceConfig): TTSProvider | null {
   return cache.tts.get(key)!;
 }
 
+function getFormatter(config: ServiceConfig): FormatProvider | null {
+  if (!config.format) return null;
+  const key = `${config.format.provider}:${config.format.model || 'default'}`;
+  if (!cache.format.has(key)) {
+    cache.format.set(key, createFormatProvider(config.format));
+  }
+  return cache.format.get(key)!;
+}
+
 /**
- * Process inbound message: if it's audio and STT is configured, transcribe it.
- * Mutates the message in place (adds text field).
+ * Process inbound message:
+ * 1. If audio + STT configured → transcribe to text
+ * 2. If format configured → run AI formatting on text
+ * Mutates the message in place.
  */
 export async function processInbound(message: UnifiedMessage, serviceConfig: ServiceConfig): Promise<void> {
-  if (message.type !== 'audio' || !serviceConfig.stt) return;
-  if (!message.media?.buffer) {
-    console.log(`[stt] Audio message ${message.id} has no buffer — skipping transcription`);
-    return;
+  // Step 1: STT — transcribe audio to text
+  if (message.type === 'audio' && serviceConfig.stt && message.media?.buffer) {
+    const stt = getSTT(serviceConfig);
+    if (stt) {
+      try {
+        const mimetype = message.media.mimetype || 'audio/ogg';
+        console.log(`[stt] Transcribing message ${message.id} (${mimetype}, ${message.media.buffer.length} bytes)...`);
+        const transcript = await stt.transcribe(message.media.buffer, mimetype, serviceConfig.stt.language);
+        if (transcript) {
+          message.text = transcript;
+          console.log(`[stt] Transcribed: "${transcript.substring(0, 80)}${transcript.length > 80 ? '...' : ''}"`);
+        } else {
+          console.log(`[stt] Empty transcription for message ${message.id}`);
+        }
+      } catch (err) {
+        console.error(`[stt] Transcription failed for message ${message.id}:`, err);
+      }
+    }
   }
 
-  const stt = getSTT(serviceConfig);
-  if (!stt) return;
-
-  try {
-    const mimetype = message.media.mimetype || 'audio/ogg';
-    console.log(`[stt] Transcribing message ${message.id} (${mimetype}, ${message.media.buffer.length} bytes)...`);
-    const transcript = await stt.transcribe(message.media.buffer, mimetype, serviceConfig.stt.language);
-    if (transcript) {
-      message.text = transcript;
-      console.log(`[stt] Transcribed: "${transcript.substring(0, 80)}${transcript.length > 80 ? '...' : ''}"`);
-    } else {
-      console.log(`[stt] Empty transcription for message ${message.id}`);
+  // Step 2: AI formatting — transform text using configured prompt
+  if (serviceConfig.format && message.text) {
+    const formatter = getFormatter(serviceConfig);
+    if (formatter) {
+      try {
+        console.log(`[format] Formatting message ${message.id} with ${serviceConfig.format.provider}...`);
+        const formatted = await formatter.format(message.text, serviceConfig.format.prompt);
+        if (formatted) {
+          console.log(`[format] Result: "${formatted.substring(0, 80)}${formatted.length > 80 ? '...' : ''}"`);
+          message.text = formatted;
+        }
+      } catch (err) {
+        console.error(`[format] Formatting failed for message ${message.id}:`, err);
+        // On error, keep original text (graceful degradation)
+      }
     }
-  } catch (err) {
-    console.error(`[stt] Transcription failed for message ${message.id}:`, err);
   }
 }
 

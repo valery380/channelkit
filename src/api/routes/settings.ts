@@ -40,7 +40,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.settings) config.settings = {};
-      const allowed = ['twilio_account_sid', 'twilio_auth_token', 'google_api_key', 'elevenlabs_api_key', 'openai_api_key', 'deepgram_api_key'];
+      const allowed = ['twilio_account_sid', 'twilio_auth_token', 'google_api_key', 'elevenlabs_api_key', 'openai_api_key', 'deepgram_api_key', 'anthropic_api_key'];
       const envMap: Record<string, string> = {
         twilio_account_sid: 'TWILIO_ACCOUNT_SID',
         twilio_auth_token: 'TWILIO_AUTH_TOKEN',
@@ -48,6 +48,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
         elevenlabs_api_key: 'ELEVENLABS_API_KEY',
         openai_api_key: 'OPENAI_API_KEY',
         deepgram_api_key: 'DEEPGRAM_API_KEY',
+        anthropic_api_key: 'ANTHROPIC_API_KEY',
       };
       for (const key of allowed) {
         if (key in req.body) {
