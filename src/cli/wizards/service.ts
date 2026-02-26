@@ -136,6 +136,21 @@ export async function serviceAddWizard(opts: { config: string } = { config: 'con
       return;
     }
 
+    let allow_list: string[] | undefined;
+    const phoneChannelTypes = ['whatsapp', 'sms', 'voice'];
+    if (phoneChannelTypes.includes(chType)) {
+      const accessIdx = await select(rl, 'Who can use this service?', [
+        '🌐 Any number — no restrictions',
+        '🔒 Only specific numbers — allow list',
+      ]);
+      if (accessIdx === 1) {
+        const nums = await ask(rl, 'Allowed numbers (comma-separated, e.g. +972541234567, +12025551234):');
+        if (nums.trim()) {
+          allow_list = nums.split(',').map((n: string) => n.trim()).filter(Boolean);
+        }
+      }
+    }
+
     config.services[name] = {
       channel: selectedChannel,
       webhook,
@@ -144,6 +159,7 @@ export async function serviceAddWizard(opts: { config: string } = { config: 'con
       ...(stt ? { stt } : {}),
       ...(tts ? { tts } : {}),
       ...(voice ? { voice } : {}),
+      ...(allow_list ? { allow_list } : {}),
     };
     saveConfig(configPath, config);
 

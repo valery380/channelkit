@@ -14,6 +14,7 @@ import { wireMessageHandler } from './core/messageHandler';
 import { TunnelManager } from './core/tunnel';
 import { loadConfig, saveConfig } from './config/parser';
 import { ChannelKitMcpServer } from './mcp';
+import { Updater } from './core/updater';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -25,6 +26,7 @@ export class ChannelKit {
   private tunnel?: TunnelManager;
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
   private mcpServer?: ChannelKitMcpServer;
+  private updater?: Updater;
 
   constructor(private config: AppConfig, private configPath?: string) {
     // Populate process.env from config.settings (existing env vars take precedence)
@@ -268,6 +270,7 @@ export class ChannelKit {
         config: this.config,
         startTime: Date.now(),
         getPublicUrl: () => this.tunnel?.getPublicUrl() || null,
+        updater: this.updater,
       };
       this.mcpServer = new ChannelKitMcpServer(mcpCtx, this.config.mcp || {});
       await this.mcpServer.mountOnExpress(this.apiServer.getExpressApp());
@@ -315,6 +318,23 @@ export class ChannelKit {
     });
     console.log('Listening for messages...');
 
+    // Initialize updater
+    this.updater = new Updater(this.channelMap);
+
+    // Wire up update callbacks for API server
+    this.apiServer.updateStatus = async () => {
+      return await this.updater!.checkForUpdate();
+    };
+    this.apiServer.updateTrigger = async () => {
+      return await this.updater!.performUpdate();
+    };
+
+    // Start auto-update if configured
+    if (this.config.auto_update?.enabled) {
+      const interval = this.config.auto_update.interval || 30;
+      this.updater.startAutoUpdate(interval);
+    }
+
     // Start MCP server if enabled
     if (this.config.mcp?.enabled) {
       const mcpCtx = {
@@ -324,6 +344,7 @@ export class ChannelKit {
         config: this.config,
         startTime: Date.now(),
         getPublicUrl: () => this.tunnel?.getPublicUrl() || null,
+        updater: this.updater,
       };
       this.mcpServer = new ChannelKitMcpServer(mcpCtx, this.config.mcp);
 
@@ -438,6 +459,9 @@ export class ChannelKit {
   }
 
   async stop(): Promise<void> {
+    if (this.updater) {
+      this.updater.stopAutoUpdate();
+    }
     if (this.mcpServer) {
       await this.mcpServer.stop();
     }

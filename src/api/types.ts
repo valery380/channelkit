@@ -23,6 +23,8 @@ export interface ServerContext {
   mcpStart?: () => Promise<{ url: string }>;
   mcpStop?: () => Promise<void>;
   mcpStatus?: () => { active: boolean; url: string | null };
+  updateStatus?: () => Promise<{ currentCommit: string; remoteCommit: string; updateAvailable: boolean; behindCount: number; lastChecked: number }>;
+  updateTrigger?: () => Promise<{ success: boolean; previousCommit: string; newCommit: string; error?: string }>;
   setPublicUrl: (url: string) => void;
   clearPublicUrl: () => void;
   getBaseUrl: () => string;

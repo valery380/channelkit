@@ -8,6 +8,10 @@ export interface ChannelConfig {
    *  'list'   — reply with a list of available services
    *  'ignore' — silently drop the message (default) */
   unmatched?: 'list' | 'ignore';
+  /** Optional allow list of sender identifiers (phone numbers, emails, user IDs).
+   *  If set and non-empty, only senders matching an entry are allowed.
+   *  Numbers are normalized (non-digit chars stripped) before comparison. */
+  allow_list?: string[];
   [key: string]: unknown;
 }
 
@@ -104,6 +108,10 @@ export interface ServiceConfig {
   tts?: TTSServiceConfig;   // text-to-speech config
   voice?: VoiceServiceConfig; // voice call settings
   format?: FormatServiceConfig; // AI data formatting config
+  /** Optional allow list of sender identifiers (phone numbers, emails, user IDs).
+   *  If set and non-empty, only senders matching an entry are allowed.
+   *  Numbers are normalized (non-digit chars stripped) before comparison. */
+  allow_list?: string[];
 }
 
 // Legacy support
@@ -154,6 +162,11 @@ export interface McpConfig {
   secret?: string;     // Bearer token required for MCP access
 }
 
+export interface AutoUpdateConfig {
+  enabled?: boolean;   // default: false
+  interval?: number;   // check interval in minutes, default: 30
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -166,4 +179,5 @@ export interface AppConfig {
   settings?: SettingsConfig;
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
   mcp?: McpConfig;             // MCP server configuration
+  auto_update?: AutoUpdateConfig; // Auto-update from GitHub
 }

@@ -23,7 +23,9 @@
       "Bash(lsof:*)",
       "Bash(kill:*)",
       "Bash(npx @modelcontextprotocol/inspector:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(git -C /Users/naamasha/development/channelkit remote -v)",
+      "Bash(git -C /Users/naamasha/development/channelkit log --oneline -15)"
     ]
   }
 }

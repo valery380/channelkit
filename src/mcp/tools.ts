@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
+import { Updater } from '../core/updater';
 import { AppConfig } from '../config/types';
 import { loadConfig, saveConfig } from '../config/parser';
 
@@ -12,6 +13,7 @@ export interface McpContext {
   config: AppConfig;
   startTime: number;
   getPublicUrl: () => string | null;
+  updater?: Updater;
 }
 
 export function registerTools(mcp: McpServer, ctx: McpContext): void {
@@ -125,8 +127,9 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
       name: z.string().describe('Channel name'),
       type: z.enum(['whatsapp', 'telegram', 'email', 'sms', 'voice']).describe('Channel type'),
       config: z.record(z.string(), z.any()).optional().describe('Channel-specific configuration (bot_token, api_key, etc.)'),
+      allow_list: z.array(z.string()).optional().describe('Optional allow list of sender identifiers (phone numbers). If set, only these senders can use the channel.'),
     },
-    async ({ name, type, config: channelConfig }) => {
+    async ({ name, type, config: channelConfig, allow_list }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
       }
@@ -135,7 +138,11 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         if (config.channels[name]) {
           return { content: [{ type: 'text', text: `Channel "${name}" already exists` }], isError: true };
         }
-        config.channels[name] = { type, ...channelConfig };
+        config.channels[name] = {
+          type,
+          ...channelConfig,
+          ...(allow_list && allow_list.length > 0 && { allow_list }),
+        };
         saveConfig(ctx.configPath, config);
         return { content: [{ type: 'text', text: `Channel "${name}" (${type}) added. Restart ChannelKit to connect it.` }] };
       } catch (err: any) {
@@ -215,8 +222,9 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         voice: z.string().optional(),
         language: z.string().optional(),
       }).optional().describe('Text-to-speech config'),
+      allow_list: z.array(z.string()).optional().describe('Optional allow list of sender identifiers (phone numbers). If set, only these senders can use the service.'),
     },
-    async ({ name, channel, webhook, code, command, stt, tts }) => {
+    async ({ name, channel, webhook, code, command, stt, tts, allow_list }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -234,6 +242,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         if (command) svc.command = command;
         if (stt) svc.stt = stt;
         if (tts) svc.tts = tts;
+        if (allow_list && allow_list.length > 0) svc.allow_list = allow_list;
         config.services[name] = svc;
         saveConfig(ctx.configPath, config);
         return { content: [{ type: 'text', text: `Service "${name}" created. Restart ChannelKit to activate.` }] };
@@ -260,8 +269,9 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         voice: z.string().optional(),
         language: z.string().optional(),
       }).optional().describe('New TTS config'),
+      allow_list: z.array(z.string()).optional().describe('Allow list of sender identifiers. Pass empty array to remove restrictions.'),
     },
-    async ({ name, webhook, code, command, stt, tts }) => {
+    async ({ name, webhook, code, command, stt, tts, allow_list }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -286,6 +296,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         if (tts !== undefined) {
           if (tts) config.services[name].tts = tts;
           else delete config.services[name].tts;
+        }
+        if (allow_list !== undefined) {
+          if (allow_list.length > 0) config.services[name].allow_list = allow_list;
+          else delete config.services[name].allow_list;
         }
         saveConfig(ctx.configPath, config);
         return { content: [{ type: 'text', text: `Service "${name}" updated. Restart to apply changes.` }] };
@@ -321,7 +335,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'get_status',
-    'Get ChannelKit status: connected channels, uptime, message stats',
+    'Get ChannelKit status: connected channels, uptime, message stats, current version, and update availability',
     {},
     async () => {
       const channelStatus: Record<string, any> = {};
@@ -335,14 +349,58 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
       const stats = ctx.logger?.getStats() || { total: 0, byChannel: {}, avgLatency: 0, errorCount: 0 };
       const uptime = Date.now() - ctx.startTime;
 
+      // Version info
+      let version: any = {};
+      if (ctx.updater) {
+        try {
+          const updateStatus = await ctx.updater.checkForUpdate();
+          version = {
+            current_commit: updateStatus.currentCommit,
+            remote_commit: updateStatus.remoteCommit,
+            update_available: updateStatus.updateAvailable,
+            behind_count: updateStatus.behindCount,
+          };
+        } catch {
+          version = { current_commit: ctx.updater.getCurrentCommit(), update_available: false };
+        }
+      } else {
+        try {
+          const { execSync } = await import('child_process');
+          version.current_commit = execSync('git rev-parse --short HEAD', { cwd: process.cwd(), encoding: 'utf-8' }).trim();
+        } catch {
+          version.current_commit = 'unknown';
+        }
+      }
+
       const status = {
         uptime_ms: uptime,
         uptime_human: formatUptime(uptime),
         channels: channelStatus,
         messages: stats,
         public_url: ctx.getPublicUrl(),
+        version,
       };
       return { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] };
+    }
+  );
+
+  mcp.tool(
+    'update',
+    'Update ChannelKit to the latest version from GitHub. Pulls latest changes, installs dependencies, rebuilds, and restarts the process. The MCP connection will be lost after restart.',
+    {},
+    async () => {
+      if (!ctx.updater) {
+        return { content: [{ type: 'text', text: 'Updater not available' }], isError: true };
+      }
+      try {
+        const result = await ctx.updater.performUpdate();
+        if (result.success) {
+          return { content: [{ type: 'text', text: `Update successful: ${result.previousCommit} -> ${result.newCommit}. ChannelKit is restarting... The MCP connection will reconnect shortly.` }] };
+        }
+        return { content: [{ type: 'text', text: `Update failed: ${result.error}` }], isError: true };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Update failed: ${err.message}` }], isError: true };
+      }
     }
   );
 

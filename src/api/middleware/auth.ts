@@ -1,6 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import { ServerContext } from '../types';
 
+function isMcpPath(p: string): boolean {
+  return p === '/mcp' || p.startsWith('/mcp/') || p === '/sse' || p === '/messages';
+}
+
+/** Set CORS headers and handle OPTIONS preflight for MCP endpoints. */
+export function mcpCors() {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!isMcpPath(req.path)) { next(); return; }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, mcp-session-id');
+    res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
+    next();
+  };
+}
+
 export function externalAccessGuard(ctx: ServerContext) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!ctx.publicUrl || ctx.exposeDashboard) { next(); return; }
@@ -11,7 +31,7 @@ export function externalAccessGuard(ctx: ServerContext) {
     if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
       next(); return;
     }
-    if (ctx.exposeMcp && (p === '/mcp' || p.startsWith('/mcp/') || p === '/sse' || p === '/messages')) {
+    if (ctx.exposeMcp && isMcpPath(p)) {
       next(); return;
     }
     res.status(403).send('Dashboard access is disabled for external requests.');
@@ -20,10 +40,7 @@ export function externalAccessGuard(ctx: ServerContext) {
 
 export function mcpAuthCheck(ctx: ServerContext) {
   return (req: Request, res: Response, next: NextFunction) => {
-    const p = req.path;
-    if (p !== '/mcp' && !p.startsWith('/mcp/') && p !== '/sse' && p !== '/messages') {
-      next(); return;
-    }
+    if (!isMcpPath(req.path)) { next(); return; }
     if (!ctx.mcpSecret) { next(); return; }
     const auth = req.headers.authorization;
     if (auth && auth === `Bearer ${ctx.mcpSecret}`) {

@@ -49,6 +49,17 @@ export async function channelAddWizard(opts: { config: string }) {
       channelName = 'whatsapp';
       channelConfig = { type: 'whatsapp', number, mode: modeIdx === 0 ? 'groups' : 'direct' };
 
+      const accessIdx = await select(rl, 'Who can send messages through this channel?', [
+        '🌐 Any number — no restrictions',
+        '🔒 Only specific numbers — allow list',
+      ]);
+      if (accessIdx === 1) {
+        const numbers = await ask(rl, 'Allowed numbers (comma-separated, e.g. +972541234567, +12025551234):');
+        if (numbers.trim()) {
+          channelConfig.allow_list = numbers.split(',').map((n: string) => n.trim()).filter(Boolean);
+        }
+      }
+
     } else if (channelIdx === 1) {
       const existingTg = Object.entries(config.channels).find(([, v]) => (v as any).type === 'telegram');
       if (existingTg) {
@@ -142,6 +153,17 @@ export async function channelAddWizard(opts: { config: string }) {
         ...(parseInt(pollInterval) > 0 ? { poll_interval: parseInt(pollInterval) } : {}),
       };
 
+      const smsAccessIdx = await select(rl, 'Who can send messages through this channel?', [
+        '🌐 Any number — no restrictions',
+        '🔒 Only specific numbers — allow list',
+      ]);
+      if (smsAccessIdx === 1) {
+        const smsNumbers = await ask(rl, 'Allowed numbers (comma-separated, e.g. +972541234567, +12025551234):');
+        if (smsNumbers.trim()) {
+          channelConfig.allow_list = smsNumbers.split(',').map((n: string) => n.trim()).filter(Boolean);
+        }
+      }
+
     } else if (channelIdx === 4) {
       console.log(c('bright', '\n  📝 Twilio Voice Setup:\n'));
       const existingSms = Object.entries(config.channels).find(([, v]) => (v as any).type === 'sms' && (v as any).provider === 'twilio');
@@ -167,6 +189,18 @@ export async function channelAddWizard(opts: { config: string }) {
       const number = await ask(rl, 'Twilio phone number (e.g. +12025551234):');
       channelName = await ask(rl, 'Channel name:', 'voice');
       channelConfig = { type: 'voice', provider: 'twilio', account_sid: accountSid, auth_token: authToken, number };
+
+      const voiceAccessIdx = await select(rl, 'Who can call this channel?', [
+        '🌐 Any number — no restrictions',
+        '🔒 Only specific numbers — allow list',
+      ]);
+      if (voiceAccessIdx === 1) {
+        const voiceNumbers = await ask(rl, 'Allowed numbers (comma-separated, e.g. +972541234567, +12025551234):');
+        if (voiceNumbers.trim()) {
+          channelConfig.allow_list = voiceNumbers.split(',').map((n: string) => n.trim()).filter(Boolean);
+        }
+      }
+
       console.log(c('yellow', '\n  ⚠️  Voice requires a public URL. Use --tunnel or --public-url when starting.\n'));
     }
 

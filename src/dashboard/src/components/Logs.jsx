@@ -20,10 +20,100 @@ function StatusBadge({ status }) {
         <span className="text-xs font-bold">Error</span>
       </div>
     );
+  if (status === 'blocked')
+    return (
+      <div className="flex items-center gap-1.5 text-yellow">
+        <span className="material-symbols-outlined text-[18px]">block</span>
+        <span className="text-xs font-bold">Blocked</span>
+      </div>
+    );
   return (
     <div className="flex items-center gap-1.5 text-orange">
       <span className="material-symbols-outlined text-[18px]">pending</span>
       <span className="text-xs font-bold">Processing</span>
+    </div>
+  );
+}
+
+function AllowActions({ entry }) {
+  const [adding, setAdding] = useState(null);
+  const [done, setDone] = useState(false);
+  const { channels, services } = useAppState();
+
+  const channelName = Object.keys(channels).find(
+    name => name === entry.channel || channels[name].type === entry.channel
+  );
+
+  const channelServices = channelName
+    ? Object.entries(services).filter(([, svc]) => svc.channel === channelName)
+    : [];
+
+  async function addToChannel() {
+    if (!channelName) return;
+    setAdding('channel');
+    try {
+      const ch = channels[channelName];
+      const newList = [...(ch.allow_list || []), entry.from];
+      await fetch(API + '/api/config/channels/' + encodeURIComponent(channelName), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allow_list: newList }),
+      });
+      setDone(true);
+    } catch {}
+    setAdding(null);
+  }
+
+  async function addToService(svcName) {
+    const svc = services[svcName];
+    setAdding(svcName);
+    try {
+      const newList = [...(svc.allow_list || []), entry.from];
+      await fetch(API + '/api/config/services/' + encodeURIComponent(svcName), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook: svc.webhook, allow_list: newList }),
+      });
+      setDone(true);
+    } catch {}
+    setAdding(null);
+  }
+
+  if (!channelName) return null;
+
+  if (done) {
+    return (
+      <div className="flex items-center gap-2 text-green text-sm">
+        <span className="material-symbols-outlined text-[18px]">check_circle</span>
+        <span className="font-medium">{entry.from} added to allow list</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-dim">This number is not in the allow list. Add it to allow future messages:</p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={(e) => { e.stopPropagation(); addToChannel(); }}
+          disabled={!!adding}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-primary text-primary hover:bg-primary hover:text-white transition-colors disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-[16px]">{adding === 'channel' ? 'hourglass_empty' : 'person_add'}</span>
+          Add to {channelName} channel
+        </button>
+        {channelServices.map(([name]) => (
+          <button
+            key={name}
+            onClick={(e) => { e.stopPropagation(); addToService(name); }}
+            disabled={!!adding}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border border-border text-dim hover:border-primary hover:text-primary transition-colors disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[16px]">{adding === name ? 'hourglass_empty' : 'person_add'}</span>
+            Add to {name} service
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -92,6 +182,7 @@ function LogRow({ entry, isNew }) {
                 <label className="text-[11px] text-dim uppercase block mb-1">Response</label>
                 <div className="bg-surface border border-border rounded-lg p-3 text-sm whitespace-pre-wrap">{entry.responseText || '\u2014'}</div>
               </div>
+              {entry.status === 'blocked' && <AllowActions entry={entry} />}
             </div>
           </td>
         </tr>

@@ -21,7 +21,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   // POST /api/config/services — add a new service
   app.post('/api/config/services', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
-    const { name, channel, webhook, code, command } = req.body;
+    const { name, channel, webhook, code, command, allow_list } = req.body;
     if (!name || !channel || !webhook) {
       res.status(400).json({ error: 'name, channel, and webhook are required' });
       return;
@@ -37,7 +37,12 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         res.status(400).json({ error: `Channel "${channel}" does not exist` });
         return;
       }
-      config.services[name] = { channel, webhook, ...(code && { code }), ...(command && { command }) };
+      config.services[name] = {
+        channel, webhook,
+        ...(code && { code }),
+        ...(command && { command }),
+        ...(Array.isArray(allow_list) && allow_list.length > 0 && { allow_list }),
+      };
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
@@ -50,7 +55,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/services/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { webhook, code, command, stt, tts, format } = req.body;
+    const { webhook, code, command, stt, tts, format, allow_list } = req.body;
     if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
     const validSttProviders = ['google', 'whisper', 'deepgram'];
     const validTtsProviders = ['google', 'elevenlabs', 'openai'];
@@ -96,6 +101,11 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       } else {
         delete config.services[name].format;
       }
+      if (Array.isArray(allow_list) && allow_list.length > 0) {
+        config.services[name].allow_list = allow_list;
+      } else {
+        delete config.services[name].allow_list;
+      }
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
@@ -126,7 +136,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   // POST /api/config/channels — add a new channel
   app.post('/api/config/channels', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
-    const { name, ...fields } = req.body;
+    const { name, allow_list, ...fields } = req.body;
     if (!name || !fields.type) {
       res.status(400).json({ error: 'name and type are required' });
       return;
@@ -137,7 +147,10 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         res.status(409).json({ error: `Channel "${name}" already exists` });
         return;
       }
-      config.channels[name] = fields;
+      config.channels[name] = {
+        ...fields,
+        ...(Array.isArray(allow_list) && allow_list.length > 0 && { allow_list }),
+      };
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
@@ -150,7 +163,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched } = req.body;
+    const { unmatched, allow_list } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
@@ -161,6 +174,13 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         config.channels[name].unmatched = unmatched;
       } else {
         delete config.channels[name].unmatched;
+      }
+      if (allow_list !== undefined) {
+        if (Array.isArray(allow_list) && allow_list.length > 0) {
+          config.channels[name].allow_list = allow_list;
+        } else {
+          delete config.channels[name].allow_list;
+        }
       }
       saveConfig(ctx.configPath, config);
       ctx.broadcast({ type: 'configChanged' });

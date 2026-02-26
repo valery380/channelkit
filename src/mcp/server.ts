@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'crypto';
 import express from 'express';
 import { createServer } from 'http';
@@ -105,60 +106,97 @@ export class ChannelKitMcpServer {
    * Each client session gets its own McpServer + transport pair.
    */
   async mountOnExpress(app: ReturnType<typeof express>): Promise<void> {
+    // CORS headers + OPTIONS preflight are handled globally by mcpCors() middleware
+    // registered in ApiServer before externalAccessGuard and mcpAuthCheck.
+
     // ── Streamable HTTP transport (newer clients like Claude Desktop) ──
     app.all('/mcp', async (req, res) => {
-      const sessionId = req.headers['mcp-session-id'] as string | undefined;
+      try {
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-      if (sessionId) {
-        // Existing session — route to its transport
-        const transport = this.httpSessions.get(sessionId);
-        if (transport) {
-          await transport.handleRequest(req, res, req.body);
-        } else {
+        if (sessionId) {
+          // Existing session — route to its transport
+          const transport = this.httpSessions.get(sessionId);
+          if (transport) {
+            await transport.handleRequest(req, res, req.body);
+          } else {
+            res.status(400).json({
+              jsonrpc: '2.0',
+              error: { code: -32600, message: 'Invalid Request: session not found' },
+              id: null,
+            });
+          }
+          return;
+        }
+
+        // New session — only allow POST with initialize request
+        if (req.method !== 'POST' || !isInitializeRequest(req.body)) {
           res.status(400).json({
             jsonrpc: '2.0',
-            error: { code: -32600, message: 'Invalid Request: session not found' },
+            error: { code: -32600, message: 'Bad Request: first request must be a POST initialize' },
+            id: null,
+          });
+          return;
+        }
+
+        const id = randomUUID();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => id,
+        });
+
+        const server = this.createMcpServer();
+        await server.connect(transport);
+
+        this.httpSessions.set(id, transport);
+        transport.onclose = () => { this.httpSessions.delete(id); };
+
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        console.error('[mcp] Error handling /mcp request:', error);
+        if (!(res as any).headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: 'Internal server error' },
             id: null,
           });
         }
-        return;
       }
-
-      // New session — create a dedicated transport + server
-      const id = randomUUID();
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => id,
-      });
-
-      const server = this.createMcpServer();
-      await server.connect(transport);
-
-      this.httpSessions.set(id, transport);
-      transport.onclose = () => { this.httpSessions.delete(id); };
-
-      await transport.handleRequest(req, res, req.body);
     });
 
     // ── Legacy SSE transport (Antigravity, older clients) ──
     app.get('/sse', async (req, res) => {
-      const transport = new SSEServerTransport('/messages', res);
-      this.sseTransports.set(transport.sessionId, transport);
+      try {
+        const transport = new SSEServerTransport('/messages', res as any);
+        this.sseTransports.set(transport.sessionId, transport);
 
-      res.on('close', () => {
-        this.sseTransports.delete(transport.sessionId);
-      });
+        (res as any).on('close', () => {
+          this.sseTransports.delete(transport.sessionId);
+        });
 
-      const server = this.createMcpServer();
-      await server.connect(transport);
+        const server = this.createMcpServer();
+        await server.connect(transport);
+      } catch (error) {
+        console.error('[mcp] Error handling /sse request:', error);
+        if (!(res as any).headersSent) {
+          res.status(500).json({ error: 'Failed to establish SSE connection' });
+        }
+      }
     });
 
     app.post('/messages', async (req, res) => {
-      const sessionId = req.query.sessionId as string;
-      const transport = this.sseTransports.get(sessionId);
-      if (transport) {
-        await transport.handlePostMessage(req, res, req.body);
-      } else {
-        res.status(400).json({ error: 'No active SSE session for this sessionId' });
+      try {
+        const sessionId = req.query.sessionId as string;
+        const transport = this.sseTransports.get(sessionId);
+        if (transport) {
+          await transport.handlePostMessage(req as any, res as any, req.body);
+        } else {
+          res.status(400).json({ error: 'No active SSE session for this sessionId' });
+        }
+      } catch (error) {
+        console.error('[mcp] Error handling /messages request:', error);
+        if (!(res as any).headersSent) {
+          res.status(500).json({ error: 'Internal server error' });
+        }
       }
     });
 

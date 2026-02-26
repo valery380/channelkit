@@ -8,6 +8,37 @@ import { ApiServer } from '../api/server';
 import { processInbound, processOutbound } from '../media/processor';
 import { AppConfig, ServiceConfig } from '../config/types';
 
+/** Normalize a sender identifier by stripping non-digit characters (for phone numbers). */
+function normalizeSender(sender: string): string {
+  return sender.replace(/[^0-9]/g, '');
+}
+
+/** Check if a sender is allowed by an allow list. Returns true if no list or list is empty. */
+function isAllowed(sender: string, allowList?: string[]): boolean {
+  if (!allowList || allowList.length === 0) return true;
+  const normalized = normalizeSender(sender);
+  return allowList.some(entry => normalizeSender(entry) === normalized);
+}
+
+/**
+ * Check if a sender can interact with this channel at all (pre-routing).
+ * Allowed if: channel has no allow list, OR channel allows them,
+ * OR any service on this channel explicitly allows them (service overrides channel).
+ */
+function isAllowedForChannel(
+  sender: string,
+  channelAllowList: string[] | undefined,
+  servicesOnChannel: ServiceConfig[],
+): boolean {
+  if (!channelAllowList || channelAllowList.length === 0) return true;
+  if (isAllowed(sender, channelAllowList)) return true;
+  // Service allow lists override channel — if any service allows this sender, let them through
+  for (const svc of servicesOnChannel) {
+    if (svc.allow_list && svc.allow_list.length > 0 && isAllowed(sender, svc.allow_list)) return true;
+  }
+  return false;
+}
+
 export interface MessageHandlerDeps {
   router: Router;
   apiServer: ApiServer;
@@ -21,6 +52,27 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
   channel.on('message', async (message: UnifiedMessage) => {
     message.channelName = channel.name;
+
+    // Check if sender can interact with this channel at all.
+    // A service-level allow list overrides the channel restriction,
+    // so we also check service allow lists before blocking.
+    const channelAllowList = (config.channels[channel.name] as any)?.allow_list as string[] | undefined;
+    const servicesOnChannel = router.getServicesForChannel(channel.name);
+    if (!isAllowedForChannel(message.from, channelAllowList, servicesOnChannel)) {
+      logger.log({
+        id: message.id,
+        timestamp: Date.now(),
+        channel: message.channel,
+        from: message.from,
+        senderName: message.senderName,
+        text: message.text,
+        type: message.type,
+        route: 'blocked',
+        status: 'blocked',
+        latency: 0,
+      });
+      return;
+    }
 
     // Try onboarding first for DMs (only in groups mode)
     const mode = router.getChannelMode(channel.name);
@@ -75,6 +127,28 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // STT: transcribe audio if configured for this service
     const serviceConfig = router.findServiceConfig(message);
+
+    // Check allow list: service allow list overrides channel allow list.
+    // If the service defines its own allow list, use it; otherwise fall back to channel's.
+    const effectiveAllowList = (serviceConfig?.allow_list && serviceConfig.allow_list.length > 0)
+      ? serviceConfig.allow_list
+      : channelAllowList;
+    if (!isAllowed(message.from, effectiveAllowList)) {
+      logger.log({
+        id: message.id,
+        timestamp: Date.now(),
+        channel: message.channel,
+        from: message.from,
+        senderName: message.senderName,
+        text: message.text,
+        type: message.type,
+        route: 'blocked',
+        status: 'blocked',
+        latency: 0,
+      });
+      return;
+    }
+
     let sttTranscription: string | undefined;
     if (serviceConfig) {
       const originalText = message.text;

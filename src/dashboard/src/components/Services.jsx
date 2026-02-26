@@ -329,16 +329,22 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const [webhook, setWebhook] = useState(svc.webhook);
   const [code, setCode] = useState(svc.code || '');
   const [command, setCommand] = useState(svc.command || '');
+  const [editAllowListEnabled, setEditAllowListEnabled] = useState(!!(svc.allow_list?.length));
+  const [editAllowListText, setEditAllowListText] = useState((svc.allow_list || []).join(', '));
   const [showExample, setShowExample] = useState(false);
   const showAudio = audioTarget === name;
   const isEndpoint = channels[svc.channel]?.type === 'endpoint';
+  const isPhoneChannel = ['whatsapp', 'sms', 'voice'].includes(channels[svc.channel]?.type);
 
   async function save() {
     if (!webhook) { alert('Webhook URL is required'); return; }
+    const allowList = editAllowListEnabled && editAllowListText.trim()
+      ? editAllowListText.split(',').map(n => n.trim()).filter(Boolean)
+      : [];
     const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhook, code: code || null, command: command || null }),
+      body: JSON.stringify({ webhook, code: code || null, command: command || null, allow_list: allowList.length > 0 ? allowList : null }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Save failed'); return; }
     setEditing(false);
@@ -358,6 +364,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   if (svc.stt) infoParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ''));
   if (svc.tts) infoParts.push('TTS: ' + svc.tts.provider + (svc.tts.language ? ' (' + svc.tts.language + ')' : ''));
   if (svc.format) infoParts.push('Format: ' + svc.format.provider);
+  if (svc.allow_list?.length) infoParts.push(svc.allow_list.length + ' allowed');
 
   return (
     <>
@@ -369,6 +376,23 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
           <td className="px-6 py-4 space-y-1">
             <input value={code} onChange={e => setCode(e.target.value)} placeholder="Magic code" className={inputCls} />
             <input value={command} onChange={e => setCommand(e.target.value)} placeholder="Slash command" className={inputCls} />
+            {isPhoneChannel && (
+              <div className="space-y-1 pt-1">
+                <label className="flex items-center gap-2 text-xs text-text cursor-pointer select-none">
+                  <input type="checkbox" checked={editAllowListEnabled} onChange={e => setEditAllowListEnabled(e.target.checked)} className="accent-primary" />
+                  Allow list
+                </label>
+                {editAllowListEnabled && (
+                  <textarea
+                    value={editAllowListText}
+                    onChange={e => setEditAllowListText(e.target.value)}
+                    placeholder="+972541234567, +12025551234"
+                    rows={2}
+                    className={inputCls + ' resize-y text-xs'}
+                  />
+                )}
+              </div>
+            )}
           </td>
           <td className="px-6 py-4 text-right whitespace-nowrap">
             <button onClick={save} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Save</button>
@@ -417,6 +441,8 @@ export default function Services({ loadConfig }) {
   const [svcWebhook, setSvcWebhook] = useState('');
   const [svcCode, setSvcCode] = useState('');
   const [svcCommand, setSvcCommand] = useState('');
+  const [svcAllowListEnabled, setSvcAllowListEnabled] = useState(false);
+  const [svcAllowListText, setSvcAllowListText] = useState('');
 
   useEffect(() => {
     loadConfig();
@@ -438,10 +464,15 @@ export default function Services({ loadConfig }) {
     setSvcWebhook('');
     setSvcCode('');
     setSvcCommand('');
+    setSvcAllowListEnabled(false);
+    setSvcAllowListText('');
   }
 
   async function addService() {
     if (!svcName || !selectedChannel || !svcWebhook) { alert('Name, channel and webhook URL are required'); return; }
+    const allowList = svcAllowListEnabled && svcAllowListText.trim()
+      ? svcAllowListText.split(',').map(n => n.trim()).filter(Boolean)
+      : undefined;
     const res = await fetch(API + '/api/config/services', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -449,6 +480,7 @@ export default function Services({ loadConfig }) {
         name: svcName, channel: selectedChannel, webhook: svcWebhook,
         ...(svcCode && { code: svcCode }),
         ...(svcCommand && { command: svcCommand }),
+        ...(allowList && { allow_list: allowList }),
       }),
     });
     if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed to add service'); return; }
@@ -541,6 +573,23 @@ export default function Services({ loadConfig }) {
               <div className="flex gap-3 flex-wrap mb-3">
                 <input value={svcCode} onChange={e => setSvcCode(e.target.value)} placeholder="Magic code — WhatsApp multi-service (optional)" className={inputCls + ' flex-1 min-w-[140px]'} />
                 <input value={svcCommand} onChange={e => setSvcCommand(e.target.value)} placeholder="Slash command — Telegram, e.g. /support (optional)" className={inputCls + ' flex-1 min-w-[140px]'} />
+              </div>
+            )}
+            {['whatsapp', 'sms', 'voice'].includes(channels[selectedChannel]?.type) && (
+              <div className="space-y-2 mb-3">
+                <label className="flex items-center gap-2 text-sm text-text cursor-pointer select-none">
+                  <input type="checkbox" checked={svcAllowListEnabled} onChange={e => setSvcAllowListEnabled(e.target.checked)} className="accent-primary" />
+                  Restrict to specific numbers (allow list)
+                </label>
+                {svcAllowListEnabled && (
+                  <textarea
+                    value={svcAllowListText}
+                    onChange={e => setSvcAllowListText(e.target.value)}
+                    placeholder="Comma-separated phone numbers, e.g. +972541234567, +12025551234"
+                    rows={2}
+                    className={inputCls + ' resize-y'}
+                  />
+                )}
               </div>
             )}
             <div className="flex items-center gap-3">

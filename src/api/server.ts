@@ -4,7 +4,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
 import { ServerContext } from './types';
-import { externalAccessGuard, mcpAuthCheck } from './middleware/auth';
+import { mcpCors, externalAccessGuard, mcpAuthCheck } from './middleware/auth';
 import { registerSendRoutes } from './routes/send';
 import { registerInboundRoutes } from './routes/inbound';
 import { registerConfigRoutes } from './routes/config';
@@ -15,6 +15,7 @@ import { registerLogRoutes } from './routes/logs';
 import { registerDashboardRoutes } from './routes/dashboard';
 import { registerRestartRoutes } from './routes/restart';
 import { registerMcpRoutes } from './routes/mcp';
+import { registerUpdateRoutes } from './routes/update';
 
 export class ApiServer {
   private app = express();
@@ -55,6 +56,8 @@ export class ApiServer {
       mcpStart: undefined,
       mcpStop: undefined,
       mcpStatus: undefined,
+      updateStatus: undefined,
+      updateTrigger: undefined,
       setPublicUrl: (url: string) => { this.ctx.publicUrl = url.replace(/\/$/, ''); },
       clearPublicUrl: () => { this.ctx.publicUrl = null; },
       getBaseUrl: () => this.ctx.publicUrl || `http://localhost:${this.port}`,
@@ -65,6 +68,7 @@ export class ApiServer {
     };
 
     this.app.use(express.json());
+    this.app.use(mcpCors());
     this.app.use(externalAccessGuard(this.ctx));
     this.app.use(mcpAuthCheck(this.ctx));
 
@@ -79,6 +83,7 @@ export class ApiServer {
     registerDashboardRoutes(this.app, this.ctx);
     registerRestartRoutes(this.app, this.ctx);
     registerMcpRoutes(this.app, this.ctx);
+    registerUpdateRoutes(this.app, this.ctx);
   }
 
   // Proxy getters/setters that delegate to ctx for backward compat with index.ts
@@ -135,6 +140,8 @@ export class ApiServer {
   set mcpStart(fn: (() => Promise<{ url: string }>) | undefined) { this.ctx.mcpStart = fn; }
   set mcpStop(fn: (() => Promise<void>) | undefined) { this.ctx.mcpStop = fn; }
   set mcpStatus(fn: (() => { active: boolean; url: string | null }) | undefined) { this.ctx.mcpStatus = fn; }
+  set updateStatus(fn: (() => Promise<any>) | undefined) { this.ctx.updateStatus = fn; }
+  set updateTrigger(fn: (() => Promise<any>) | undefined) { this.ctx.updateTrigger = fn; }
   setExposeMcp(value: boolean): void { this.ctx.setExposeMcp(value); }
   broadcast(msg: any): void { this.ctx.broadcast(msg); }
   getExpressApp() { return this.app; }

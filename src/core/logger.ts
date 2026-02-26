@@ -15,7 +15,7 @@ export interface LogEntry {
   groupName?: string;
   route?: string;
   responseText?: string;
-  status: 'success' | 'error' | 'no-route';
+  status: 'success' | 'error' | 'no-route' | 'blocked';
   latency?: number;
   sttTranscription?: string;
   ttsGenerated?: boolean;

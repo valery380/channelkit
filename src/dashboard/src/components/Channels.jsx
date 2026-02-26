@@ -358,6 +358,9 @@ export default function Channels({ loadConfig }) {
   const [smsSettingsTarget, setSmsSettingsTarget] = useState(null);
   const [endpointResponseMode, setEndpointResponseMode] = useState('sync');
   const [endpointTimeout, setEndpointTimeout] = useState('30');
+  const [allowListEnabled, setAllowListEnabled] = useState(false);
+  const [allowListText, setAllowListText] = useState('');
+  const [allowListTarget, setAllowListTarget] = useState(null);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
@@ -365,6 +368,7 @@ export default function Channels({ loadConfig }) {
 
   function backToPicker() {
     setStep('pick'); setTypeKey(''); setChName(''); setFieldValues({}); setMode('service');
+    setAllowListEnabled(false); setAllowListText('');
   }
 
   function updateField(key, val) { setFieldValues(prev => ({ ...prev, [key]: val })); }
@@ -382,6 +386,9 @@ export default function Channels({ loadConfig }) {
     if (!name || !typeKey) { alert('Channel name and type are required'); return; }
     const body = { name, mode };
     if (mode === 'groups') body.unmatched = unmatched;
+    if (allowListEnabled && allowListText.trim()) {
+      body.allow_list = allowListText.split(',').map(n => n.trim()).filter(Boolean);
+    }
 
     if (typeKey === 'whatsapp') {
       const num = fieldValues.number?.trim();
@@ -518,6 +525,9 @@ export default function Channels({ loadConfig }) {
                       <td className="px-6 py-4 font-mono text-xs text-dim">
                         {detail}
                         {isSms && <div className="mt-0.5 font-sans text-primary text-[11px]">{smsModeLabel}</div>}
+                        {ch.allow_list?.length > 0 && (
+                          <div className="mt-0.5 font-sans text-[11px] text-yellow">{ch.allow_list.length} allowed number{ch.allow_list.length > 1 ? 's' : ''}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-xs text-dim">{deps.length > 0 ? deps.join(', ') : '\u2014'}</td>
                       <td className="px-6 py-4">
@@ -534,12 +544,59 @@ export default function Channels({ loadConfig }) {
                         ) : <span className="text-xs text-dim">{'\u2014'}</span>}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
+                        {['whatsapp', 'sms', 'voice'].includes(ch.type) && (
+                          <button onClick={() => {
+                            if (allowListTarget === name) { setAllowListTarget(null); return; }
+                            setAllowListTarget(name);
+                            setAllowListText((ch.allow_list || []).join(', '));
+                            setAllowListEnabled(!!(ch.allow_list?.length));
+                          }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Allow List</button>
+                        )}
                         {isSms && <button onClick={() => setSmsSettingsTarget(smsSettingsTarget === name ? null : name)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Settings</button>}
                         <button onClick={() => removeChannel(name, deps)} className="px-3 py-1 text-xs font-medium text-red border border-red/30 rounded hover:bg-red-light transition-colors">Remove</button>
                       </td>
                     </tr>
                     {smsSettingsTarget === name && (
                       <SmsSettingsRow name={name} currentMode={smsMode} currentInterval={ch.poll_interval || 60} onClose={() => setSmsSettingsTarget(null)} loadConfig={loadConfig} />
+                    )}
+                    {allowListTarget === name && (
+                      <tr>
+                        <td colSpan={6} className="px-6 py-4">
+                          <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
+                            <div className="text-sm font-semibold text-text">Allow List — {name}</div>
+                            <label className="flex items-center gap-2 text-sm text-text cursor-pointer select-none">
+                              <input type="checkbox" checked={allowListEnabled} onChange={e => setAllowListEnabled(e.target.checked)} className="accent-primary" />
+                              Restrict to specific numbers
+                            </label>
+                            {allowListEnabled && (
+                              <textarea
+                                value={allowListText}
+                                onChange={e => setAllowListText(e.target.value)}
+                                placeholder="Comma-separated phone numbers, e.g. +972541234567, +12025551234"
+                                rows={2}
+                                className={inputCls + ' resize-y'}
+                              />
+                            )}
+                            <div className="flex items-center gap-2 pt-1">
+                              <button
+                                onClick={async () => {
+                                  const list = allowListEnabled && allowListText.trim()
+                                    ? allowListText.split(',').map(n => n.trim()).filter(Boolean)
+                                    : [];
+                                  await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+                                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ unmatched: ch.unmatched || null, allow_list: list.length > 0 ? list : [] }),
+                                  });
+                                  setAllowListTarget(null);
+                                  loadConfig();
+                                }}
+                                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors"
+                              >Save</button>
+                              <button onClick={() => setAllowListTarget(null)} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Cancel</button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     )}
                   </React.Fragment>
                 );
@@ -640,6 +697,24 @@ export default function Channels({ loadConfig }) {
                 </select>
                 {endpointResponseMode === 'sync' && (
                   <input type="number" value={endpointTimeout} onChange={e => setEndpointTimeout(e.target.value)} min="5" max="120" placeholder="Response timeout in seconds (default: 30)" className={inputCls} />
+                )}
+              </div>
+            )}
+
+            {['whatsapp', 'sms-twilio', 'voice-twilio'].includes(typeKey) && (
+              <div className="space-y-2 mb-3">
+                <label className="flex items-center gap-2 text-sm text-text cursor-pointer select-none">
+                  <input type="checkbox" checked={allowListEnabled} onChange={e => setAllowListEnabled(e.target.checked)} className="accent-primary" />
+                  Restrict to specific numbers (allow list)
+                </label>
+                {allowListEnabled && (
+                  <textarea
+                    value={allowListText}
+                    onChange={e => setAllowListText(e.target.value)}
+                    placeholder="Comma-separated phone numbers, e.g. +972541234567, +12025551234"
+                    rows={2}
+                    className={inputCls + ' resize-y'}
+                  />
                 )}
               </div>
             )}
