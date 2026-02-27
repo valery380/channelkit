@@ -52,7 +52,7 @@ export class Onboarding {
   private async handleWhatsApp(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
     if (!this.whatsappChannel) return false;
 
-    const codes = this.getCodesForChannel('whatsapp');
+    const codes = this.getCodesForChannel(message.channelName || message.channel);
     const text = (message.text || '').trim().toUpperCase();
 
     const matched = codes.find(c => c.code.toUpperCase() === text);
@@ -125,7 +125,7 @@ export class Onboarding {
   private async handleTelegram(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
     if (!this.telegramChannel) return false;
 
-    const codes = this.getCodesForChannel('telegram');
+    const codes = this.getCodesForChannel(message.channelName || message.channel);
     if (codes.length === 0) return false;
     // Support both plain code and /start CODE
     let text = (message.text || '').trim().toUpperCase();

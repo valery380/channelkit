@@ -268,7 +268,15 @@ export class WhatsAppChannel extends Channel {
     if (response.text) {
       await this.sock.sendMessage(to, { text: response.text });
     }
-    if (response.media?.url) {
+    if (response.media?.buffer && response.media.mimetype) {
+      // Non-audio buffer (e.g. PDF from webhook response)
+      const mime = response.media.mimetype;
+      const type = mime.startsWith('image') ? 'image' : 'document';
+      await this.sock.sendMessage(to, {
+        [type]: response.media.buffer,
+        mimetype: mime,
+      } as any);
+    } else if (response.media?.url) {
       const type = response.media.mimetype?.startsWith('image') ? 'image' : 'document';
       await this.sock.sendMessage(to, {
         [type]: { url: response.media.url },
@@ -292,11 +300,13 @@ export class WhatsAppChannel extends Channel {
       '';
 
     const isGroup = jid.endsWith('@g.us');
+    // Resolve participant: key.participant is primary, msg.participant is fallback
+    const participant = key.participant || msg.participant || undefined;
 
     return {
       id: key.id || `${Date.now()}`,
       channel: 'whatsapp',
-      from: isGroup ? (key.participant || jid) : jid,
+      from: isGroup ? (participant || jid) : jid,
       type: content.imageMessage
         ? 'image'
         : content.audioMessage

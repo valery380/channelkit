@@ -556,6 +556,12 @@ export default function Services({ loadConfig }) {
   const isServiceMode = channels[selectedChannel]?.mode === 'service';
   const svcEntries = Object.entries(services);
   const channelNames = Object.keys(channels);
+  const occupiedServiceChannels = new Set(
+    channelNames.filter(name =>
+      channels[name]?.mode === 'service' &&
+      svcEntries.some(([, svc]) => svc.channel === name)
+    )
+  );
 
   return (
     <>
@@ -608,15 +614,17 @@ export default function Services({ loadConfig }) {
                   const ch = channels[name];
                   const icon = channelIcons[ch.type] || null;
                   const detail = ch.number || ch.from_email || (ch.bot_token ? ch.bot_token.slice(0, 12) + '\u2026' : '');
+                  const occupied = occupiedServiceChannels.has(name);
                   return (
                     <div
                       key={name}
-                      onClick={() => selectChannel(name)}
-                      className="flex flex-col items-center gap-2 p-4 bg-bg-light border-2 border-border rounded-xl cursor-pointer transition-all hover:border-primary hover:bg-highlight text-center"
+                      onClick={occupied ? undefined : () => selectChannel(name)}
+                      className={`flex flex-col items-center gap-2 p-4 bg-bg-light border-2 border-border rounded-xl transition-all text-center ${occupied ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary hover:bg-highlight'}`}
                     >
                       <div className="w-8 h-8 flex items-center justify-center text-[28px]">{icon}</div>
                       <div className="text-sm font-medium text-text">{name}</div>
                       <div className="text-[11px] text-dim leading-tight w-full truncate">{ch.type}{detail ? ' \u00b7 ' + detail : ''}</div>
+                      {occupied && <div className="text-[10px] text-dim leading-tight">Service mode · already in use</div>}
                     </div>
                   );
                 })}

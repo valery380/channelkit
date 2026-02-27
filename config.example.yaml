@@ -16,6 +16,19 @@ routes:
   #   match: "status|temperature"
   #   webhook: "http://localhost:8080/smart-home"
 
+# Webhook URLs support placeholders that are replaced at runtime:
+#   [FROM]          – sender identifier (phone number, user ID, email)
+#   [CHANNEL]       – channel type (whatsapp, telegram, email, sms)
+#   [CHANNEL_NAME]  – channel config key (main, support-bot, etc.)
+#   [SENDER_NAME]   – sender display name
+#   [MESSAGE_TYPE]  – message type (text, image, audio, etc.)
+#   [GROUP_ID]      – group/chat ID
+#   [GROUP_NAME]    – group/chat name
+#   [TEXT]          – message text (or STT transcription for voice messages)
+#
+# Example:
+#   webhook: "http://localhost:3000/api/users/[FROM]/messages"
+
 # onboarding:
 #   method: code
 #   codes:

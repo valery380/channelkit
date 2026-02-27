@@ -125,6 +125,15 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       }
     }
 
+    // For group messages where `from` isn't a standard user JID (e.g. group JID or LID),
+    // resolve to the actual user stored during onboarding
+    if (message.groupId && !message.from.endsWith('@s.whatsapp.net') && onboarding) {
+      const mapping = onboarding.getGroupStore().get(message.groupId);
+      if (mapping?.userId) {
+        message.from = mapping.userId;
+      }
+    }
+
     // STT: transcribe audio if configured for this service
     const serviceConfig = router.findServiceConfig(message);
 

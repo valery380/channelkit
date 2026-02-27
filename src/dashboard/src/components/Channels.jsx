@@ -107,7 +107,7 @@ function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfi
 
   return (
     <tr>
-      <td colSpan={6} className="px-6 py-4">
+      <td colSpan={7} className="px-6 py-4">
         <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
           <div className="text-sm font-semibold text-text">SMS Inbound Settings</div>
           <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
@@ -163,7 +163,7 @@ function EmailSettingsRow({ name, ch, onClose, loadConfig }) {
 
   return (
     <tr>
-      <td colSpan={6} className="px-6 py-4">
+      <td colSpan={7} className="px-6 py-4">
         <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
           <div className="text-sm font-semibold text-text">Email Settings &mdash; {name}</div>
           <div className="space-y-1">
@@ -547,6 +547,13 @@ export default function Channels({ loadConfig }) {
     });
   }
 
+  async function setChannelMode(name, mode) {
+    await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
+    });
+    loadConfig();
+  }
+
   const hasBuyOption = typeKey === 'sms-twilio' || typeKey === 'voice-twilio' || typeKey === 'whatsapp';
   const def = CHANNEL_FIELDS[typeKey];
   const chEntries = Object.entries(channels);
@@ -561,6 +568,7 @@ export default function Channels({ loadConfig }) {
               <tr className="bg-bg-light border-b border-border">
                 <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Type</th>
+                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Mode</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Details</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Services</th>
                 <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Unmatched msgs</th>
@@ -569,7 +577,7 @@ export default function Channels({ loadConfig }) {
             </thead>
             <tbody className="divide-y divide-border/50">
               {chEntries.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-dim py-8 text-sm">No channels configured</td></tr>
+                <tr><td colSpan={7} className="text-center text-dim py-8 text-sm">No channels configured</td></tr>
               ) : chEntries.map(([name, ch]) => {
                 const deps = Object.entries(services).filter(([, s]) => s.channel === name).map(([n]) => n);
                 const detail = ch.number || (ch.bot_token ? ch.bot_token.slice(0, 12) + '\u2026' : '') || ch.from_email || '';
@@ -583,6 +591,20 @@ export default function Channels({ loadConfig }) {
                     <tr className="hover:bg-bg-light transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-text">{name}</td>
                       <td className="px-6 py-4 text-sm text-dim">{ch.type}</td>
+                      <td className="px-6 py-4">
+                        {ch.type === 'endpoint' ? (
+                          <span className="text-xs text-dim">{'\u2014'}</span>
+                        ) : (
+                          <select
+                            value={ch.mode || 'service'}
+                            onChange={e => setChannelMode(name, e.target.value)}
+                            className="text-xs py-1 px-2 border border-border rounded bg-bg-light text-text focus:outline-none"
+                          >
+                            <option value="service">Service</option>
+                            <option value="groups">Groups</option>
+                          </select>
+                        )}
+                      </td>
                       <td className="px-6 py-4 font-mono text-xs text-dim">
                         {detail}
                         {isSms && <div className="mt-0.5 font-sans text-primary text-[11px]">{smsModeLabel}</div>}
@@ -626,7 +648,7 @@ export default function Channels({ loadConfig }) {
                     )}
                     {allowListTarget === name && (
                       <tr>
-                        <td colSpan={6} className="px-6 py-4">
+                        <td colSpan={7} className="px-6 py-4">
                           <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
                             <div className="text-sm font-semibold text-text">Allow List — {name}</div>
                             <label className="flex items-center gap-2 text-sm text-text cursor-pointer select-none">

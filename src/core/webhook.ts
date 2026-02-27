@@ -22,6 +22,42 @@ function guessFilename(type: string, mimetype: string): string {
   return `${type || 'file'}.${ext}`;
 }
 
+/** Normalize a phone-like identifier: strip WhatsApp JID suffix, ensure + prefix. */
+function normalizePhone(value: string): string {
+  // Strip WhatsApp JID suffixes (@s.whatsapp.net, @g.us, etc.)
+  const stripped = value.replace(/@.+$/, '');
+  // If it looks like a phone number (all digits, optionally with +), ensure + prefix
+  if (/^\+?\d{7,15}$/.test(stripped)) {
+    return stripped.startsWith('+') ? stripped : `+${stripped}`;
+  }
+  // Non-phone identifiers (emails, Telegram IDs) pass through unchanged
+  return value;
+}
+
+const PLACEHOLDER_MAP: Record<string, (m: UnifiedMessage) => string | undefined> = {
+  FROM: (m) => normalizePhone(m.from),
+  CHANNEL: (m) => m.channel,
+  CHANNEL_NAME: (m) => m.channelName,
+  SENDER_NAME: (m) => m.senderName,
+  MESSAGE_TYPE: (m) => m.type,
+  GROUP_ID: (m) => m.groupId,
+  GROUP_NAME: (m) => m.groupName,
+  TEXT: (m) => m.text,
+};
+
+/**
+ * Replace [PLACEHOLDER] tokens in a URL with values from the message.
+ * Values are URI-encoded. Missing values become empty strings.
+ */
+export function resolvePlaceholders(url: string, message: UnifiedMessage): string {
+  if (!url.includes('[')) return url;
+  return url.replace(/\[([A-Z_]+)\]/g, (_match, key: string) => {
+    const getter = PLACEHOLDER_MAP[key];
+    const value = getter ? getter(message) : undefined;
+    return encodeURIComponent(value || '');
+  });
+}
+
 export async function dispatchWebhook(
   url: string,
   message: UnifiedMessage,
@@ -97,6 +133,20 @@ export async function dispatchWebhook(
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         return (await res.json()) as WebhookResponse;
+      }
+
+      // Non-JSON response — return binary content (PDF, images, etc.) as media
+      if (contentType && !contentType.includes('text/')) {
+        const arrayBuf = await res.arrayBuffer();
+        if (arrayBuf.byteLength > 0) {
+          const mimetype = contentType.split(';')[0].trim();
+          return {
+            media: {
+              buffer: Buffer.from(arrayBuf),
+              mimetype,
+            },
+          } as WebhookResponse;
+        }
       }
 
       return null;

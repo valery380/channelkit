@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
+import { restartProcess } from '../core/restart';
 import { Updater } from '../core/updater';
 import { AppConfig } from '../config/types';
 import { loadConfig, saveConfig } from '../config/parser';
@@ -122,14 +123,15 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'add_channel',
-    'Add a new channel to the configuration (requires restart to take effect)',
+    'Add a new channel to the configuration. Requires restart to take effect — set auto_restart to restart automatically.',
     {
       name: z.string().describe('Channel name'),
       type: z.enum(['whatsapp', 'telegram', 'email', 'sms', 'voice']).describe('Channel type'),
       config: z.record(z.string(), z.any()).optional().describe('Channel-specific configuration (bot_token, api_key, etc.)'),
       allow_list: z.array(z.string()).optional().describe('Optional allow list of sender identifiers (phone numbers). If set, only these senders can use the channel.'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
     },
-    async ({ name, type, config: channelConfig, allow_list }) => {
+    async ({ name, type, config: channelConfig, allow_list, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
       }
@@ -144,6 +146,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
           ...(allow_list && allow_list.length > 0 && { allow_list }),
         };
         saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Channel "${name}" (${type}) added. ChannelKit is restarting...` }] };
+        }
         return { content: [{ type: 'text', text: `Channel "${name}" (${type}) added. Restart ChannelKit to connect it.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
@@ -153,9 +159,12 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'remove_channel',
-    'Remove a channel and its dependent services from the configuration',
-    { name: z.string().describe('Channel name to remove') },
-    async ({ name }) => {
+    'Remove a channel and its dependent services from the configuration. Requires restart to apply — set auto_restart to restart automatically.',
+    {
+      name: z.string().describe('Channel name to remove'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
+    },
+    async ({ name, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -177,8 +186,43 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         saveConfig(ctx.configPath, config);
         let msg = `Channel "${name}" removed.`;
         if (removedServices.length > 0) msg += ` Also removed services: ${removedServices.join(', ')}.`;
-        msg += ' Restart ChannelKit to apply.';
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          msg += ' ChannelKit is restarting...';
+        } else {
+          msg += ' Restart ChannelKit to apply.';
+        }
         return { content: [{ type: 'text', text: msg }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
+  mcp.tool(
+    'set_channel_mode',
+    'Set a channel\'s routing mode to "service" (single service, direct routing) or "groups" (multiple services via codes/commands). Requires restart to apply — set auto_restart to restart automatically.',
+    {
+      name: z.string().describe('Channel name'),
+      mode: z.enum(['service', 'groups']).describe('Routing mode'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
+    },
+    async ({ name, mode, auto_restart }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+        if (!config.channels[name]) {
+          return { content: [{ type: 'text', text: `Channel "${name}" not found` }], isError: true };
+        }
+        config.channels[name].mode = mode;
+        saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Channel "${name}" mode set to "${mode}". ChannelKit is restarting...` }] };
+        }
+        return { content: [{ type: 'text', text: `Channel "${name}" mode set to "${mode}". Restart ChannelKit to apply.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
       }
@@ -206,7 +250,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'add_service',
-    'Create a new service',
+    'Create a new service. Requires restart to activate — set auto_restart to restart automatically.',
     {
       name: z.string().describe('Service name'),
       channel: z.string().describe('Channel name this service uses'),
@@ -223,8 +267,9 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         language: z.string().optional(),
       }).optional().describe('Text-to-speech config'),
       allow_list: z.array(z.string()).optional().describe('Optional allow list of sender identifiers (phone numbers). If set, only these senders can use the service.'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
     },
-    async ({ name, channel, webhook, code, command, stt, tts, allow_list }) => {
+    async ({ name, channel, webhook, code, command, stt, tts, allow_list, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -245,6 +290,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         if (allow_list && allow_list.length > 0) svc.allow_list = allow_list;
         config.services[name] = svc;
         saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Service "${name}" created. ChannelKit is restarting...` }] };
+        }
         return { content: [{ type: 'text', text: `Service "${name}" created. Restart ChannelKit to activate.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
@@ -254,7 +303,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'update_service',
-    'Update an existing service',
+    'Update an existing service. Requires restart to apply — set auto_restart to restart automatically.',
     {
       name: z.string().describe('Service name to update'),
       webhook: z.string().optional().describe('New webhook URL'),
@@ -270,8 +319,9 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         language: z.string().optional(),
       }).optional().describe('New TTS config'),
       allow_list: z.array(z.string()).optional().describe('Allow list of sender identifiers. Pass empty array to remove restrictions.'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
     },
-    async ({ name, webhook, code, command, stt, tts, allow_list }) => {
+    async ({ name, webhook, code, command, stt, tts, allow_list, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -302,6 +352,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
           else delete config.services[name].allow_list;
         }
         saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Service "${name}" updated. ChannelKit is restarting...` }] };
+        }
         return { content: [{ type: 'text', text: `Service "${name}" updated. Restart to apply changes.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
@@ -311,9 +365,12 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
   mcp.tool(
     'remove_service',
-    'Remove a service from the configuration',
-    { name: z.string().describe('Service name to remove') },
-    async ({ name }) => {
+    'Remove a service from the configuration. Requires restart to apply — set auto_restart to restart automatically.',
+    {
+      name: z.string().describe('Service name to remove'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
+    },
+    async ({ name, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -324,6 +381,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         }
         delete config.services![name];
         saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Service "${name}" removed. ChannelKit is restarting...` }] };
+        }
         return { content: [{ type: 'text', text: `Service "${name}" removed. Restart to apply.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
@@ -405,14 +466,29 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
     }
   );
 
+  // ── Restart ──────────────────────────────────────────────
+
+  mcp.tool(
+    'restart',
+    'Restart the ChannelKit process. The MCP connection will be lost and should reconnect automatically.',
+    {},
+    async () => {
+      setTimeout(() => restartProcess(ctx.channels), 500);
+      return { content: [{ type: 'text', text: 'ChannelKit is restarting... The MCP connection will reconnect shortly.' }] };
+    }
+  );
+
+  // ── Configuration ───────────────────────────────────────────
+
   mcp.tool(
     'set_config',
     'Set a configuration value using a dot-separated path. Examples: set_config("apiPort", 5000), set_config("tunnel.expose_dashboard", true), set_config("settings.openai_api_key", "sk-..."), set_config("mcp.enabled", true). Changes are saved to config.yaml. Some changes require a restart to take effect.',
     {
       path: z.string().describe('Dot-separated config path (e.g. "apiPort", "tunnel.token", "settings.openai_api_key", "mcp.enabled")'),
       value: z.any().describe('Value to set (string, number, boolean, or null to delete the key)'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart ChannelKit to apply changes'),
     },
-    async ({ path, value }) => {
+    async ({ path, value, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set — cannot modify config' }], isError: true };
       }
@@ -439,6 +515,10 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
 
         saveConfig(ctx.configPath, config);
         const display = value === null ? '(deleted)' : JSON.stringify(value);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: `Set ${path} = ${display}. ChannelKit is restarting...` }] };
+        }
         return { content: [{ type: 'text', text: `Set ${path} = ${display}. Restart ChannelKit if needed to apply.` }] };
       } catch (err: any) {
         return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };

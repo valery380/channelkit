@@ -1,6 +1,6 @@
 import { ServiceConfig, RouteConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from './types';
-import { dispatchWebhook } from './webhook';
+import { dispatchWebhook, resolvePlaceholders } from './webhook';
 import { GroupStore } from './groupStore';
 import { Logger } from './logger';
 
@@ -130,10 +130,12 @@ export class Router {
       }
     }
 
-    // Group mapping
+    // Group mapping — look up by service name (stable), fall back to webhook URL
     if (message.groupId && this.groupStore) {
       const mapping = this.groupStore.get(message.groupId);
       if (mapping) {
+        const byName = this.services.get(mapping.serviceName);
+        if (byName) return byName;
         for (const svc of this.services.values()) {
           if (svc.webhook === mapping.webhook) return svc;
         }
@@ -159,10 +161,11 @@ export class Router {
       return { response: null, webhook: undefined, latency: 0 };
     }
 
-    console.log(`[router] Routing ${message.id} → ${svc.webhook}`);
+    const resolvedUrl = resolvePlaceholders(svc.webhook, message);
+    console.log(`[router] Routing ${message.id} → ${resolvedUrl}`);
     const timeoutMs = message.media?.buffer ? 30000 : 5000;
-    const response = await dispatchWebhook(svc.webhook, message, replyUrl, { method: svc.method, auth: svc.auth, timeout: timeoutMs });
+    const response = await dispatchWebhook(resolvedUrl, message, replyUrl, { method: svc.method, auth: svc.auth, timeout: timeoutMs });
     const latency = Date.now() - startTime;
-    return { response, webhook: svc.webhook, latency };
+    return { response, webhook: resolvedUrl, latency };
   }
 }

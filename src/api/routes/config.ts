@@ -196,12 +196,19 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched, allow_list } = req.body;
+    const { unmatched, allow_list, mode } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
         res.status(404).json({ error: `Channel "${name}" not found` });
         return;
+      }
+      if (mode !== undefined) {
+        if (!['service', 'groups'].includes(mode)) {
+          res.status(400).json({ error: 'Mode must be "service" or "groups"' });
+          return;
+        }
+        config.channels[name].mode = mode;
       }
       if (unmatched) {
         config.channels[name].unmatched = unmatched;
