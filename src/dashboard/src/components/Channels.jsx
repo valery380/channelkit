@@ -148,6 +148,97 @@ function GmailAuthModal({ channel, qrMessage, onClose }) {
   );
 }
 
+function SmsListenModal({ number, smsListenMessage, onClose }) {
+  const dispatch = useDispatch();
+  const [messages, setMessages] = useState([]);
+  const [error, setError] = useState('');
+  const [timer, setTimer] = useState(300);
+  const intervalRef = useRef(null);
+  const stopped = useRef(false);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => setTimer(t => {
+      if (t <= 1) { clearInterval(intervalRef.current); return 0; }
+      return t - 1;
+    }), 1000);
+    return () => clearInterval(intervalRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (!smsListenMessage || smsListenMessage.number !== number) return;
+    if (smsListenMessage.type === 'sms-listen') {
+      setMessages(prev => {
+        const exists = prev.some(m => m.body === smsListenMessage.message.body && m.from === smsListenMessage.message.from && m.date === smsListenMessage.message.date);
+        if (exists) return prev;
+        return [smsListenMessage.message, ...prev];
+      });
+    } else if (smsListenMessage.type === 'sms-listen-error') {
+      setError(smsListenMessage.error);
+      clearInterval(intervalRef.current);
+    } else if (smsListenMessage.type === 'sms-listen-stopped') {
+      stopped.current = true;
+      clearInterval(intervalRef.current);
+      setTimer(0);
+    }
+  }, [smsListenMessage, number]);
+
+  function handleClose() {
+    apiFetch(API + '/api/twilio/stop-listen-sms', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number }),
+    }).catch(() => {});
+    dispatch({ type: 'SET_SMS_LISTEN', payload: null });
+    onClose();
+  }
+
+  const mins = Math.floor(timer / 60);
+  const secs = timer % 60;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div className="bg-surface rounded-xl p-8 max-w-lg w-[90%] shadow-2xl">
+        <h3 className="text-base font-semibold mb-1">Listening for SMS</h3>
+        <div className="text-sm text-dim mb-4">Messages arriving at <span className="font-mono font-medium text-text">{number}</span></div>
+
+        {error && <div className="p-3 rounded-lg text-xs text-red bg-red-light border border-red/20 mb-4">{error}</div>}
+
+        {messages.length === 0 && !error && timer > 0 && (
+          <div className="py-10 text-center text-dim text-sm">
+            <div className="inline-block w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-3"></div>
+            <div>Waiting for messages...</div>
+          </div>
+        )}
+
+        {messages.length > 0 && (
+          <div className="max-h-60 overflow-y-auto border border-border rounded-lg mb-4 divide-y divide-border/50">
+            {messages.map((m, i) => (
+              <div key={i} className="px-4 py-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-mono text-xs font-medium text-text">{m.from}</span>
+                  <span className="text-[10px] text-dim">{new Date(m.date).toLocaleTimeString()}</span>
+                </div>
+                <div className="text-sm text-text select-all">{m.body}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {timer === 0 && messages.length === 0 && !error && (
+          <div className="py-8 text-center text-dim text-sm">Timed out — no messages received.</div>
+        )}
+
+        <div className="flex items-center justify-between">
+          {timer > 0 && !error && <span className="text-xs text-dim">Auto-stop in {mins}:{secs.toString().padStart(2, '0')}</span>}
+          {(timer === 0 || error) && <span></span>}
+          <button onClick={handleClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">
+            {timer > 0 && !error ? 'Stop & Close' : 'Close'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfig }) {
   const { tunnelActive } = useAppState();
   const [mode, setMode] = useState(currentMode);
@@ -376,7 +467,7 @@ function BuyNumberPanel({ typeKey, fieldValues, onNumberPurchased, onClose }) {
   );
 }
 
-function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onSelect }) {
+function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onSelect, onNumbersFetched }) {
   const [numbers, setNumbers] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -407,6 +498,7 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
       if (!res.ok) throw new Error(data.error || 'Failed to fetch numbers');
       if (!data.numbers?.length) { setError('No phone numbers found in this Twilio account.'); return; }
       setNumbers(data.numbers);
+      if (onNumbersFetched) onNumbersFetched(data.numbers);
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   }
@@ -464,7 +556,7 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
 }
 
 export default function Channels({ loadConfig }) {
-  const { channels, services, twilioDefaults, tunnelActive, qrMessage } = useAppState();
+  const { channels, services, twilioDefaults, tunnelActive, qrMessage, smsListenMessage } = useAppState();
   const dispatch = useDispatch();
   const [step, setStep] = useState('pick');
   const [typeKey, setTypeKey] = useState('');
@@ -488,10 +580,12 @@ export default function Channels({ loadConfig }) {
   const [allowListText, setAllowListText] = useState('');
   const [allowListTarget, setAllowListTarget] = useState(null);
   const [copiedSecret, setCopiedSecret] = useState(null);
+  const [smsListenNumber, setSmsListenNumber] = useState(null);
+  const [fetchedTwilioNumbers, setFetchedTwilioNumbers] = useState([]);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
-  function selectType(type) { setTypeKey(type); setStep('form'); setFieldValues({}); setShowBuy(false); }
+  function selectType(type) { setTypeKey(type); setStep('form'); setFieldValues({}); setShowBuy(false); setFetchedTwilioNumbers([]); }
 
   function backToPicker() {
     setStep('pick'); setTypeKey(''); setChName(''); setFieldValues({}); setMode('service');
@@ -645,6 +739,28 @@ export default function Channels({ loadConfig }) {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
     });
     loadConfig();
+  }
+
+  async function startSmsListen(phoneNumber) {
+    const sid = twilioDefaults.sid;
+    const tok = twilioDefaults.tok;
+    if (!sid || !tok) { alert('Set Twilio defaults in Settings first to listen for SMS.'); return; }
+    setSmsListenNumber(phoneNumber);
+    dispatch({ type: 'SET_SMS_LISTEN', payload: null });
+    try {
+      const res = await apiFetch(API + '/api/twilio/listen-sms', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_sid: sid, auth_token: tok, number: phoneNumber }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || 'Failed to start SMS listener');
+        setSmsListenNumber(null);
+      }
+    } catch (e) {
+      alert(e.message);
+      setSmsListenNumber(null);
+    }
   }
 
   const hasBuyOption = typeKey === 'sms-twilio' || typeKey === 'voice-twilio' || typeKey === 'whatsapp';
@@ -841,7 +957,7 @@ export default function Channels({ loadConfig }) {
             </div>
 
             {hasBuyOption && (
-              <FetchNumbersPanel typeKey={typeKey} fieldValues={fieldValues} channels={channels} twilioDefaults={twilioDefaults} onSelect={num => updateField('number', num)} />
+              <FetchNumbersPanel typeKey={typeKey} fieldValues={fieldValues} channels={channels} twilioDefaults={twilioDefaults} onSelect={num => updateField('number', num)} onNumbersFetched={nums => setFetchedTwilioNumbers(nums.map(n => n.phoneNumber))} />
             )}
 
             {hasBuyOption && !showBuy && (
@@ -853,6 +969,18 @@ export default function Channels({ loadConfig }) {
             )}
             {hasBuyOption && showBuy && (
               <BuyNumberPanel typeKey={typeKey} fieldValues={fieldValues} onNumberPurchased={num => { updateField('number', num); setShowBuy(false); }} onClose={() => setShowBuy(false)} />
+            )}
+
+            {typeKey === 'whatsapp' && fieldValues.number?.trim() && fetchedTwilioNumbers.includes(fieldValues.number.trim()) && (
+              <div className="mb-3 p-3 bg-bg-light border border-border rounded-lg flex items-center justify-between">
+                <div className="text-xs text-dim">
+                  <span className="font-mono font-medium text-text">{fieldValues.number.trim()}</span> is in your Twilio account.
+                  Listen for incoming SMS to catch a verification code.
+                </div>
+                <button onClick={() => startSmsListen(fieldValues.number.trim())} className="ml-3 px-3 py-1.5 text-xs font-semibold text-white bg-primary rounded-lg hover:bg-primary-hover transition-colors whitespace-nowrap">
+                  Listen to SMS
+                </button>
+              </div>
             )}
 
             {typeKey === 'sms-twilio' && (
@@ -946,6 +1074,10 @@ export default function Channels({ loadConfig }) {
 
       {gmailAuthChannel && (
         <GmailAuthModal channel={gmailAuthChannel} qrMessage={qrMessage} onClose={() => setGmailAuthChannel(null)} />
+      )}
+
+      {smsListenNumber && (
+        <SmsListenModal number={smsListenNumber} smsListenMessage={smsListenMessage} onClose={() => setSmsListenNumber(null)} />
       )}
     </>
   );

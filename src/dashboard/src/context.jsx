@@ -20,6 +20,7 @@ const initialState = {
   wsConnected: false,
   configChanged: false,
   qrMessage: null,
+  smsListenMessage: null,
 };
 
 function reducer(state, action) {
@@ -76,6 +77,8 @@ function reducer(state, action) {
       return { ...state, twilioDefaults: action.payload };
     case 'SET_QR_MESSAGE':
       return { ...state, qrMessage: action.payload };
+    case 'SET_SMS_LISTEN':
+      return { ...state, smsListenMessage: action.payload };
     default:
       return state;
   }

@@ -72,6 +72,10 @@ export function useWebSocket(dispatch) {
           ) {
             dispatch({ type: 'SET_QR_MESSAGE', payload: msg });
           }
+
+          if (msg.type === 'sms-listen' || msg.type === 'sms-listen-error' || msg.type === 'sms-listen-stopped') {
+            dispatch({ type: 'SET_SMS_LISTEN', payload: msg });
+          }
         } catch {}
       };
     }
