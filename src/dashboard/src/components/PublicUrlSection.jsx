@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 import McpConnectModal from './McpConnectModal.jsx';
 
 export default function PublicUrlSection() {
@@ -32,7 +32,7 @@ export default function PublicUrlSection() {
 
   async function updateEndpoints() {
     try {
-      const res = await fetch(API + '/api/tunnel/update-webhooks', { method: 'POST' });
+      const res = await apiFetch(API + '/api/tunnel/update-webhooks', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) { alert('Failed: ' + (data.error || res.status)); return; }
       const lines = [];
@@ -45,7 +45,7 @@ export default function PublicUrlSection() {
 
   function openSetup() {
     setSetupOpen(true);
-    fetch(API + '/api/tunnel/config')
+    apiFetch(API + '/api/tunnel/config')
       .then(r => r.json())
       .then(cfg => {
         if (cfg.token) setToken(cfg.token);
@@ -60,7 +60,7 @@ export default function PublicUrlSection() {
     let h = hostname.trim();
     if (!t || !h) { alert('Both tunnel token and public hostname are required.'); return; }
     if (!h.startsWith('http')) h = 'https://' + h;
-    const res = await fetch(API + '/api/tunnel/config', {
+    const res = await apiFetch(API + '/api/tunnel/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: t, public_url: h }),
@@ -69,7 +69,7 @@ export default function PublicUrlSection() {
     dispatch({ type: 'SET_TUNNEL_HAS_TOKEN', payload: true });
     setSetupOpen(false);
     if (tunnelActive) {
-      await fetch(API + '/api/tunnel/stop', { method: 'POST' });
+      await apiFetch(API + '/api/tunnel/stop', { method: 'POST' });
       dispatch({ type: 'SET_TUNNEL', payload: { active: false, url: null } });
       alert('Token saved. Click Externalize again to connect with your stable URL.');
     } else {
@@ -79,7 +79,7 @@ export default function PublicUrlSection() {
 
   async function clearConfig() {
     if (!confirm('Remove the tunnel token? The next Externalize will use a random URL.')) return;
-    await fetch(API + '/api/tunnel/config', {
+    await apiFetch(API + '/api/tunnel/config', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: null, public_url: null }),
@@ -91,7 +91,7 @@ export default function PublicUrlSection() {
   }
 
   async function toggleExpose(checked) {
-    await fetch(API + '/api/tunnel/expose-dashboard', {
+    await apiFetch(API + '/api/tunnel/expose-dashboard', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: checked }),
@@ -100,7 +100,7 @@ export default function PublicUrlSection() {
   }
 
   async function toggleExposeMcp(checked) {
-    await fetch(API + '/api/mcp/expose', {
+    await apiFetch(API + '/api/mcp/expose', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: checked }),

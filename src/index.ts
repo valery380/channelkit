@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { AppConfig, TunnelConfig } from './config/types';
 import { Router } from './core/router';
 import { ApiServer } from './api/server';
@@ -213,8 +214,25 @@ export class ChannelKit {
       }
     };
 
+    // Auto-generate api_secret on first startup if not configured
+    if (!this.config.api_secret && this.configPath) {
+      const generated = randomBytes(32).toString('base64url');
+      this.config.api_secret = generated;
+      try {
+        saveConfig(this.configPath, this.config);
+        console.log(`\n🔐 New API secret generated and saved to config.yaml:`);
+        console.log(`   ${generated}`);
+        console.log(`   Use this to log in to the dashboard and for API requests.\n`);
+      } catch (err: any) {
+        console.warn(`[security] Failed to save generated api_secret: ${err.message}`);
+        console.log(`🔐 Generated API secret (not persisted): ${generated}`);
+      }
+    }
+
     if (this.config.api_secret) {
       this.apiServer.setApiSecret(this.config.api_secret);
+    } else {
+      console.warn('[security] No api_secret configured — dashboard and API endpoints are unauthenticated.');
     }
     if (this.config.mcp?.secret) {
       this.apiServer.setMcpSecret(this.config.mcp.secret);

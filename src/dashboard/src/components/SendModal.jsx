@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API } from '../api.js';
+import { API, apiFetch, getToken } from '../api.js';
 
 function phoneToJid(phone) {
   return phone.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
@@ -13,13 +13,11 @@ export default function SendModal({ onClose }) {
   const [status, setStatus] = useState('');
   const [statusColor, setStatusColor] = useState('');
   const [sending, setSending] = useState(false);
-  const [apiSecret, setApiSecret] = useState(null);
 
   useEffect(() => {
-    fetch(API + '/api/config')
+    apiFetch(API + '/api/config')
       .then(r => r.json())
       .then(data => {
-        setApiSecret(data.api_secret || null);
         const waChannels = Object.entries(data.channels)
           .filter(([, cfg]) => cfg.type === 'whatsapp')
           .map(([name]) => name);
@@ -39,12 +37,10 @@ export default function SendModal({ onClose }) {
     setStatusColor('text-dim');
 
     const jid = phoneToJid(phone);
-    const headers = { 'Content-Type': 'application/json' };
-    if (apiSecret) headers['Authorization'] = 'Bearer ' + apiSecret;
 
     try {
-      const res = await fetch(API + '/api/send/' + encodeURIComponent(channel) + '/' + encodeURIComponent(jid), {
-        method: 'POST', headers, body: JSON.stringify({ text }),
+      const res = await apiFetch(API + '/api/send/' + encodeURIComponent(channel) + '/' + encodeURIComponent(jid), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -64,12 +60,13 @@ export default function SendModal({ onClose }) {
   }
 
   const jid = phoneToJid(phone || '+972501234567');
+  const token = getToken();
   const curlExample = `curl -X POST ${API}/api/send/${channel || 'whatsapp'}/${encodeURIComponent(jid)} \\
-  -H "Content-Type: application/json" \\${apiSecret ? `\n  -H "Authorization: Bearer ${apiSecret}" \\` : ''}
+  -H "Content-Type: application/json" \\${token ? `\n  -H "Authorization: Bearer <your_api_secret>" \\` : ''}
   -d '{"text": "Hello from the API!"}'`;
   const jsExample = `await fetch("${API}/api/send/${channel || 'whatsapp'}/${encodeURIComponent(jid)}", {
   method: "POST",
-  headers: {${apiSecret ? `\n    "Authorization": "Bearer ${apiSecret}",` : ''}
+  headers: {${token ? `\n    "Authorization": "Bearer <your_api_secret>",` : ''}
     "Content-Type": "application/json"
   },
   body: JSON.stringify({ text: "Hello from the API!" })

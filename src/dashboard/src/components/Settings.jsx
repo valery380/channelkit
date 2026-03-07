@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 const FIELDS = [
   { key: 'twilio_account_sid', label: 'Account SID', placeholder: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', group: 'twilio' },
@@ -53,7 +53,7 @@ export default function Settings() {
 
   async function loadSettings() {
     try {
-      const res = await fetch(API + '/api/settings');
+      const res = await apiFetch(API + '/api/settings');
       const data = await res.json();
       const s = data.settings || {};
       dispatch({ type: 'SET_SETTINGS', payload: s });
@@ -79,7 +79,7 @@ export default function Settings() {
       return;
     }
     try {
-      const res = await fetch(API + '/api/settings', {
+      const res = await apiFetch(API + '/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -90,7 +90,7 @@ export default function Settings() {
       setTimeout(() => setStatus(''), 2000);
       loadSettings();
       try {
-        const r = await fetch(API + '/api/settings/twilio-defaults');
+        const r = await apiFetch(API + '/api/settings/twilio-defaults');
         const d = await r.json();
         dispatch({ type: 'SET_TWILIO_DEFAULTS', payload: { sid: d.account_sid || '', tok: d.auth_token || '' } });
       } catch {}

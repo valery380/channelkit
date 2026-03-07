@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 const TRANSPORTS = [
   { id: 'http', label: 'Streamable HTTP', desc: 'Modern clients (Claude Code, Cursor, Windsurf)' },
@@ -39,7 +39,7 @@ export default function McpConnectModal({ onClose }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    fetch(API + '/api/mcp/connection-info')
+    apiFetch(API + '/api/mcp/connection-info')
       .then(r => r.json())
       .then(data => {
         setInfo(data);

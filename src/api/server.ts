@@ -1,10 +1,13 @@
 import express from 'express';
 import { createServer } from 'http';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
+import { timingSafeEqual } from 'crypto';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
 import { ServerContext } from './types';
-import { mcpCors, externalAccessGuard, mcpAuthCheck } from './middleware/auth';
+import { mcpCors, externalAccessGuard, mcpAuthCheck, adminAuthCheck } from './middleware/auth';
 import { registerSendRoutes } from './routes/send';
 import { registerInboundRoutes } from './routes/inbound';
 import { registerConfigRoutes } from './routes/config';
@@ -16,6 +19,18 @@ import { registerDashboardRoutes } from './routes/dashboard';
 import { registerRestartRoutes } from './routes/restart';
 import { registerMcpRoutes } from './routes/mcp';
 import { registerUpdateRoutes } from './routes/update';
+
+/** Redact patterns that look like API keys/tokens from log text. */
+function redactSecrets(text: string): string {
+  // Common API key patterns (long hex, base64, bearer tokens in log output)
+  return text
+    .replace(/\b(re_[A-Za-z0-9_]{20,})\b/g, 're_****')
+    .replace(/\b(sk-[A-Za-z0-9_-]{20,})\b/g, 'sk-****')
+    .replace(/\b(whsec_[A-Za-z0-9_]{20,})\b/g, 'whsec_****')
+    .replace(/\b(AC[a-f0-9]{32})\b/g, 'AC****')
+    .replace(/\b(AIzaSy[A-Za-z0-9_-]{33})\b/g, 'AIza****')
+    .replace(/\b(eyJ[A-Za-z0-9_-]{50,})\b/g, 'eyJ****');
+}
 
 export class ApiServer {
   private app = express();
@@ -67,10 +82,80 @@ export class ApiServer {
       setExposeMcp: (value: boolean) => { this.ctx.exposeMcp = value; },
     };
 
-    this.app.use(express.json());
-    this.app.use(mcpCors());
+    // Security headers
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          imgSrc: ["'self'", "data:"],
+          connectSrc: ["'self'", "ws:", "wss:"],
+        },
+      },
+    }));
+
+    // Body size limits
+    this.app.use(express.json({ limit: '1mb' }));
+    this.app.use(mcpCors(this.ctx));
     this.app.use(externalAccessGuard(this.ctx));
     this.app.use(mcpAuthCheck(this.ctx));
+    this.app.use(adminAuthCheck(this.ctx));
+
+    // Rate limiting — stricter for send/inbound, looser for dashboard
+    const sendLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 60,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many requests, please try again later' },
+    });
+    const inboundLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 120,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { error: 'Too many requests' },
+    });
+    const dashboardLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 300,
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    this.app.use('/api/send', sendLimiter);
+    this.app.use('/inbound', inboundLimiter);
+    this.app.use('/api', dashboardLimiter);
+
+    // Auth check endpoint — lets the dashboard verify if a secret is required/valid
+    this.app.get('/api/auth/check', (_req, res) => {
+      if (!this.ctx.apiSecret) {
+        res.json({ required: false });
+        return;
+      }
+      const auth = _req.headers.authorization;
+      if (auth) {
+        const expected = `Bearer ${this.ctx.apiSecret}`;
+        const valid = auth.length === expected.length && timingSafeEqual(Buffer.from(auth), Buffer.from(expected));
+        res.json({ required: true, valid });
+      } else {
+        res.json({ required: true, valid: false });
+      }
+    });
+
+    // WebSocket authentication
+    wss.on('connection', (ws, req) => {
+      if (this.ctx.apiSecret) {
+        const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+        const token = url.searchParams.get('token');
+        if (!token || token.length !== this.ctx.apiSecret.length ||
+            !timingSafeEqual(Buffer.from(token), Buffer.from(this.ctx.apiSecret))) {
+          ws.close(4401, 'Unauthorized');
+          return;
+        }
+      }
+    });
 
     // Register all route modules
     registerSendRoutes(this.app, this.ctx);
@@ -103,7 +188,7 @@ export class ApiServer {
 
   captureConsole(): void {
     const capture = (level: string, data: any) => {
-      const text = String(data).replace(/\r?\n$/, '');
+      const text = redactSecrets(String(data).replace(/\r?\n$/, ''));
       if (!text) return;
       const entry = { level, text, ts: Date.now() };
       this.ctx.serverLogBuffer.push(entry);
@@ -157,6 +242,10 @@ export class ApiServer {
       }
       this.httpServer = createServer(this.app);
       this.ctx.wss = new WebSocketServer({ server: this.httpServer });
+    }
+
+    if (!this.ctx.apiSecret) {
+      console.warn('⚠️  No api_secret configured — dashboard and API endpoints are unprotected. Set api_secret in config.yaml for production use.');
     }
 
     return new Promise((resolve, reject) => {

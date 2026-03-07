@@ -422,6 +422,43 @@ npm install
 npm run dev    # starts with auto-reload on code changes
 ```
 
+## Security
+
+ChannelKit is designed to run on a dedicated server. Follow these guidelines to secure your deployment:
+
+### Required for production
+
+- **Set `api_secret`** in `config.yaml` — this protects all dashboard and API endpoints with Bearer token authentication. Without it, anyone with network access can control your instance.
+- **Run behind a reverse proxy** (nginx, Caddy, Traefik) with TLS termination. ChannelKit itself serves HTTP; the proxy handles HTTPS.
+- **Use firewall rules** to restrict port 4000 to localhost if using a reverse proxy, or to trusted IPs only.
+
+### Credentials
+
+- **Never commit `config.yaml`** to version control (it's in `.gitignore` by default). If you previously committed it, rotate all credentials immediately.
+- **Set a strong MCP secret** in Settings if you expose the MCP server externally.
+- **Webhook signature verification** is enabled automatically for Twilio and Resend channels when `auth_token` / `webhook_secret` are configured.
+
+### What's protected
+
+| Feature | Protection |
+|---------|-----------|
+| Dashboard & admin APIs | `api_secret` Bearer token |
+| WebSocket (real-time updates) | Token validated on connection |
+| `/api/send` endpoint | `api_secret` Bearer token |
+| MCP server | `mcp.secret` Bearer token (external only) |
+| Inbound webhooks (Twilio) | Request signature verification |
+| Inbound webhooks (Resend) | Svix signature verification |
+| Endpoint channels | Optional `X-Channel-Secret` header |
+
+### Additional hardening
+
+- Rate limiting is applied to all endpoints (60/min for send, 120/min for inbound, 300/min for dashboard)
+- Security headers (CSP, X-Frame-Options, etc.) are set via `helmet`
+- Webhook URLs are validated against private IP ranges (SSRF protection)
+- Channel/service names are restricted to alphanumeric characters, hyphens, and underscores
+- Sensitive fields (API keys, tokens) are masked in API responses
+- Server log broadcasts redact common API key patterns
+
 ## License
 
 MIT

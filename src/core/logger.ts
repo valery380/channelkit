@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 
 export interface LogEntry {
   id: string;

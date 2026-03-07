@@ -3,8 +3,35 @@ import { ServerContext } from '../types';
 import { loadConfig, saveConfig } from '../../config/parser';
 import { WhatsAppChannel } from '../../channels/whatsapp';
 
+/** Keys in channel configs that contain secrets and should be masked in API responses. */
+const SENSITIVE_CHANNEL_KEYS = ['api_key', 'bot_token', 'auth_token', 'client_secret', 'webhook_secret', 'secret'];
+
+function maskValue(val: string): string {
+  if (val.length <= 4) return '••••';
+  return '•'.repeat(val.length - 4) + val.slice(-4);
+}
+
+function maskChannelSecrets(channels: Record<string, any>): Record<string, any> {
+  const masked: Record<string, any> = {};
+  for (const [name, ch] of Object.entries(channels)) {
+    const copy = { ...ch };
+    for (const key of SENSITIVE_CHANNEL_KEYS) {
+      if (typeof copy[key] === 'string' && copy[key].length > 0) {
+        copy[key] = maskValue(copy[key]);
+      }
+    }
+    masked[name] = copy;
+  }
+  return masked;
+}
+
+/** Validate a channel/service name: only alphanumeric, hyphens, and underscores allowed. */
+function isValidName(name: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(name);
+}
+
 export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
-  // GET /api/config — return channels and services from config file
+  // GET /api/config — return channels and services from config file (secrets masked)
   app.get('/api/config', (_req, res) => {
     if (!ctx.configPath) {
       res.status(503).json({ error: 'Config path not set' });
@@ -12,9 +39,9 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     }
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
-      res.json({ channels: config.channels, services: config.services || {}, api_secret: config.api_secret || null });
+      res.json({ channels: maskChannelSecrets(config.channels), services: config.services || {} });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: 'Failed to load config' });
     }
   });
 
@@ -24,6 +51,10 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     const { name, channel, webhook, code, command, allow_list, method, auth } = req.body;
     if (!name || !channel || !webhook) {
       res.status(400).json({ error: 'name, channel, and webhook are required' });
+      return;
+    }
+    if (!isValidName(name)) {
+      res.status(400).json({ error: 'Name must contain only letters, numbers, hyphens, and underscores' });
       return;
     }
     const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
@@ -60,7 +91,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -142,7 +174,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -162,7 +195,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -172,6 +206,10 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     const { name, allow_list, ...fields } = req.body;
     if (!name || !fields.type) {
       res.status(400).json({ error: 'name and type are required' });
+      return;
+    }
+    if (!isValidName(name)) {
+      res.status(400).json({ error: 'Name must contain only letters, numbers, hyphens, and underscores' });
       return;
     }
     try {
@@ -188,7 +226,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -226,7 +265,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -290,7 +330,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -377,7 +418,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -401,7 +443,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -448,7 +491,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         tempChannel.disconnect().catch(() => {});
       }, 65000);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 }

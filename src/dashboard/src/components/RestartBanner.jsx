@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppState } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 export default function RestartBanner() {
   const { configChanged } = useAppState();
@@ -13,14 +13,14 @@ export default function RestartBanner() {
     if (!confirm('Restart ChannelKit now?\n\nThe process will restart and the dashboard will reload automatically.')) return;
     setRestarting(true);
     setStatus('');
-    try { await fetch(API + '/api/restart', { method: 'POST' }); } catch {}
+    try { await apiFetch(API + '/api/restart', { method: 'POST' }); } catch {}
     setStatus('Waiting for server\u2026');
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
       if (attempts > 30) { clearInterval(poll); setStatus('Restart timed out \u2014 reload manually'); return; }
       try {
-        const r = await fetch(API + '/api/health');
+        const r = await apiFetch(API + '/api/health');
         if (r.ok) { clearInterval(poll); location.reload(); }
       } catch {}
     }, 1000);

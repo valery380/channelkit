@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 export default function ServerLogs() {
   const { serverLogLines } = useAppState();
@@ -9,7 +9,7 @@ export default function ServerLogs() {
   const logRef = useRef(null);
 
   useEffect(() => {
-    fetch(API + '/api/server-logs')
+    apiFetch(API + '/api/server-logs')
       .then(r => r.json())
       .then(lines => dispatch({ type: 'SET_SERVER_LOGS', payload: lines }))
       .catch(() => {});
@@ -22,7 +22,7 @@ export default function ServerLogs() {
   }, [serverLogLines, autoScroll]);
 
   async function clear() {
-    await fetch(API + '/api/server-logs', { method: 'DELETE' });
+    await apiFetch(API + '/api/server-logs', { method: 'DELETE' });
     dispatch({ type: 'SET_SERVER_LOGS', payload: [] });
   }
 

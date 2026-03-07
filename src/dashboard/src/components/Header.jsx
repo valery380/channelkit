@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 export default function Header() {
   const { wsConnected, tunnelActive, tunnelUrl, mcpActive, mcpUrl } = useAppState();
@@ -20,10 +20,10 @@ export default function Header() {
     setTunnelLoading(true);
     try {
       if (tunnelActive) {
-        await fetch(API + '/api/tunnel/stop', { method: 'POST' });
+        await apiFetch(API + '/api/tunnel/stop', { method: 'POST' });
         dispatch({ type: 'SET_TUNNEL', payload: { active: false, url: null } });
       } else {
-        const res = await fetch(API + '/api/tunnel/start', { method: 'POST' });
+        const res = await apiFetch(API + '/api/tunnel/start', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
           dispatch({ type: 'SET_TUNNEL', payload: { active: true, url: data.url } });
@@ -42,10 +42,10 @@ export default function Header() {
     setMcpLoading(true);
     try {
       if (mcpActive) {
-        await fetch(API + '/api/mcp/stop', { method: 'POST' });
+        await apiFetch(API + '/api/mcp/stop', { method: 'POST' });
         dispatch({ type: 'SET_MCP', payload: { active: false, url: null } });
       } else {
-        const res = await fetch(API + '/api/mcp/start', { method: 'POST' });
+        const res = await apiFetch(API + '/api/mcp/start', { method: 'POST' });
         const data = await res.json();
         if (res.ok) {
           dispatch({ type: 'SET_MCP', payload: { active: true, url: data.url } });

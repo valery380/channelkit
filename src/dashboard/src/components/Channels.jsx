@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 import { channelIcons, maskValue } from '../utils.jsx';
 
 const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
@@ -94,7 +94,7 @@ function SmsSettingsRow({ name, currentMode, currentInterval, onClose, loadConfi
     if (mode === 'webhook' && !tunnelActive) { alert('Please externalize the service first.'); return; }
     setSaving(true);
     try {
-      const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/sms-settings', {
+      const res = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/sms-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inbound_mode: mode, ...(mode === 'polling' && { poll_interval: parseInt(interval) || 60 }) }),
@@ -150,7 +150,7 @@ function EmailSettingsRow({ name, ch, onClose, loadConfig }) {
     if (mode === 'webhook' && !tunnelActive) { alert('Please externalize the service first.'); return; }
     setSaving(true);
     try {
-      const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/email-settings', {
+      const res = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/email-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inbound_mode: mode, from_email: fromEmail.trim(), ...(mode === 'polling' && { poll_interval: parseInt(interval) || 30 }) }),
@@ -222,7 +222,7 @@ function BuyNumberPanel({ typeKey, fieldValues, onNumberPurchased, onClose }) {
     if (!sid || !tok) { setError('Account SID and Auth Token are required'); return; }
     setSearching(true); setError('');
     try {
-      const res = await fetch(API + '/api/twilio/search-numbers', {
+      const res = await apiFetch(API + '/api/twilio/search-numbers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_sid: sid, auth_token: tok, country_code: country, type: numType, limit: 10 }),
       });
@@ -239,7 +239,7 @@ function BuyNumberPanel({ typeKey, fieldValues, onNumberPurchased, onClose }) {
     const { sid, tok } = getCreds();
     setPurchaseError('');
     try {
-      const res = await fetch(API + '/api/twilio/buy-number', {
+      const res = await apiFetch(API + '/api/twilio/buy-number', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_sid: sid, auth_token: tok, phone_number: phoneNumber }),
       });
@@ -335,7 +335,7 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
   async function fetchNumbers() {
     setLoading(true); setError(''); setNumbers(null);
     try {
-      const res = await fetch(API + '/api/twilio/list-numbers', {
+      const res = await apiFetch(API + '/api/twilio/list-numbers', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account_sid: sid, auth_token: tok }),
       });
@@ -489,14 +489,14 @@ export default function Channels({ loadConfig }) {
       });
     }
 
-    const res = await fetch(API + '/api/config/channels', {
+    const res = await apiFetch(API + '/api/config/channels', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Failed to add channel'); return; }
 
     if (typeKey === 'sms-twilio') {
       try {
-        await fetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/sms-settings', {
+        await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/sms-settings', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ inbound_mode: smsInbound, ...(smsInbound === 'polling' && { poll_interval: parseInt(smsPollInterval) || 60 }) }),
         });
@@ -504,7 +504,7 @@ export default function Channels({ loadConfig }) {
     }
     if (typeKey === 'email-resend') {
       try {
-        await fetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/email-settings', {
+        await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/email-settings', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ inbound_mode: emailInbound, ...(emailInbound === 'polling' && { poll_interval: parseInt(emailPollInterval) || 30 }) }),
         });
@@ -521,7 +521,7 @@ export default function Channels({ loadConfig }) {
     setQrChannel(channelName);
     dispatch({ type: 'SET_QR_MESSAGE', payload: null });
     try {
-      const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(channelName) + '/pair', { method: 'POST' });
+      const res = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(channelName) + '/pair', { method: 'POST' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         dispatch({ type: 'SET_QR_MESSAGE', payload: { type: 'whatsapp-pair-error', channel: channelName, error: d.error || 'Failed to start pairing' } });
@@ -536,19 +536,19 @@ export default function Channels({ loadConfig }) {
       ? `Remove channel "${name}"?\n\nThis will also remove these services:\n\u2022 ${deps.join('\n\u2022 ')}`
       : `Remove channel "${name}"?`;
     if (!confirm(msg)) return;
-    const res = await fetch(API + '/api/config/channels/' + encodeURIComponent(name), { method: 'DELETE' });
+    const res = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name), { method: 'DELETE' });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Remove failed'); return; }
     loadConfig();
   }
 
   async function setUnmatchedValue(name, value) {
-    await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+    await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unmatched: value || null }),
     });
   }
 
   async function setChannelMode(name, mode) {
-    await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+    await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name), {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }),
     });
     loadConfig();
@@ -670,7 +670,7 @@ export default function Channels({ loadConfig }) {
                                   const list = allowListEnabled && allowListText.trim()
                                     ? allowListText.split(',').map(n => n.trim()).filter(Boolean)
                                     : [];
-                                  await fetch(API + '/api/config/channels/' + encodeURIComponent(name), {
+                                  await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name), {
                                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ unmatched: ch.unmatched || null, allow_list: list.length > 0 ? list : [] }),
                                   });

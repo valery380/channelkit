@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 import { formatTime, formatDate, truncate, shortUrl, channelIcons } from '../utils.jsx';
 
 const PAGE_SIZE = 25;
@@ -69,7 +69,7 @@ function AllowActions({ entry, onToast }) {
     try {
       const ch = channels[channelName];
       const newList = [...(ch.allow_list || []), phoneNumber];
-      await fetch(API + '/api/config/channels/' + encodeURIComponent(channelName), {
+      await apiFetch(API + '/api/config/channels/' + encodeURIComponent(channelName), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allow_list: newList }),
@@ -85,7 +85,7 @@ function AllowActions({ entry, onToast }) {
     setAdding(svcName);
     try {
       const newList = [...(svc.allow_list || []), phoneNumber];
-      await fetch(API + '/api/config/services/' + encodeURIComponent(svcName), {
+      await apiFetch(API + '/api/config/services/' + encodeURIComponent(svcName), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ webhook: svc.webhook, allow_list: newList }),
@@ -234,7 +234,7 @@ export default function Logs({ onSend }) {
   }, []);
 
   useEffect(() => {
-    fetch(API + '/api/logs')
+    apiFetch(API + '/api/logs')
       .then(r => r.json())
       .then(data => dispatch({ type: 'SET_ENTRIES', payload: data }))
       .catch(() => {});
@@ -249,7 +249,7 @@ export default function Logs({ onSend }) {
 
   async function clearMessages() {
     if (!confirm('Clear all message logs? This cannot be undone.')) return;
-    await fetch(API + '/api/logs', { method: 'DELETE' });
+    await apiFetch(API + '/api/logs', { method: 'DELETE' });
     dispatch({ type: 'SET_ENTRIES', payload: [] });
   }
 
@@ -373,13 +373,13 @@ export default function Logs({ onSend }) {
             onClick={async () => {
               if (!confirm('Restart ChannelKit now?\n\nThe process will restart and the dashboard will reload automatically.')) return;
               setToast('Restarting\u2026');
-              try { await fetch(API + '/api/restart', { method: 'POST' }); } catch {}
+              try { await apiFetch(API + '/api/restart', { method: 'POST' }); } catch {}
               let attempts = 0;
               const poll = setInterval(async () => {
                 attempts++;
                 if (attempts > 30) { clearInterval(poll); setToast('Restart timed out — reload manually'); return; }
                 try {
-                  const r = await fetch(API + '/api/health');
+                  const r = await apiFetch(API + '/api/health');
                   if (r.ok) { clearInterval(poll); location.reload(); }
                 } catch {}
               }, 1000);

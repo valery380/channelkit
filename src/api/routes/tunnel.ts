@@ -31,7 +31,7 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
       res.json({ ok: true, url: result.url });
     } catch (err: any) {
       ctx.broadcast({ type: 'tunnelStatus', active: false, url: null, error: err.message });
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -54,7 +54,7 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'tunnelStatus', active: false, url: null });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -70,7 +70,7 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
       saveConfig(ctx.configPath, config);
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -84,7 +84,7 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
         expose_dashboard: ctx.exposeDashboard,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -124,7 +124,7 @@ export function registerTunnelRoutes(app: Express, ctx: ServerContext): void {
 
       res.json({ ok: true, updated, errors });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 

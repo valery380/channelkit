@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { Channel } from '../base';
 import { EndpointChannelConfig } from '../../config/types';
 import { UnifiedMessage, WebhookResponse } from '../../core/types';
@@ -52,7 +53,7 @@ export class EndpointChannel extends Channel {
     headers: Record<string, string>,
     method: string,
   ): { message: UnifiedMessage; waitForResponse?: Promise<WebhookResponse> } {
-    const requestId = `endpoint-${this.name}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = randomUUID();
     const fromId = `endpoint:${requestId}`;
 
     // Build text from request

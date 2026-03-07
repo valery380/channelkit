@@ -23,7 +23,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
       }
       res.json({ settings: masked });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -36,7 +36,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
         auth_token: config.settings?.twilio_auth_token || '',
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -84,7 +84,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 }

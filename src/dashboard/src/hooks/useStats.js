@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 
 export function useStats(dispatch) {
   useEffect(() => {
     function fetchStats() {
-      fetch(API + '/api/logs/stats')
+      apiFetch(API + '/api/logs/stats')
         .then(r => r.json())
         .then(s => dispatch({ type: 'SET_STATS', payload: s }))
         .catch(() => {});

@@ -1,4 +1,5 @@
 import { Express } from 'express';
+import { randomUUID } from 'crypto';
 import { ServerContext } from '../types';
 import { apiSecretCheck } from '../middleware/auth';
 
@@ -25,7 +26,7 @@ export function registerSendRoutes(app: Express, ctx: ServerContext): void {
 
       if (ctx.logger) {
         ctx.logger.log({
-          id: `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: randomUUID(),
           timestamp: Math.floor(Date.now() / 1000),
           channel: channelName,
           from: 'system (async)',
@@ -45,7 +46,7 @@ export function registerSendRoutes(app: Express, ctx: ServerContext): void {
 
       if (ctx.logger) {
         ctx.logger.log({
-          id: `async_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          id: randomUUID(),
           timestamp: Math.floor(Date.now() / 1000),
           channel: channelName,
           from: 'system (async)',
@@ -59,7 +60,7 @@ export function registerSendRoutes(app: Express, ctx: ServerContext): void {
         });
       }
 
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { Channel } from '../channels/base';
@@ -48,7 +49,7 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         await ch.send(recipient, { text, media: media ? { url: media } : undefined });
         if (ctx.logger) {
           ctx.logger.log({
-            id: `mcp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            id: randomUUID(),
             timestamp: Math.floor(Date.now() / 1000),
             channel: channelName,
             from: 'system (mcp)',

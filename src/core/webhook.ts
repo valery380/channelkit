@@ -1,6 +1,29 @@
 import { UnifiedMessage, WebhookResponse } from './types';
 import { ServiceAuthConfig } from '../config/types';
 
+/** Block requests to private/reserved IP ranges and cloud metadata endpoints. */
+function isBlockedUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr);
+    const hostname = parsed.hostname;
+    // Block cloud metadata endpoints
+    if (hostname === '169.254.169.254' || hostname === 'metadata.google.internal') return true;
+    // Block localhost and loopback
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '0.0.0.0') return true;
+    // Block private IP ranges (10.x, 172.16-31.x, 192.168.x)
+    const parts = hostname.split('.').map(Number);
+    if (parts.length === 4 && parts.every(n => !isNaN(n))) {
+      if (parts[0] === 10) return true;
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+      if (parts[0] === 192 && parts[1] === 168) return true;
+      if (parts[0] === 0) return true;
+    }
+    return false;
+  } catch {
+    return true; // Block malformed URLs
+  }
+}
+
 function backoffDelay(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
 }
@@ -64,6 +87,11 @@ export async function dispatchWebhook(
   replyUrl?: string,
   { maxRetries = 3, timeout = 5000, method = 'POST', auth }: { maxRetries?: number; timeout?: number; method?: string; auth?: ServiceAuthConfig } = {}
 ): Promise<WebhookResponse | null> {
+  if (isBlockedUrl(url)) {
+    console.error(`[webhook] Blocked request to private/reserved address: ${url}`);
+    return null;
+  }
+
   const payload = replyUrl ? { ...message, replyUrl } : message;
   const httpMethod = (method || 'POST').toUpperCase();
   const authHeaders = buildAuthHeaders(auth);

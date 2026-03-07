@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
-import { API } from '../api.js';
+import { API, apiFetch } from '../api.js';
 import { channelIcons, maskValue } from '../utils.jsx';
 
 const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
@@ -126,7 +126,7 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
     const sttVal = sttProvider ? { provider: sttProvider, ...(sttLang && { language: sttLang }) } : null;
     const ttsVal = ttsProvider ? { provider: ttsProvider, ...(ttsLang && { language: ttsLang }), ...(ttsVoice && { voice: ttsVoice }) } : null;
     try {
-      const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+      const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, format: svc.format || null }),
@@ -176,7 +176,7 @@ function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
   async function save() {
     const formatVal = provider ? { provider, ...(model && { model }), prompt } : null;
     try {
-      const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+      const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -365,7 +365,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
     const allowList = editAllowListEnabled && editAllowListText.trim()
       ? editAllowListText.split(',').map(n => n.trim()).filter(Boolean)
       : [];
-    const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), {
+    const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ webhook, method: webhookMethod, auth: buildAuthPayload(), code: code || null, command: command || null, stt: svc.stt || null, tts: svc.tts || null, format: svc.format || null, allow_list: allowList.length > 0 ? allowList : null }),
@@ -377,7 +377,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
 
   async function remove() {
     if (!confirm(`Remove service "${name}"?`)) return;
-    const res = await fetch(API + '/api/config/services/' + encodeURIComponent(name), { method: 'DELETE' });
+    const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), { method: 'DELETE' });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Remove failed'); return; }
     loadConfig();
   }
@@ -515,7 +515,7 @@ export default function Services({ loadConfig }) {
 
   useEffect(() => {
     loadConfig();
-    fetch(API + '/api/settings')
+    apiFetch(API + '/api/settings')
       .then(r => r.json())
       .then(data => dispatch({ type: 'SET_SETTINGS', payload: data.settings || {} }))
       .catch(() => {});
@@ -554,7 +554,7 @@ export default function Services({ loadConfig }) {
       ? svcAllowListText.split(',').map(n => n.trim()).filter(Boolean)
       : undefined;
     const authPayload = buildSvcAuthPayload();
-    const res = await fetch(API + '/api/config/services', {
+    const res = await apiFetch(API + '/api/config/services', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

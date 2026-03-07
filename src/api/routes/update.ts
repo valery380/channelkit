@@ -11,7 +11,7 @@ export function registerUpdateRoutes(app: Express, ctx: ServerContext): void {
       const status = await ctx.updateStatus();
       res.json(status);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -32,7 +32,7 @@ export function registerUpdateRoutes(app: Express, ctx: ServerContext): void {
       }
       res.json(result);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 }

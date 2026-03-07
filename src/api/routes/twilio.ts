@@ -14,7 +14,7 @@ export function registerTwilioRoutes(app: Express, ctx: ServerContext): void {
       const numbers = await provisioner.listOwnedNumbers();
       res.json({ numbers });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -32,7 +32,7 @@ export function registerTwilioRoutes(app: Express, ctx: ServerContext): void {
       });
       res.json({ numbers });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 
@@ -47,7 +47,7 @@ export function registerTwilioRoutes(app: Express, ctx: ServerContext): void {
       const purchased = await provisioner.purchaseNumber(phone_number);
       res.json({ ok: true, purchased });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
   });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { WS_URL } from '../api.js';
+import { WS_URL, getToken } from '../api.js';
 
 export function useWebSocket(dispatch) {
   const wsRef = useRef(null);
@@ -9,7 +9,9 @@ export function useWebSocket(dispatch) {
 
     function connect() {
       if (cancelled) return;
-      const ws = new WebSocket(WS_URL);
+      const token = getToken();
+      const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
+      const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
