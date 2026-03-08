@@ -1,4 +1,4 @@
-import { ServiceConfig, RouteConfig } from '../config/types';
+import { ServiceConfig, RouteConfig, ChannelConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from './types';
 import { dispatchWebhook, resolvePlaceholders } from './webhook';
 import { GroupStore } from './groupStore';
@@ -10,8 +10,10 @@ export class Router {
   private services: Map<string, ServiceConfig> = new Map();
   // channelName → ServiceConfig[] for quick lookup
   private servicesByChannel: Map<string, ServiceConfig[]> = new Map();
+  private channelConfigs: Record<string, ChannelConfig> = {};
 
-  constructor(services?: Record<string, ServiceConfig>, legacyRoutes?: RouteConfig[]) {
+  constructor(services?: Record<string, ServiceConfig>, legacyRoutes?: RouteConfig[], channelConfigs?: Record<string, ChannelConfig>) {
+    if (channelConfigs) this.channelConfigs = channelConfigs;
     // Load services
     if (services) {
       for (const [name, svc] of Object.entries(services)) {
@@ -43,7 +45,8 @@ export class Router {
    * Hot-reload services from updated config (e.g. after dashboard edits).
    * Preserves legacy routes already loaded.
    */
-  reloadServices(services: Record<string, ServiceConfig>): void {
+  reloadServices(services: Record<string, ServiceConfig>, channelConfigs?: Record<string, ChannelConfig>): void {
+    if (channelConfigs) this.channelConfigs = channelConfigs;
     // Remove non-legacy services
     for (const name of [...this.services.keys()]) {
       if (!name.startsWith('_route_')) {
@@ -76,10 +79,13 @@ export class Router {
 
   /**
    * Determine the mode for a channel:
-   * - 1 service → direct (all messages go to that webhook)
-   * - 2+ services → groups (route by group mapping)
+   * - Explicit mode in channel config takes priority
+   * - Otherwise: 1 service → direct, 2+ services → groups
    */
   getChannelMode(channelName: string): 'direct' | 'groups' {
+    const explicitMode = this.channelConfigs[channelName]?.mode;
+    if (explicitMode === 'groups') return 'groups';
+    if (explicitMode === 'service') return 'direct';
     const services = this.servicesByChannel.get(channelName) || [];
     return services.length <= 1 ? 'direct' : 'groups';
   }

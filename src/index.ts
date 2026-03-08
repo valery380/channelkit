@@ -54,7 +54,7 @@ export class ChannelKit {
       setAllowLocalWebhooks(true);
     }
 
-    this.router = new Router(config.services, config.routes);
+    this.router = new Router(config.services, config.routes, config.channels);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
 
@@ -249,7 +249,7 @@ export class ChannelKit {
       try {
         const freshConfig = loadConfig(this.configPath, { validate: false });
         if (freshConfig.services) {
-          this.router.reloadServices(freshConfig.services);
+          this.router.reloadServices(freshConfig.services, freshConfig.channels);
           console.log('[router] Services reloaded from config');
         }
       } catch (err: any) {
