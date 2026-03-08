@@ -52,6 +52,7 @@ export default function Settings() {
   const [origPort, setOrigPort] = useState('');
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [origAutoUpdate, setOrigAutoUpdate] = useState(true);
+  const [version, setVersion] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -75,6 +76,12 @@ export default function Settings() {
       const au = data.autoUpdate !== false;
       setAutoUpdate(au);
       setOrigAutoUpdate(au);
+      // Fetch version
+      try {
+        const ur = await apiFetch(API + '/api/update/status');
+        const ud = await ur.json();
+        if (ud.currentVersion) setVersion(ud.currentVersion);
+      } catch {}
     } catch (e) {
       console.error('Failed to load settings', e);
     }
@@ -156,7 +163,7 @@ export default function Settings() {
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
               />
               <div>
-                <span className="text-xs font-medium text-text">Auto-update</span>
+                <span className="text-xs font-medium text-text">Auto-update{version && <span className="text-dim font-normal ml-2">v{version}</span>}</span>
                 <p className="text-[11px] text-dim mt-0.5">Automatically check for and install new versions.</p>
               </div>
             </label>
