@@ -24,7 +24,7 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
       if (mcpSecret) {
         masked['mcp_secret'] = mcpSecret.length > 4 ? '•'.repeat(mcpSecret.length - 4) + mcpSecret.slice(-4) : '••••';
       }
-      res.json({ settings: masked });
+      res.json({ settings: masked, port: config.apiPort || 4000 });
     } catch (err: any) {
       console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
@@ -77,6 +77,13 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
         setAllowLocalWebhooks(val);
       }
       if (Object.keys(config.settings).length === 0) delete config.settings;
+      // Handle port → config.apiPort
+      if ('port' in req.body) {
+        const portVal = parseInt(req.body['port'], 10);
+        if (portVal >= 1 && portVal <= 65535) {
+          config.apiPort = portVal;
+        }
+      }
       // Handle mcp_secret → config.mcp.secret
       if ('mcp_secret' in req.body) {
         const val = req.body['mcp_secret']?.trim() || '';

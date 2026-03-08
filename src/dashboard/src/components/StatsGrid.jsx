@@ -23,7 +23,7 @@ export default function StatsGrid() {
     },
     {
       label: 'Latency',
-      value: `${stats.avgLatency}ms`,
+      value: `${stats.avgLatency || 0}ms`,
       icon: 'speed',
       iconColor: 'text-orange',
       change: null,

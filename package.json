@@ -22,7 +22,8 @@
     "init": "NODE_NO_WARNINGS=1 tsx src/cli.ts init",
     "service": "NODE_NO_WARNINGS=1 tsx src/cli.ts service",
     "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel",
-    "demo": "NODE_NO_WARNINGS=1 tsx src/cli.ts demo"
+    "demo": "NODE_NO_WARNINGS=1 tsx src/cli.ts demo",
+    "postinstall": "echo \"\n  ✅ ChannelKit installed!\n\n  Run 'channelkit' to get started.\n\""
   },
   "keywords": [
     "whatsapp",

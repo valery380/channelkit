@@ -101,13 +101,4 @@ export async function startCommand(configPath: string, opts: { tunnel?: boolean;
   console.log();
   console.log(c('green', '  🚀 ChannelKit is running!\n'));
   console.log(c('dim', '  Press Ctrl+C to stop\n'));
-
-  const serviceWebhooks = Object.values(config.services || {}).map((s: any) => s.webhook);
-  const routeWebhooks = (config.routes || []).map((r: any) => r.webhook);
-  const webhooks = new Set([...serviceWebhooks, ...routeWebhooks].filter(Boolean));
-  console.log(c('dim', '  Do not forget to run the server at:'));
-  webhooks.forEach((wh) => {
-    console.log(c('cyan', `    ${wh}`));
-  });
-  console.log(c('dim', '  For example you can run the demo server: node echo-server.js\n'));
 }

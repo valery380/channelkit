@@ -199,26 +199,6 @@ export class ChannelKit {
       return svc?.voice;
     };
 
-    // Start API server + connect all channels
-    await this.apiServer.start();
-    if (this.configPath) {
-      this.apiServer.setConfigPath(this.configPath);
-    }
-
-    // Wire up hot-reload: when services are changed via dashboard, reload the Router
-    this.apiServer.reloadRouter = () => {
-      if (!this.configPath) return;
-      try {
-        const freshConfig = loadConfig(this.configPath, { validate: false });
-        if (freshConfig.services) {
-          this.router.reloadServices(freshConfig.services);
-          console.log('[router] Services reloaded from config');
-        }
-      } catch (err: any) {
-        console.error(`[router] Failed to reload services: ${err.message}`);
-      }
-    };
-
     // Auto-generate api_secret on first startup if not configured
     if (!this.config.api_secret && this.configPath) {
       const generated = randomBytes(32).toString('base64url');
@@ -242,7 +222,40 @@ export class ChannelKit {
     if (this.config.mcp?.secret) {
       this.apiServer.setMcpSecret(this.config.mcp.secret);
     }
+
+    // Start API server + connect all channels
+    await this.apiServer.start();
+
+    // If the port changed (user chose a different port due to conflict), save it
+    const actualPort = this.apiServer.getPort();
+    if (actualPort !== (this.config.apiPort || 4000) && this.configPath) {
+      this.config.apiPort = actualPort;
+      try {
+        saveConfig(this.configPath, this.config);
+        console.log(`[config] Port ${actualPort} saved to config.yaml`);
+      } catch (err: any) {
+        console.warn(`[config] Failed to save new port: ${err.message}`);
+      }
+    }
+
+    if (this.configPath) {
+      this.apiServer.setConfigPath(this.configPath);
+    }
     this.apiServer.captureConsole();
+
+    // Wire up hot-reload: when services are changed via dashboard, reload the Router
+    this.apiServer.reloadRouter = () => {
+      if (!this.configPath) return;
+      try {
+        const freshConfig = loadConfig(this.configPath, { validate: false });
+        if (freshConfig.services) {
+          this.router.reloadServices(freshConfig.services);
+          console.log('[router] Services reloaded from config');
+        }
+      } catch (err: any) {
+        console.error(`[router] Failed to reload services: ${err.message}`);
+      }
+    };
 
     // Set initial external access from config
     if (this.config.tunnel?.expose_dashboard) {

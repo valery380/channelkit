@@ -68,7 +68,7 @@ function reducer(state, action) {
     case 'SET_TUNNEL_HAS_TOKEN':
       return { ...state, tunnelHasToken: action.payload };
     case 'SET_STATS':
-      return { ...state, stats: action.payload };
+      return { ...state, stats: { ...state.stats, ...action.payload } };
     case 'SET_WS_CONNECTED':
       return { ...state, wsConnected: action.payload };
     case 'SET_CONFIG_CHANGED':

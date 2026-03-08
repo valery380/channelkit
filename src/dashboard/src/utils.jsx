@@ -9,6 +9,7 @@ export function formatDate(ts) {
 }
 
 export function formatUptime(ms) {
+  if (!ms || !isFinite(ms)) return '0s';
   const s = Math.floor(ms / 1000);
   if (s < 60) return s + 's';
   if (s < 3600) return Math.floor(s / 60) + 'm';

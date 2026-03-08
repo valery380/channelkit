@@ -26,6 +26,8 @@ function SettingsInput({ label, placeholder, sub, value, onChange }) {
           placeholder={placeholder}
           value={value}
           onChange={e => onChange(e.target.value)}
+          autoComplete="off"
+          data-1p-ignore
           className="w-full py-2 pl-3 pr-14 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
         />
         <button
@@ -46,6 +48,8 @@ export default function Settings() {
   const [originals, setOriginals] = useState({});
   const [status, setStatus] = useState('');
   const [statusColor, setStatusColor] = useState('');
+  const [port, setPort] = useState('');
+  const [origPort, setOrigPort] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -63,6 +67,9 @@ export default function Settings() {
       setOriginals({ ...v });
       setAllowLocal(!!s.allow_local_webhooks);
       setOrigAllowLocal(!!s.allow_local_webhooks);
+      const p = String(data.port || 4000);
+      setPort(p);
+      setOrigPort(p);
     } catch (e) {
       console.error('Failed to load settings', e);
     }
@@ -75,6 +82,7 @@ export default function Settings() {
       if (val !== (originals[f.key] || '')) body[f.key] = val;
     }
     if (allowLocal !== origAllowLocal) body.allow_local_webhooks = allowLocal;
+    if (port !== origPort) body.port = parseInt(port, 10) || 4000;
     if (Object.keys(body).length === 0) {
       setStatus('No changes to save');
       setStatusColor('text-dim');
@@ -88,9 +96,10 @@ export default function Settings() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
-      setStatus('Saved');
-      setStatusColor('text-green');
-      setTimeout(() => setStatus(''), 2000);
+      const portChanged = port !== origPort;
+      setStatus(portChanged ? 'Saved — restart required for port change' : 'Saved');
+      setStatusColor(portChanged ? 'text-yellow-400' : 'text-green');
+      setTimeout(() => setStatus(''), portChanged ? 5000 : 2000);
       loadSettings();
       try {
         const r = await apiFetch(API + '/api/settings/twilio-defaults');
@@ -118,6 +127,23 @@ export default function Settings() {
     <div className="max-w-xl mx-auto py-6">
       <div className="bg-surface border border-border rounded-xl p-6 shadow-sm space-y-6">
         <div>
+          <h3 className="text-sm font-semibold text-text mb-1">Server</h3>
+          <p className="text-xs text-dim mb-4">Port the API server and dashboard listen on. Requires restart to take effect.</p>
+          <div>
+            <label className="text-xs font-medium block mb-1 text-text">Port</label>
+            <input
+              type="number"
+              min="1"
+              max="65535"
+              placeholder="4000"
+              value={port}
+              onChange={e => setPort(e.target.value)}
+              className="w-32 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-6">
           <h3 className="text-sm font-semibold text-text mb-1">Twilio Defaults</h3>
           <p className="text-xs text-dim mb-4">Default credentials used when adding SMS or Voice channels.</p>
           <div className="space-y-3">

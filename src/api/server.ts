@@ -232,13 +232,19 @@ export class ApiServer {
   broadcast(msg: any): void { this.ctx.broadcast(msg); }
   getExpressApp() { return this.app; }
 
+  getPort(): number { return this.port; }
+
   async start(): Promise<void> {
     const portInUse = await this.isPortInUse(this.port);
     if (portInUse) {
-      const freed = await this.promptKillExistingProcess(this.port);
-      if (!freed) {
+      const result = await this.promptPortConflict(this.port);
+      if (result === false) {
         console.log('[api] Exiting — port is in use.');
         process.exit(1);
+      }
+      if (typeof result === 'number') {
+        // User chose a different port
+        this.port = result;
       }
       this.httpServer = createServer(this.app);
       this.ctx.wss = new WebSocketServer({ server: this.httpServer });
@@ -271,7 +277,8 @@ export class ApiServer {
     });
   }
 
-  private async promptKillExistingProcess(port: number): Promise<boolean> {
+  /** Returns true if process was killed, a number for an alternative port, or false to abort. */
+  private async promptPortConflict(port: number): Promise<boolean | number> {
     const { execSync } = await import('child_process');
 
     let pid: string | undefined;
@@ -300,15 +307,37 @@ export class ApiServer {
         const timeout = setTimeout(() => {
           rl.close();
           console.error(`   No response received — auto-killing process on port ${port}...`);
-          res('y');
-        }, 5000);
-        rl.question(`   Kill the existing process and continue? [y/N] (auto-yes in 5s) `, (ans) => {
+          res('k');
+        }, 10000);
+        rl.question(`   [K]ill the existing process, [C]hange port, or [Q]uit? (auto-kill in 10s) `, (ans) => {
           clearTimeout(timeout);
           rl.close();
           res(ans.trim().toLowerCase());
         });
       });
-      if (answer !== 'y' && answer !== 'yes') return false;
+
+      if (answer === 'c' || answer === 'change') {
+        const rl2 = createInterface({ input: process.stdin, output: process.stderr });
+        const newPortStr = await new Promise<string>((res) => {
+          rl2.question(`   Enter new port: `, (ans) => {
+            rl2.close();
+            res(ans.trim());
+          });
+        });
+        const newPort = parseInt(newPortStr, 10);
+        if (!newPort || newPort < 1 || newPort > 65535) {
+          console.error(`   Invalid port number.`);
+          return false;
+        }
+        if (await this.isPortInUse(newPort)) {
+          console.error(`   Port ${newPort} is also in use.`);
+          return false;
+        }
+        console.log(`   Switching to port ${newPort}.`);
+        return newPort;
+      }
+
+      if (answer !== 'k' && answer !== 'kill' && answer !== 'y' && answer !== 'yes') return false;
     } else {
       console.error(`\n⚠️  Port ${port} is already in use${pidInfo}. Auto-killing...`);
     }

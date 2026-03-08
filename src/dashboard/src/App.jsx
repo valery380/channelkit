@@ -15,6 +15,7 @@ import ServerLogs from './components/ServerLogs.jsx';
 import Settings from './components/Settings.jsx';
 import SendModal from './components/SendModal.jsx';
 import Footer from './components/Footer.jsx';
+import WelcomeDialog from './components/WelcomeDialog.jsx';
 
 const TABS = [
   { hash: '#logs', label: 'Messages', icon: 'chat' },
@@ -84,6 +85,7 @@ export default function App() {
   const [tab, setTab] = useState(getHash);
   const [sendOpen, setSendOpen] = useState(false);
   const [authState, setAuthState] = useState('checking'); // 'checking' | 'login' | 'ok'
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const dispatch = useDispatch();
   const state = useAppState();
 
@@ -224,6 +226,14 @@ export default function App() {
       </main>
       <Footer />
       {sendOpen && <SendModal onClose={() => setSendOpen(false)} />}
+      {!welcomeDismissed && (
+        <WelcomeDialog onNavigate={(hash) => {
+          if (hash) {
+            window.location.hash = hash;
+          }
+          setWelcomeDismissed(true);
+        }} />
+      )}
     </div>
   );
 }
