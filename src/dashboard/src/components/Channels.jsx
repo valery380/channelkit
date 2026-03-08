@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API, apiFetch } from '../api.js';
-import { channelIcons, maskValue } from '../utils.jsx';
+import { channelIcons, maskValue, IconBtn } from '../utils.jsx';
 
 const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
 const selectCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary';
@@ -771,17 +771,17 @@ export default function Channels({ loadConfig }) {
     <>
       {/* Channels Table */}
       <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-bg-light border-b border-border">
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Mode</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Details</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Services</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Unmatched msgs</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider w-[80px]"></th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Type</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Mode</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Details</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Services</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Unmatched</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -798,9 +798,9 @@ export default function Channels({ loadConfig }) {
                 return (
                   <React.Fragment key={name}>
                     <tr className="hover:bg-bg-light transition-colors">
-                      <td className="px-6 py-4 text-sm font-medium text-text">{name}</td>
-                      <td className="px-6 py-4 text-sm text-dim">{ch.type}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 text-sm font-medium text-text">{name}</td>
+                      <td className="px-4 py-4 text-sm text-dim">{ch.type}</td>
+                      <td className="px-4 py-4">
                         {ch.type === 'endpoint' ? (
                           <span className="text-xs text-dim">{'\u2014'}</span>
                         ) : (
@@ -814,15 +814,15 @@ export default function Channels({ loadConfig }) {
                           </select>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-dim">
+                      <td className="px-4 py-4 font-mono text-xs text-dim">
                         {detail}
                         {isSms && <div className="mt-0.5 font-sans text-primary text-[11px]">{smsModeLabel}</div>}
                         {ch.allow_list?.length > 0 && (
                           <div className="mt-0.5 font-sans text-[11px] text-yellow">{ch.allow_list.length} allowed number{ch.allow_list.length > 1 ? 's' : ''}</div>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-xs text-dim">{deps.length > 0 ? deps.join(', ') : '\u2014'}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-4 text-xs text-dim">{deps.length > 0 ? deps.join(', ') : '\u2014'}</td>
+                      <td className="px-4 py-4">
                         {ch.mode === 'groups' || deps.length > 1 ? (
                           <select
                             defaultValue={ch.unmatched || ''}
@@ -835,30 +835,28 @@ export default function Channels({ loadConfig }) {
                           </select>
                         ) : <span className="text-xs text-dim">{'\u2014'}</span>}
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
+                      <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
                         {['whatsapp', 'sms', 'voice'].includes(ch.type) && (
-                          <button onClick={() => {
+                          <IconBtn icon="shield_person" label="Allow List" onClick={() => {
                             if (allowListTarget === name) { setAllowListTarget(null); return; }
                             setAllowListTarget(name);
                             setAllowListText((ch.allow_list || []).join(', '));
                             setAllowListEnabled(!!(ch.allow_list?.length));
-                          }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Allow List</button>
+                          }} />
                         )}
-                        {isSms && <button onClick={() => setSmsSettingsTarget(smsSettingsTarget === name ? null : name)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Settings</button>}
-                        {isResendEmail && <button onClick={() => setEmailSettingsTarget(emailSettingsTarget === name ? null : name)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Settings</button>}
-                        {ch.type === 'email' && ch.provider === 'gmail' && <button onClick={() => startGmailAuth(name)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Authenticate</button>}
+                        {isSms && <IconBtn icon="settings" label="Settings" onClick={() => setSmsSettingsTarget(smsSettingsTarget === name ? null : name)} />}
+                        {isResendEmail && <IconBtn icon="settings" label="Settings" onClick={() => setEmailSettingsTarget(emailSettingsTarget === name ? null : name)} />}
+                        {ch.type === 'email' && ch.provider === 'gmail' && <IconBtn icon="key" label="Authenticate" onClick={() => startGmailAuth(name)} />}
                         {ch.type === 'endpoint' && ch.secret && (
-                          <button onClick={async () => {
+                          <IconBtn icon={copiedSecret === name ? 'check' : 'content_copy'} label={copiedSecret === name ? 'Copied!' : 'Copy Secret'} onClick={async () => {
                             try {
                               const r = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(name) + '/secret');
                               const d = await r.json();
                               if (d.secret) { navigator.clipboard.writeText(d.secret); setCopiedSecret(name); setTimeout(() => setCopiedSecret(null), 1500); }
                             } catch {}
-                          }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">
-                            {copiedSecret === name ? 'Copied!' : 'Copy Secret'}
-                          </button>
+                          }} />
                         )}
-                        <button onClick={() => removeChannel(name, deps)} className="px-3 py-1 text-xs font-medium text-red border border-red/30 rounded hover:bg-red-light transition-colors">Remove</button>
+                        <IconBtn icon="delete" label="Remove" onClick={() => removeChannel(name, deps)} danger />
                       </td>
                     </tr>
                     {smsSettingsTarget === name && (

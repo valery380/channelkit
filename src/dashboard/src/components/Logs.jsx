@@ -149,13 +149,13 @@ function LogRow({ entry, isNew, onToast }) {
         className={`hover:bg-bg-light transition-colors cursor-pointer ${isNew ? 'animate-fade-in-row' : ''}`}
         onClick={() => setExpanded(!expanded)}
       >
-        <td className="px-6 py-4 text-xs font-medium text-dim">{formatTime(entry.timestamp)}</td>
-        <td className="px-6 py-4">
+        <td className="px-4 py-4 text-xs font-medium text-dim">{formatTime(entry.timestamp)}</td>
+        <td className="px-4 py-4">
           <div className="flex items-center gap-2">
             <div className="size-6 rounded-full bg-bg-light flex items-center justify-center text-[11px] font-semibold text-dim shrink-0">
               {icon ? <span className="w-4 h-4">{icon}</span> : initials}
             </div>
-            <div>
+            <div className="min-w-0">
               <span className="text-sm font-semibold text-text">{entry.senderName || entry.from || 'Unknown'}</span>
               {entry.senderName && entry.from && (
                 <span className="text-[11px] text-dim ml-1 font-mono">{entry.from}</span>
@@ -163,22 +163,22 @@ function LogRow({ entry, isNew, onToast }) {
             </div>
           </div>
         </td>
-        <td className="px-6 py-4">
+        <td className="px-4 py-4">
           <p className="text-sm text-dim line-clamp-1">{typeLabel} {truncate(entry.text, 80)}</p>
         </td>
-        <td className="px-6 py-4">
+        <td className="px-4 py-4">
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-bg-light text-dim border border-border">
             {shortUrl(entry.route) || '\u2014'}
           </span>
         </td>
-        <td className="px-6 py-4">
+        <td className="px-4 py-4">
           <StatusBadge status={entry.status} />
         </td>
-        <td className="px-6 py-4 text-xs font-bold text-dim">{entry.latency != null ? entry.latency + 'ms' : '\u2014'}</td>
+        <td className="px-4 py-4 text-xs font-bold text-dim">{entry.latency != null ? entry.latency + 'ms' : '\u2014'}</td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={6} className="px-6 py-4">
+          <td colSpan={6} className="px-4 py-4">
             <div className="bg-bg-light border border-border rounded-lg p-4 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">ID</label><p className="text-sm font-mono">{entry.id}</p></div>
@@ -313,16 +313,16 @@ export default function Logs({ onSend }) {
       </div>
 
       {/* Messages Table */}
-      <div className="overflow-x-auto">
+      <div>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-bg-light border-b border-border">
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Time</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">From</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Message</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Webhook</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Latency</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Time</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">From</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Message</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Webhook</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Status</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Latency</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -341,7 +341,7 @@ export default function Logs({ onSend }) {
 
       {/* Table Footer */}
       {filtered.length > 0 && (
-        <div className="px-6 py-4 bg-bg-light border-t border-border flex items-center justify-between">
+        <div className="px-4 py-4 bg-bg-light border-t border-border flex items-center justify-between">
           <p className="text-xs text-dim">
             Showing {Math.min((page - 1) * PAGE_SIZE + 1, filtered.length)}&ndash;{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length.toLocaleString()} messages
           </p>

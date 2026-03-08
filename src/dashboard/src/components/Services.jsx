@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context.jsx';
 import { API, apiFetch } from '../api.js';
-import { channelIcons, maskValue } from '../utils.jsx';
+import { channelIcons, maskValue, IconBtn } from '../utils.jsx';
 
 const inputCls = 'w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary';
 const selectCls = 'py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary';
@@ -394,9 +394,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
     <>
       {editing ? (
         <tr className="hover:bg-bg-light transition-colors">
-          <td className="px-6 py-4 font-medium text-sm text-text">{name}</td>
-          <td className="px-6 py-4 text-sm text-dim">{svc.channel}</td>
-          <td className="px-6 py-4 space-y-1">
+          <td className="px-4 py-4 font-medium text-sm text-text">{name}</td>
+          <td className="px-4 py-4 text-sm text-dim">{svc.channel}</td>
+          <td className="px-4 py-4 space-y-1">
             <div className="flex gap-2">
               <select value={webhookMethod} onChange={e => setWebhookMethod(e.target.value)} className={selectCls + ' w-[90px] shrink-0'}>
                 <option value="POST">POST</option>
@@ -426,7 +426,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
               )}
             </div>
           </td>
-          <td className="px-6 py-4 space-y-1">
+          <td className="px-4 py-4 space-y-1">
             <input value={code} onChange={e => setCode(e.target.value)} placeholder="Magic code" className={inputCls} />
             <input value={command} onChange={e => setCommand(e.target.value)} placeholder="Slash command" className={inputCls} />
             {isPhoneChannel && (
@@ -447,37 +447,33 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
               </div>
             )}
           </td>
-          <td className="px-6 py-4 text-right whitespace-nowrap">
-            <button onClick={save} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Save</button>
-            <button onClick={() => setEditing(false)} className="ml-1 px-3 py-1 text-xs text-dim hover:text-text bg-transparent border-none cursor-pointer">Cancel</button>
+          <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
+            <IconBtn icon="check" label="Save" onClick={save} />
+            <IconBtn icon="close" label="Cancel" onClick={() => setEditing(false)} />
           </td>
         </tr>
       ) : (
         <tr className="hover:bg-bg-light transition-colors">
-          <td className="px-6 py-4 text-sm font-medium text-text">
+          <td className="px-4 py-4 text-sm font-medium text-text">
             {name}
             {infoParts.length > 0 && <div className="mt-0.5 text-[11px] text-dim">{infoParts.join(' \u00b7 ')}</div>}
           </td>
-          <td className="px-6 py-4 text-sm text-dim">{svc.channel}</td>
-          <td className="px-6 py-4 max-w-[280px]">
+          <td className="px-4 py-4 text-sm text-dim">{svc.channel}</td>
+          <td className="px-4 py-4 max-w-[280px]">
             <div className="flex items-center gap-1.5">
               {svc.method && svc.method !== 'POST' && <span className="shrink-0 px-1.5 py-0.5 text-[10px] font-bold rounded bg-primary/10 text-primary">{svc.method}</span>}
               {svc.auth && <span className="shrink-0 material-symbols-outlined text-[14px] text-dim" title={svc.auth.type === 'bearer' ? 'Bearer token' : svc.auth.header_name}>lock</span>}
               <span className="block truncate text-xs text-dim font-mono">{svc.webhook}</span>
             </div>
           </td>
-          <td className="px-6 py-4 text-xs text-dim">{svc.code || svc.command || '\u2014'}</td>
-          <td className="px-6 py-4 text-right whitespace-nowrap space-x-1">
-            {isEndpoint && (
-              <button onClick={copyEndpointUrl} className="inline-flex items-center justify-center px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors align-middle" title={copiedUrl ? 'Copied!' : 'Copy endpoint URL'} style={{ height: '26px' }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '14px', lineHeight: 1 }}>{copiedUrl ? 'check' : 'link'}</span>
-              </button>
-            )}
-            {isEndpoint && <button onClick={() => setShowExample(true)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Example</button>}
-            <button onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Audio</button>
-            <button onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); }} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Format</button>
-            <button onClick={() => setEditing(true)} className="px-3 py-1 text-xs font-medium text-primary border border-primary/30 rounded hover:bg-primary/5 transition-colors">Edit</button>
-            <button onClick={remove} className="px-3 py-1 text-xs font-medium text-red border border-red/30 rounded hover:bg-red-light transition-colors">Remove</button>
+          <td className="px-4 py-4 text-xs text-dim">{svc.code || svc.command || '\u2014'}</td>
+          <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
+            {isEndpoint && <IconBtn icon={copiedUrl ? 'check' : 'link'} label={copiedUrl ? 'Copied!' : 'Copy endpoint URL'} onClick={copyEndpointUrl} />}
+            {isEndpoint && <IconBtn icon="code" label="Example" onClick={() => setShowExample(true)} />}
+            <IconBtn icon="graphic_eq" label="Audio" onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); }} />
+            <IconBtn icon="auto_fix_high" label="Format" onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); }} />
+            <IconBtn icon="edit" label="Edit" onClick={() => setEditing(true)} />
+            <IconBtn icon="delete" label="Remove" onClick={remove} danger />
           </td>
         </tr>
       )}
@@ -585,15 +581,15 @@ export default function Services({ loadConfig }) {
     <>
       {/* Services Table */}
       <div className="bg-surface border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-bg-light border-b border-border">
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Channel</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Webhook</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Code / Command</th>
-                <th className="px-6 py-3 text-[11px] font-bold text-dim uppercase tracking-wider w-[190px]"></th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Name</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Channel</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Webhook</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Code / Command</th>
+                <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -640,8 +636,8 @@ export default function Services({ loadConfig }) {
                       className={`flex flex-col items-center gap-2 p-4 bg-bg-light border-2 border-border rounded-xl transition-all text-center ${occupied ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-primary hover:bg-highlight'}`}
                     >
                       <div className="w-8 h-8 flex items-center justify-center text-[28px]">{icon}</div>
-                      <div className="text-sm font-medium text-text">{name}</div>
-                      <div className="text-[11px] text-dim leading-tight w-full truncate">{ch.type}{detail ? ' \u00b7 ' + detail : ''}</div>
+                      <div className="text-sm font-medium text-text w-full break-words">{name}</div>
+                      <div className="text-[11px] text-dim leading-tight w-full break-words">{ch.type}{detail ? ' \u00b7 ' + detail : ''}</div>
                       {occupied && <div className="text-[10px] text-dim leading-tight">Service mode · already in use</div>}
                     </div>
                   );
