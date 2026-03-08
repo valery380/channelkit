@@ -103,7 +103,15 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
           const replyUrl = apiServer.getReplyUrl(message.channel, replyTo);
           const { dispatchWebhook } = await import('./webhook');
           const startTime = Date.now();
-          const response = await dispatchWebhook(webhook, message, replyUrl);
+          const { response, error: webhookError } = await dispatchWebhook(webhook, message, replyUrl);
+          const latency = Date.now() - startTime;
+          let responseText = response?.text;
+          if (webhookError) {
+            const detail = webhookError.status
+              ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
+              : `[Webhook error: ${webhookError.message}]`;
+            responseText = responseText ? `${responseText}\n${detail}` : detail;
+          }
           logger.log({
             id: message.id,
             timestamp: Date.now(),
@@ -113,9 +121,9 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
             text: message.text,
             type: message.type,
             route: webhook,
-            responseText: response?.text,
+            responseText,
             status: response ? 'success' : 'error',
-            latency: Date.now() - startTime,
+            latency,
           });
           if (response) {
             await channel.send(replyTo, response);
@@ -193,7 +201,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     const replyTo = message.groupId || message.from;
     const replyUrl = apiServer.getReplyUrl(message.channel, replyTo);
-    const { response: routedResponse, webhook: routedWebhook, latency } = await router.route(message, replyUrl);
+    const { response: routedResponse, webhook: routedWebhook, latency, webhookError } = await router.route(message, replyUrl);
     let response = routedResponse;
 
     // If no service matched, check channel's unmatched policy
@@ -230,9 +238,16 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // For endpoint channels in sync mode: if no response, send an error so the HTTP request doesn't hang
     if (!response && message.channel === 'endpoint') {
-      response = routedWebhook
-        ? { text: `Webhook ${routedWebhook} failed to respond`, _error: true }
-        : { text: 'No service matched for this endpoint', _error: true };
+      if (webhookError) {
+        const detail = webhookError.status
+          ? `Webhook ${routedWebhook} returned ${webhookError.status}: ${webhookError.message}`
+          : `Webhook ${routedWebhook} failed: ${webhookError.message}`;
+        response = { text: detail, _error: true };
+      } else {
+        response = routedWebhook
+          ? { text: `Webhook ${routedWebhook} returned an empty response`, _error: true }
+          : { text: 'No service matched for this endpoint', _error: true };
+      }
     }
 
     // Send the response
@@ -252,6 +267,12 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // Build response text for logging
     let logResponseText = response?.text;
+    if (webhookError) {
+      const detail = webhookError.status
+        ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
+        : `[Webhook error: ${webhookError.message}]`;
+      logResponseText = logResponseText ? `${logResponseText}\n${detail}` : detail;
+    }
     if (ttsError) {
       logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[TTS failed: ${ttsError}]`;
     }

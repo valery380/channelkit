@@ -1,6 +1,6 @@
 import { ServiceConfig, RouteConfig, ChannelConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from './types';
-import { dispatchWebhook, resolvePlaceholders } from './webhook';
+import { dispatchWebhook, resolvePlaceholders, WebhookError } from './webhook';
 import { GroupStore } from './groupStore';
 import { Logger } from './logger';
 
@@ -158,7 +158,7 @@ export class Router {
     return undefined;
   }
 
-  async route(message: UnifiedMessage, replyUrl?: string): Promise<{ response: WebhookResponse | null; webhook?: string; latency: number }> {
+  async route(message: UnifiedMessage, replyUrl?: string): Promise<{ response: WebhookResponse | null; webhook?: string; latency: number; webhookError?: WebhookError }> {
     const svc = this.findServiceConfig(message);
     const startTime = Date.now();
 
@@ -170,8 +170,8 @@ export class Router {
     const resolvedUrl = resolvePlaceholders(svc.webhook, message);
     console.log(`[router] Routing ${message.id} → ${resolvedUrl}`);
     const timeoutMs = message.media?.buffer ? 30000 : 5000;
-    const response = await dispatchWebhook(resolvedUrl, message, replyUrl, { method: svc.method, auth: svc.auth, timeout: timeoutMs });
+    const { response, error: webhookError } = await dispatchWebhook(resolvedUrl, message, replyUrl, { method: svc.method, auth: svc.auth, timeout: timeoutMs });
     const latency = Date.now() - startTime;
-    return { response, webhook: resolvedUrl, latency };
+    return { response, webhook: resolvedUrl, latency, webhookError };
   }
 }

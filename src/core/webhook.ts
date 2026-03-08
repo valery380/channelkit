@@ -90,15 +90,38 @@ export function resolvePlaceholders(url: string, message: UnifiedMessage): strin
   });
 }
 
+export interface WebhookError {
+  type: 'blocked' | 'http' | 'timeout' | 'network';
+  status?: number;
+  message: string;
+  body?: string;
+}
+
+export interface WebhookResult {
+  response: WebhookResponse | null;
+  error?: WebhookError;
+}
+
+/** Read up to 1 KB of response body text for error diagnostics. */
+async function readErrorBody(res: Response): Promise<string | undefined> {
+  try {
+    const text = await res.text();
+    return text ? text.slice(0, 1024) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function dispatchWebhook(
   url: string,
   message: UnifiedMessage,
   replyUrl?: string,
   { maxRetries = 3, timeout = 5000, method = 'POST', auth }: { maxRetries?: number; timeout?: number; method?: string; auth?: ServiceAuthConfig } = {}
-): Promise<WebhookResponse | null> {
+): Promise<WebhookResult> {
   if (isBlockedUrl(url)) {
-    console.error(`[webhook] Blocked request to private/reserved address: ${url}`);
-    return null;
+    const msg = `Blocked request to private/reserved address: ${url}`;
+    console.error(`[webhook] ${msg}`);
+    return { response: null, error: { type: 'blocked', message: msg } };
   }
 
   const payload = replyUrl ? { ...message, replyUrl } : message;
@@ -137,6 +160,8 @@ export async function dispatchWebhook(
     headers = { 'Content-Type': 'application/json', ...authHeaders };
   }
 
+  let lastError: WebhookError | undefined;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
@@ -152,10 +177,19 @@ export async function dispatchWebhook(
       clearTimeout(timer);
 
       if (!res.ok) {
+        const errorBody = await readErrorBody(res);
+        const statusText = res.statusText || `HTTP ${res.status}`;
+        lastError = {
+          type: 'http',
+          status: res.status,
+          message: `${statusText}${errorBody ? `: ${errorBody}` : ''}`,
+          body: errorBody,
+        };
+
         // 4xx = permanent failure, don't retry
         if (res.status >= 400 && res.status < 500) {
-          console.error(`[webhook] ${url} responded ${res.status} (permanent)`);
-          return null;
+          console.error(`[webhook] ${url} responded ${res.status} (permanent)${errorBody ? ` — ${errorBody.slice(0, 200)}` : ''}`);
+          return { response: null, error: lastError };
         }
         // 5xx = transient, retry
         if (attempt < maxRetries) {
@@ -163,13 +197,13 @@ export async function dispatchWebhook(
           await backoffDelay(attempt);
           continue;
         }
-        console.error(`[webhook] ${url} responded ${res.status} after ${maxRetries} retries`);
-        return null;
+        console.error(`[webhook] ${url} responded ${res.status} after ${maxRetries} retries${errorBody ? ` — ${errorBody.slice(0, 200)}` : ''}`);
+        return { response: null, error: lastError };
       }
 
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        return (await res.json()) as WebhookResponse;
+        return { response: (await res.json()) as WebhookResponse };
       }
 
       // Non-JSON response — return binary content (PDF, images, etc.) as media
@@ -178,11 +212,13 @@ export async function dispatchWebhook(
         if (arrayBuf.byteLength > 0) {
           const mimetype = contentType.split(';')[0].trim();
           return {
-            media: {
-              buffer: Buffer.from(arrayBuf),
-              mimetype,
-            },
-          } as WebhookResponse;
+            response: {
+              media: {
+                buffer: Buffer.from(arrayBuf),
+                mimetype,
+              },
+            } as WebhookResponse,
+          };
         }
       }
 
@@ -190,15 +226,19 @@ export async function dispatchWebhook(
       if (contentType && contentType.includes('text/')) {
         const text = await res.text();
         if (text) {
-          return { text } as WebhookResponse;
+          return { response: { text } as WebhookResponse };
         }
       }
 
-      return null;
+      return { response: null };
     } catch (err: any) {
       clearTimeout(timer);
       const isAbort = err?.name === 'AbortError';
       const label = isAbort ? 'timed out' : String(err?.message || err);
+      lastError = {
+        type: isAbort ? 'timeout' : 'network',
+        message: label,
+      };
 
       if (attempt < maxRetries) {
         console.warn(`[webhook] ${url} ${label}, retrying (${attempt + 1}/${maxRetries})...`);
@@ -209,5 +249,5 @@ export async function dispatchWebhook(
     }
   }
 
-  return null;
+  return { response: null, error: lastError };
 }
