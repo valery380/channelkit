@@ -3,12 +3,29 @@ import { WS_URL, getToken } from '../api.js';
 
 export function useWebSocket(dispatch) {
   const wsRef = useRef(null);
+  const cancelledRef = useRef(false);
+
+  // Force reconnect when token changes (e.g. after login)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.CLOSED) return; // retry loop will handle it
+      const token = getToken();
+      const currentUrl = ws?._url || ws?.url || '';
+      const expectedToken = token ? `token=${encodeURIComponent(token)}` : '';
+      if (ws && ws.readyState === WebSocket.OPEN && expectedToken && !currentUrl.includes(expectedToken)) {
+        // Token changed — reconnect
+        ws.close();
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    cancelledRef.current = false;
 
     function connect() {
-      if (cancelled) return;
+      if (cancelledRef.current) return;
       const token = getToken();
       const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
       const ws = new WebSocket(url);
@@ -18,9 +35,12 @@ export function useWebSocket(dispatch) {
         dispatch({ type: 'SET_WS_CONNECTED', payload: true });
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         dispatch({ type: 'SET_WS_CONNECTED', payload: false });
-        if (!cancelled) setTimeout(connect, 3000);
+        if (ev.code === 4401) {
+          console.warn('[ws] Unauthorized — check API secret / token');
+        }
+        if (!cancelledRef.current) setTimeout(connect, 3000);
       };
 
       ws.onmessage = (ev) => {
@@ -62,6 +82,10 @@ export function useWebSocket(dispatch) {
             dispatch({ type: 'SET_CONFIG_CHANGED', payload: true });
           }
 
+          if (msg.type === 'channelStatus') {
+            dispatch({ type: 'SET_CHANNEL_STATUS', payload: { channel: msg.channel, connected: msg.connected } });
+          }
+
           if (
             msg.type === 'whatsapp-qr' ||
             msg.type === 'whatsapp-paired' ||
@@ -83,7 +107,7 @@ export function useWebSocket(dispatch) {
     connect();
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       if (wsRef.current) wsRef.current.close();
     };
   }, [dispatch]);

@@ -4,6 +4,9 @@ import { loadConfig, saveConfig } from '../../config/parser';
 import { WhatsAppChannel, isBaileysAvailable } from '../../channels/whatsapp';
 import { DEFAULT_AUTH_DIR } from '../../paths';
 
+/** Per-channel QR state for polling. */
+const pairState = new Map<string, { qr: string | null; status: 'waiting' | 'paired' | 'error'; error?: string }>();
+
 /** Keys in channel configs that contain secrets and should be masked in API responses. */
 const SENSITIVE_CHANNEL_KEYS = ['api_key', 'bot_token', 'auth_token', 'client_secret', 'webhook_secret', 'secret'];
 
@@ -40,7 +43,13 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     }
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
-      res.json({ channels: maskChannelSecrets(config.channels), services: config.services || {}, baileysAvailable: isBaileysAvailable() });
+      // Attach connection status from runtime channel instances
+      const channels = maskChannelSecrets(config.channels);
+      for (const [name, ch] of Object.entries(channels)) {
+        const runtime = ctx.channels.get(name);
+        (ch as any).connected = runtime ? runtime.connected : false;
+      }
+      res.json({ channels, services: config.services || {}, baileysAvailable: isBaileysAvailable() });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to load config' });
     }
@@ -462,6 +471,28 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     }
   });
 
+  // POST /api/config/channels/:name/reconnect — reconnect a WhatsApp channel using existing auth
+  app.post('/api/config/channels/:name/reconnect', async (req, res) => {
+    const { name } = req.params;
+    try {
+      const existing = ctx.channels.get(name) as WhatsAppChannel | undefined;
+      if (!existing) { res.status(404).json({ error: `Channel "${name}" not found or not running` }); return; }
+
+      // Disconnect first to stop any reconnect loop
+      await existing.disconnect().catch(() => {});
+
+      res.json({ ok: true, message: 'Reconnecting...' });
+
+      // Re-connect with existing auth state
+      existing.connect().catch((err: any) => {
+        console.error(`[config] Reconnect failed for ${name}:`, err.message);
+      });
+    } catch (err: any) {
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/config/channels/:name/pair — trigger WhatsApp QR pairing
   app.post('/api/config/channels/:name/pair', async (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
@@ -472,42 +503,55 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       if (!ch) { res.status(404).json({ error: `Channel "${name}" not found` }); return; }
       if (ch.type !== 'whatsapp') { res.status(400).json({ error: 'Only WhatsApp channels support QR pairing' }); return; }
 
+      // Initialize pair state for polling
+      pairState.set(name, { qr: null, status: 'waiting' });
+
+      const existing = ctx.channels.get(name) as WhatsAppChannel | undefined;
+      if (existing) {
+        await existing.disconnect().catch(() => {});
+      }
+
       const { rm } = await import('fs/promises');
       const { join } = await import('path');
       const authDir = join(DEFAULT_AUTH_DIR, `whatsapp-${name}`);
-
       await rm(authDir, { recursive: true, force: true });
 
-      res.json({ ok: true, message: 'Pairing started. Watch for QR code.' });
+      const channel = existing || new WhatsAppChannel(name, ch as any);
 
-      const tempChannel = new WhatsAppChannel(name, ch as any);
-      const QRCode = await import('qrcode');
+      const onQR = (qr: string) => {
+        pairState.set(name, { qr, status: 'waiting' });
+      };
+      const onConnected = () => {
+        pairState.set(name, { qr: null, status: 'paired' });
+        channel.removeListener('qr', onQR);
+        channel.removeListener('connected', onConnected);
+        if (!existing) channel.disconnect().catch(() => {});
+      };
 
-      tempChannel.on('qr', async (qr: string) => {
-        try {
-          const dataUrl = await QRCode.toDataURL(qr, { width: 400, margin: 2 });
-          ctx.broadcast({ type: 'whatsapp-qr', channel: name, dataUrl });
-        } catch {
-          ctx.broadcast({ type: 'whatsapp-qr', channel: name, dataUrl: null });
-        }
+      channel.on('qr', onQR);
+      channel.on('connected', onConnected);
+
+      channel.connect().catch((err: any) => {
+        pairState.set(name, { qr: null, status: 'error', error: err.message });
       });
 
-      tempChannel.on('connected', () => {
-        ctx.broadcast({ type: 'whatsapp-paired', channel: name });
-        tempChannel.disconnect().catch(() => {});
-      });
+      if (!existing) {
+        setTimeout(() => { channel.disconnect().catch(() => {}); }, 65000);
+      }
 
-      tempChannel.connect().catch((err: any) => {
-        ctx.broadcast({ type: 'whatsapp-pair-error', channel: name, error: err.message });
-      });
-
-      setTimeout(() => {
-        tempChannel.disconnect().catch(() => {});
-      }, 65000);
+      res.json({ ok: true, message: 'Pairing started.' });
     } catch (err: any) {
       console.error('[config]', err);
       res.status(500).json({ error: 'Internal server error' });
     }
+  });
+
+  // GET /api/config/channels/:name/pair-status — poll for QR code during pairing
+  app.get('/api/config/channels/:name/pair-status', (_req, res) => {
+    const { name } = _req.params;
+    const state = pairState.get(name);
+    if (!state) { res.json({ status: 'idle' }); return; }
+    res.json(state);
   });
 
   // POST /api/config/channels/:name/gmail-auth — trigger Gmail OAuth flow

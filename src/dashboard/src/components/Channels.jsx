@@ -38,23 +38,50 @@ const channelTypeSvgs = {
   endpoint: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#6B7280" d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>,
 };
 
-function QRModal({ channel, qrMessage, onClose }) {
+function QRModal({ channel, onClose }) {
   const [timer, setTimer] = useState(60);
-  const intervalRef = useRef(null);
+  const [status, setStatus] = useState('waiting'); // 'waiting' | 'qr' | 'paired' | 'error'
+  const [error, setError] = useState('');
+  const [qrData, setQrData] = useState(null);
+  const canvasRef = useRef(null);
 
+  // Poll pair-status every second
   useEffect(() => {
-    intervalRef.current = setInterval(() => setTimer(t => Math.max(0, t - 1)), 1000);
-    return () => clearInterval(intervalRef.current);
+    let active = true;
+    const poll = async () => {
+      try {
+        const res = await apiFetch(API + '/api/config/channels/' + encodeURIComponent(channel) + '/pair-status');
+        const data = await res.json();
+        if (!active) return;
+        if (data.status === 'paired') { setStatus('paired'); return; }
+        if (data.status === 'error') { setStatus('error'); setError(data.error || 'Pairing failed'); return; }
+        if (data.qr) { setQrData(data.qr); setStatus('qr'); }
+      } catch {}
+      if (active) setTimeout(poll, 1000);
+    };
+    poll();
+    return () => { active = false; };
+  }, [channel]);
+
+  // Render QR to canvas whenever qrData changes and canvas is available
+  useEffect(() => {
+    if (!qrData || !canvasRef.current) return;
+    import('qrcode').then(QRCode => {
+      const toCanvas = QRCode.toCanvas || QRCode.default?.toCanvas;
+      if (toCanvas && canvasRef.current) {
+        toCanvas(canvasRef.current, qrData, { width: 280, margin: 2 }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [qrData]);
+
+  // Countdown timer
+  useEffect(() => {
+    const id = setInterval(() => setTimer(t => Math.max(0, t - 1)), 1000);
+    return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    if (qrMessage?.type === 'whatsapp-paired' || qrMessage?.type === 'whatsapp-pair-error') {
-      clearInterval(intervalRef.current);
-    }
-  }, [qrMessage]);
-
   let body;
-  if (qrMessage?.type === 'whatsapp-paired' && qrMessage.channel === channel) {
+  if (status === 'paired') {
     body = (
       <div className="py-10 text-center text-green text-base font-semibold">
         <span className="material-symbols-outlined text-5xl mb-3 block">check_circle</span>
@@ -62,10 +89,10 @@ function QRModal({ channel, qrMessage, onClose }) {
         <br /><span className="text-xs font-normal text-dim">Restart the server to start receiving messages.</span>
       </div>
     );
-  } else if (qrMessage?.type === 'whatsapp-pair-error' && qrMessage.channel === channel) {
-    body = <div className="py-10 text-center text-red text-sm">{qrMessage.error || 'Pairing failed'}</div>;
-  } else if (qrMessage?.type === 'whatsapp-qr' && qrMessage.channel === channel && qrMessage.dataUrl) {
-    body = <div className="bg-white rounded-xl p-3 inline-block mb-4"><img src={qrMessage.dataUrl} alt="QR Code" className="block w-[280px] h-[280px]" /></div>;
+  } else if (status === 'error') {
+    body = <div className="py-10 text-center text-red text-sm">{error}</div>;
+  } else if (status === 'qr') {
+    body = <div className="bg-white rounded-xl p-3 inline-block mb-4"><canvas ref={canvasRef} /></div>;
   } else {
     body = <div className="py-16 text-dim text-sm">Waiting for QR code...</div>;
   }
@@ -76,7 +103,7 @@ function QRModal({ channel, qrMessage, onClose }) {
         <h3 className="text-base font-semibold mb-1">Pair WhatsApp &mdash; {channel}</h3>
         <div className="text-sm text-dim mb-5">Open WhatsApp &rarr; Settings &rarr; Linked Devices &rarr; Link a Device</div>
         {body}
-        {timer > 0 && qrMessage?.type !== 'whatsapp-paired' && qrMessage?.type !== 'whatsapp-pair-error' && (
+        {timer > 0 && status !== 'paired' && status !== 'error' && (
           <div className="text-xs text-dim mb-4">{timer}s remaining</div>
         )}
         <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Close</button>
@@ -688,6 +715,10 @@ export default function Channels({ loadConfig }) {
     backToPicker(); loadConfig();
   }
 
+  async function connectWhatsApp(channelName) {
+    startPairing(channelName);
+  }
+
   async function startPairing(channelName) {
     setQrChannel(channelName);
     dispatch({ type: 'SET_QR_MESSAGE', payload: null });
@@ -798,7 +829,17 @@ export default function Channels({ loadConfig }) {
                 return (
                   <React.Fragment key={name}>
                     <tr className="hover:bg-bg-light transition-colors">
-                      <td className="px-4 py-4 text-sm font-medium text-text">{name}</td>
+                      <td className="px-4 py-4 text-sm font-medium text-text">
+                        <span className="inline-flex items-center gap-2">
+                          {name}
+                          {ch.type === 'whatsapp' && (
+                            <span
+                              title={ch.connected ? 'Connected' : 'Disconnected'}
+                              className={`inline-block w-2 h-2 rounded-full ${ch.connected ? 'bg-green-400' : 'bg-red-400'}`}
+                            />
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-4 text-sm text-dim">{ch.type}</td>
                       <td className="px-4 py-4">
                         {ch.type === 'endpoint' ? (
@@ -836,6 +877,9 @@ export default function Channels({ loadConfig }) {
                         ) : <span className="text-xs text-dim">{'\u2014'}</span>}
                       </td>
                       <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
+                        {ch.type === 'whatsapp' && !ch.connected && (
+                          <IconBtn icon="link" label="Connect" onClick={() => connectWhatsApp(name)} />
+                        )}
                         {['whatsapp', 'sms', 'voice'].includes(ch.type) && (
                           <IconBtn icon="shield_person" label="Allow List" onClick={() => {
                             if (allowListTarget === name) { setAllowListTarget(null); return; }
@@ -1089,7 +1133,7 @@ export default function Channels({ loadConfig }) {
       </div>
 
       {qrChannel && (
-        <QRModal channel={qrChannel} qrMessage={qrMessage} onClose={() => setQrChannel(null)} />
+        <QRModal channel={qrChannel} onClose={() => setQrChannel(null)} />
       )}
 
       {gmailAuthChannel && (

@@ -117,10 +117,12 @@ export class WhatsAppChannel extends Channel {
   private sock: any = null;
   private authDir: string;
   private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private static readonly MAX_RECONNECT_ATTEMPTS = 10;
 
   constructor(name: string, config: WhatsAppChannelConfig, authDir = DEFAULT_AUTH_DIR) {
     super(name, config);
+    this.connected = false; // WhatsApp channels start disconnected until Baileys connects
     this.authDir = join(authDir, `whatsapp-${name}`);
   }
 
@@ -132,7 +134,7 @@ export class WhatsAppChannel extends Channel {
     const delay = Math.min(Math.pow(2, this.reconnectAttempts) * 1000, 30000);
     this.reconnectAttempts++;
     console.log(`[whatsapp:${this.name}] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${WhatsAppChannel.MAX_RECONNECT_ATTEMPTS})...`);
-    setTimeout(() => this.connect(), delay);
+    this.reconnectTimer = setTimeout(() => this.connect(), delay);
   }
 
   getSocket(): any {
@@ -151,6 +153,7 @@ export class WhatsAppChannel extends Channel {
   }
 
   async connect(): Promise<void> {
+    this.reconnectAttempts = 0;
     const { useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, downloadMediaMessage, DisconnectReason, default: makeWASocket } = await loadBaileys();
     const { state, saveCreds } = await useMultiFileAuthState(this.authDir);
 
@@ -204,6 +207,8 @@ export class WhatsAppChannel extends Channel {
       }
 
       if (connection === 'close') {
+        this.connected = false;
+        this.emit('disconnected');
         const reason = (lastDisconnect?.error as Boom)?.output?.statusCode;
         if (reason !== DisconnectReason.loggedOut) {
           this.scheduleReconnect();
@@ -211,6 +216,7 @@ export class WhatsAppChannel extends Channel {
           console.log(`[whatsapp:${this.name}] Logged out`);
         }
       } else if (connection === 'open') {
+        this.connected = true;
         this.reconnectAttempts = 0;
         this.emit('connected');
         console.log(`✅ WhatsApp connected: ${this.name}`);
@@ -264,12 +270,20 @@ export class WhatsAppChannel extends Channel {
   }
 
   async disconnect(): Promise<void> {
+    this.connected = false;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.reconnectAttempts = WhatsAppChannel.MAX_RECONNECT_ATTEMPTS; // prevent further reconnects
     this.sock?.end(undefined);
     this.sock = null;
   }
 
   async send(to: string, response: WebhookResponse): Promise<void> {
-    if (!this.sock) return;
+    if (!this.sock || !this.connected) {
+      throw new Error('WhatsApp channel is not connected');
+    }
 
     // Voice message from buffer (TTS output)
     if (response.media?.buffer && response.media.mimetype?.includes('audio')) {

@@ -14,6 +14,11 @@ export function registerSendRoutes(app: Express, ctx: ServerContext): void {
       return;
     }
 
+    if (!channel.connected) {
+      res.status(503).json({ error: `Channel "${channelName}" is not connected` });
+      return;
+    }
+
     if (!text && !media) {
       res.status(400).json({ error: 'Must provide "text" and/or "media"' });
       return;

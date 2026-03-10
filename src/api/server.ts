@@ -174,8 +174,8 @@ export class ApiServer {
   // Proxy getters/setters that delegate to ctx for backward compat with index.ts
   setExposeDashboard(value: boolean): void { this.ctx.setExposeDashboard(value); }
   getExposeDashboard(): boolean { return this.ctx.exposeDashboard; }
-  setApiSecret(secret: string | undefined): void { this.ctx.apiSecret = secret || null; }
-  setMcpSecret(secret: string | undefined): void { this.ctx.mcpSecret = secret || null; }
+  setApiSecret(secret: string | number | undefined): void { this.ctx.apiSecret = secret != null ? String(secret) : null; }
+  setMcpSecret(secret: string | number | undefined): void { this.ctx.mcpSecret = secret != null ? String(secret) : null; }
 
   setLogger(logger: Logger): void {
     this.ctx.logger = logger;
@@ -206,9 +206,18 @@ export class ApiServer {
     channel.on('qr', (qr: string) => {
       this.ctx.latestQR = qr;
       this.ctx.broadcast({ type: 'qr', data: qr });
+      // Send raw QR string — frontend renders it
+      this.ctx.broadcast({ type: 'whatsapp-qr', channel: name, qr });
     });
     channel.on('connection', () => {
       this.ctx.latestQR = null;
+    });
+    channel.on('connected', () => {
+      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: true });
+      this.ctx.broadcast({ type: 'whatsapp-paired', channel: name });
+    });
+    channel.on('disconnected', () => {
+      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: false });
     });
   }
 

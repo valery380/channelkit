@@ -3,6 +3,9 @@ import { ChannelConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from '../core/types';
 
 export abstract class Channel extends EventEmitter {
+  /** Whether this channel is currently connected and able to send messages. */
+  public connected = true;
+
   constructor(
     public readonly name: string,
     protected config: ChannelConfig

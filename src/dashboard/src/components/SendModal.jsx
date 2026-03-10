@@ -20,15 +20,19 @@ export default function SendModal({ onClose }) {
       .then(data => {
         const waChannels = Object.entries(data.channels)
           .filter(([, cfg]) => cfg.type === 'whatsapp')
-          .map(([name]) => name);
+          .map(([name, cfg]) => ({ name, connected: cfg.connected }));
         setChannels(waChannels);
-        if (waChannels.length > 0) setChannel(waChannels[0]);
+        const firstConnected = waChannels.find(c => c.connected);
+        if (firstConnected) setChannel(firstConnected.name);
+        else if (waChannels.length > 0) setChannel(waChannels[0].name);
       })
       .catch(() => {});
   }, []);
 
   async function send() {
     if (!channel) { setStatus('Select a channel'); setStatusColor('text-red'); return; }
+    const selectedCh = channels.find(c => c.name === channel);
+    if (selectedCh && !selectedCh.connected) { setStatus('Channel is not connected'); setStatusColor('text-red'); return; }
     if (!phone) { setStatus('Enter a phone number'); setStatusColor('text-red'); return; }
     if (!text) { setStatus('Enter a message'); setStatusColor('text-red'); return; }
 
@@ -84,7 +88,11 @@ export default function SendModal({ onClose }) {
           className="w-full mb-3 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary"
         >
           {channels.length === 0 && <option value="">No WhatsApp channels</option>}
-          {channels.map(name => <option key={name} value={name}>{name}</option>)}
+          {channels.map(ch => (
+            <option key={ch.name} value={ch.name} disabled={!ch.connected}>
+              {ch.name}{ch.connected ? '' : ' (disconnected)'}
+            </option>
+          ))}
         </select>
 
         <label className="block text-[11px] font-semibold text-dim uppercase tracking-wider mb-1">Phone number</label>
