@@ -213,11 +213,12 @@ export class ApiServer {
       this.ctx.latestQR = null;
     });
     channel.on('connected', () => {
-      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: true });
+      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: true, statusMessage: null });
       this.ctx.broadcast({ type: 'whatsapp-paired', channel: name });
     });
     channel.on('disconnected', () => {
-      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: false });
+      const statusMessage = (channel as any).statusMessage || null;
+      this.ctx.broadcast({ type: 'channelStatus', channel: name, connected: false, statusMessage });
     });
   }
 

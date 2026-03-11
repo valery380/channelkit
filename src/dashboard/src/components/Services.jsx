@@ -130,7 +130,7 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
       const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, format: svc.format || null }),
+        body: JSON.stringify({ webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, voice: svc.voice || null, format: svc.format || null }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
       setStatus('Saved');
@@ -168,6 +168,97 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
   );
 }
 
+function VoiceSettingsRow({ name, svc, onClose, loadConfig }) {
+  const v = svc.voice || {};
+  const [greeting, setGreeting] = useState(v.greeting || '');
+  const [holdMessage, setHoldMessage] = useState(v.hold_message || '');
+  const [holdMusic, setHoldMusic] = useState(v.hold_music || '');
+  const [language, setLanguage] = useState(v.language || '');
+  const [voiceName, setVoiceName] = useState(v.voice_name || '');
+  const [maxRecord, setMaxRecord] = useState(v.max_record_seconds || 30);
+  const [conversational, setConversational] = useState(!!v.conversational);
+  const [status, setStatus] = useState('');
+
+  async function save() {
+    const voiceVal = {
+      ...(greeting && { greeting }),
+      ...(holdMessage && { hold_message: holdMessage }),
+      ...(holdMusic && { hold_music: holdMusic }),
+      ...(language && { language }),
+      ...(voiceName && { voice_name: voiceName }),
+      ...(maxRecord && maxRecord !== 30 && { max_record_seconds: maxRecord }),
+      conversational,
+    };
+    const hasValues = Object.keys(voiceVal).some(k => k !== 'conversational' ? voiceVal[k] : voiceVal[k]);
+    try {
+      const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null,
+          code: svc.code || null, command: svc.command || null,
+          stt: svc.stt || null, tts: svc.tts || null, format: svc.format || null,
+          voice: hasValues ? voiceVal : null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
+      setStatus('Saved');
+      setTimeout(() => { onClose(); loadConfig(); }, 600);
+    } catch (e) { setStatus(e.message); }
+  }
+
+  return (
+    <tr>
+      <td colSpan={5} className="px-6 py-4">
+        <div className="bg-bg-light border border-border rounded-lg p-4 space-y-4">
+          <div className="text-sm font-semibold text-text">Voice Call Settings &mdash; {name}</div>
+          <div className="text-xs text-dim">Configure how phone calls are handled: greeting, hold behavior, and conversation mode.</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">Greeting</div>
+              <textarea value={greeting} onChange={e => setGreeting(e.target.value)} placeholder="Hello! Please speak after the beep." rows={2} className={inputCls + ' resize-y'} />
+              <div className="text-[11px] text-dim">Spoken (or synthesized via TTS) when the call is answered.</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">Hold Message</div>
+              <input value={holdMessage} onChange={e => setHoldMessage(e.target.value)} placeholder="Please wait while I process your request..." className={inputCls} />
+              <div className="text-[11px] text-dim">Spoken while waiting for the webhook response. Leave empty for silence.</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">Hold Music URL</div>
+              <input value={holdMusic} onChange={e => setHoldMusic(e.target.value)} placeholder="https://example.com/hold-music.mp3" className={inputCls} />
+              <div className="text-[11px] text-dim">Played instead of hold message if set. Must be a public URL.</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">Max Recording (seconds)</div>
+              <input type="number" value={maxRecord} onChange={e => setMaxRecord(parseInt(e.target.value) || 30)} min={5} max={120} className={inputCls} />
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">TwiML Language</div>
+              <input value={language} onChange={e => setLanguage(e.target.value)} placeholder="en-US" className={inputCls} />
+              <div className="text-[11px] text-dim">Language for Twilio's built-in Say voice (e.g. en-US, he-IL).</div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-dim">TwiML Voice</div>
+              <input value={voiceName} onChange={e => setVoiceName(e.target.value)} placeholder="Polly.Joanna" className={inputCls} />
+              <div className="text-[11px] text-dim">Twilio voice name for the greeting and hold message.</div>
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-text cursor-pointer select-none">
+            <input type="checkbox" checked={conversational} onChange={e => setConversational(e.target.checked)} className="accent-primary" />
+            Conversational mode &mdash; loop back to record after each response
+          </label>
+          <div className="flex items-center gap-2 pt-1">
+            <button className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors" onClick={save}>Save</button>
+            <button onClick={onClose} className="px-4 py-2 border border-border rounded-lg text-sm text-dim hover:bg-bg-light transition-colors">Cancel</button>
+            {status && <span className={`text-xs ml-2 ${status === 'Saved' ? 'text-green' : 'text-red'}`}>{status}</span>}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
   const fmt = svc.format || {};
   const [provider, setProvider] = useState(fmt.provider || '');
@@ -183,7 +274,7 @@ function FormatSettingsRow({ name, svc, settings, onClose, loadConfig }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null,
-          stt: svc.stt || null, tts: svc.tts || null, format: formatVal,
+          stt: svc.stt || null, tts: svc.tts || null, voice: svc.voice || null, format: formatVal,
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
@@ -326,7 +417,7 @@ data = response.json()`;
   );
 }
 
-function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget, formatTarget, setFormatTarget, channels }) {
+function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, setAudioTarget, formatTarget, setFormatTarget, voiceTarget, setVoiceTarget, channels }) {
   const [editing, setEditing] = useState(false);
   const [webhook, setWebhook] = useState(svc.webhook);
   const [code, setCode] = useState(svc.code || '');
@@ -342,7 +433,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const [copiedUrl, setCopiedUrl] = useState(false);
   const { tunnelActive, tunnelUrl } = useAppState();
   const showAudio = audioTarget === name;
+  const showVoice = voiceTarget === name;
   const isEndpoint = channels[svc.channel]?.type === 'endpoint';
+  const isVoiceChannel = channels[svc.channel]?.type === 'voice';
   const isPhoneChannel = ['whatsapp', 'sms', 'voice'].includes(channels[svc.channel]?.type);
 
   const endpointUrl = isEndpoint
@@ -370,7 +463,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
     const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhook, method: webhookMethod, auth: buildAuthPayload(), code: code || null, command: command || null, stt: svc.stt || null, tts: svc.tts || null, format: svc.format || null, allow_list: allowList.length > 0 ? allowList : null }),
+      body: JSON.stringify({ webhook, method: webhookMethod, auth: buildAuthPayload(), code: code || null, command: command || null, stt: svc.stt || null, tts: svc.tts || null, voice: svc.voice || null, format: svc.format || null, allow_list: allowList.length > 0 ? allowList : null }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Save failed'); return; }
     setEditing(false);
@@ -389,6 +482,8 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const infoParts = [];
   if (svc.stt) infoParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ''));
   if (svc.tts) infoParts.push('TTS: ' + svc.tts.provider + (svc.tts.language ? ' (' + svc.tts.language + ')' : ''));
+  if (svc.voice?.greeting) infoParts.push('Greeting');
+  if (svc.voice?.conversational) infoParts.push('Conversational');
   if (svc.format) infoParts.push('Format: ' + svc.format.provider);
   if (svc.allow_list?.length) infoParts.push(svc.allow_list.length + ' allowed');
 
@@ -472,8 +567,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
           <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
             {isEndpoint && <IconBtn icon={copiedUrl ? 'check' : 'link'} label={copiedUrl ? 'Copied!' : 'Copy endpoint URL'} onClick={copyEndpointUrl} />}
             {isEndpoint && <IconBtn icon="code" label="Example" onClick={() => setShowExample(true)} />}
-            <IconBtn icon="graphic_eq" label="Audio" onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); }} />
-            <IconBtn icon="auto_fix_high" label="Format" onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); }} />
+            <IconBtn icon="graphic_eq" label="Audio" onClick={() => { setAudioTarget(showAudio ? null : name); setFormatTarget(null); setVoiceTarget(null); }} />
+            {isVoiceChannel && <IconBtn icon="call" label="Voice Settings" onClick={() => { setVoiceTarget(showVoice ? null : name); setAudioTarget(null); setFormatTarget(null); }} />}
+            <IconBtn icon="auto_fix_high" label="Format" onClick={() => { setFormatTarget(showFormat ? null : name); setAudioTarget(null); setVoiceTarget(null); }} />
             <IconBtn icon="edit" label="Edit" onClick={() => setEditing(true)} />
             <IconBtn icon="delete" label="Remove" onClick={remove} danger />
           </td>
@@ -481,6 +577,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
       )}
       {showAudio && (
         <AudioSettingsRow name={name} svc={svc} settings={settings} onClose={() => setAudioTarget(null)} loadConfig={loadConfig} />
+      )}
+      {showVoice && (
+        <VoiceSettingsRow name={name} svc={svc} onClose={() => setVoiceTarget(null)} loadConfig={loadConfig} />
       )}
       {showFormat && (
         <FormatSettingsRow name={name} svc={svc} settings={settings} onClose={() => setFormatTarget(null)} loadConfig={loadConfig} />
@@ -497,6 +596,7 @@ export default function Services({ loadConfig }) {
   const dispatch = useDispatch();
   const [audioTarget, setAudioTarget] = useState(null);
   const [formatTarget, setFormatTarget] = useState(null);
+  const [voiceTarget, setVoiceTarget] = useState(null);
   const [step, setStep] = useState('pick');
   const [selectedChannel, setSelectedChannel] = useState('');
   const [svcName, setSvcName] = useState('');
@@ -608,6 +708,8 @@ export default function Services({ loadConfig }) {
                   setAudioTarget={setAudioTarget}
                   formatTarget={formatTarget}
                   setFormatTarget={setFormatTarget}
+                  voiceTarget={voiceTarget}
+                  setVoiceTarget={setVoiceTarget}
                   channels={channels}
                 />
               ))}

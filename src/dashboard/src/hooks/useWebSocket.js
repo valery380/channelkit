@@ -83,7 +83,7 @@ export function useWebSocket(dispatch) {
           }
 
           if (msg.type === 'channelStatus') {
-            dispatch({ type: 'SET_CHANNEL_STATUS', payload: { channel: msg.channel, connected: msg.connected } });
+            dispatch({ type: 'SET_CHANNEL_STATUS', payload: { channel: msg.channel, connected: msg.connected, statusMessage: msg.statusMessage } });
           }
 
           if (

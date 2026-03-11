@@ -82,12 +82,12 @@ function reducer(state, action) {
     case 'SET_SMS_LISTEN':
       return { ...state, smsListenMessage: action.payload };
     case 'SET_CHANNEL_STATUS': {
-      const { channel, connected } = action.payload;
+      const { channel, connected, statusMessage } = action.payload;
       const ch = state.channels[channel];
       if (!ch) return state;
       return {
         ...state,
-        channels: { ...state.channels, [channel]: { ...ch, connected } },
+        channels: { ...state.channels, [channel]: { ...ch, connected, statusMessage: statusMessage || null } },
       };
     }
     default:

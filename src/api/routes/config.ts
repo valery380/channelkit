@@ -48,6 +48,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       for (const [name, ch] of Object.entries(channels)) {
         const runtime = ctx.channels.get(name);
         (ch as any).connected = runtime ? runtime.connected : false;
+        (ch as any).statusMessage = runtime ? (runtime as any).statusMessage || null : null;
       }
       res.json({ channels, services: config.services || {}, baileysAvailable: isBaileysAvailable() });
     } catch (err: any) {
@@ -110,7 +111,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/services/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { webhook, code, command, stt, tts, format, allow_list, method, auth } = req.body;
+    const { webhook, code, command, stt, tts, voice, format, allow_list, method, auth } = req.body;
     if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
     const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
     if (method && !validMethods.includes(method.toUpperCase())) {
@@ -164,6 +165,25 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           if (tts.voice) config.services[name].tts.voice = tts.voice;
         } else {
           delete config.services[name].tts;
+        }
+      }
+      if ('voice' in req.body) {
+        if (voice && Object.keys(voice).some(k => voice[k])) {
+          const v: any = {};
+          if (voice.greeting) v.greeting = voice.greeting;
+          if (voice.hold_message) v.hold_message = voice.hold_message;
+          if (voice.hold_music) v.hold_music = voice.hold_music;
+          if (voice.language) v.language = voice.language;
+          if (voice.voice_name) v.voice_name = voice.voice_name;
+          if (voice.max_record_seconds) v.max_record_seconds = Number(voice.max_record_seconds);
+          if (voice.conversational !== undefined) v.conversational = !!voice.conversational;
+          if (Object.keys(v).length > 0) {
+            config.services[name].voice = v;
+          } else {
+            delete config.services[name].voice;
+          }
+        } else {
+          delete config.services[name].voice;
         }
       }
       if ('format' in req.body) {

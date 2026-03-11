@@ -41,7 +41,7 @@ class GoogleTTS implements TTSProvider {
         name: voice || undefined,
       },
       audioConfig: {
-        audioEncoding: 'OGG_OPUS',
+        audioEncoding: 'MP3',
       },
     };
 
@@ -61,7 +61,7 @@ class GoogleTTS implements TTSProvider {
 
     const data = await res.json() as any;
     const buffer = Buffer.from(data.audioContent, 'base64');
-    return { buffer, mimetype: 'audio/ogg; codecs=opus' };
+    return { buffer, mimetype: 'audio/mpeg' };
   }
 }
 
@@ -133,7 +133,7 @@ class OpenAITTS implements TTSProvider {
         model: 'tts-1',
         input: text,
         voice: voice || this.defaultVoice,
-        response_format: 'opus',
+        response_format: 'mp3',
       }),
     });
 
@@ -144,7 +144,7 @@ class OpenAITTS implements TTSProvider {
 
     const arrayBuf = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuf);
-    return { buffer, mimetype: 'audio/ogg; codecs=opus' };
+    return { buffer, mimetype: 'audio/mpeg' };
   }
 }
 

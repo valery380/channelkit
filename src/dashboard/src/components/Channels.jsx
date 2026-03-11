@@ -832,9 +832,9 @@ export default function Channels({ loadConfig }) {
                       <td className="px-4 py-4 text-sm font-medium text-text">
                         <span className="inline-flex items-center gap-2">
                           {name}
-                          {ch.type === 'whatsapp' && (
+                          {['whatsapp', 'voice'].includes(ch.type) && (
                             <span
-                              title={ch.connected ? 'Connected' : 'Disconnected'}
+                              title={ch.connected ? 'Connected' : (ch.statusMessage || 'Disconnected')}
                               className={`inline-block w-2 h-2 rounded-full ${ch.connected ? 'bg-green-400' : 'bg-red-400'}`}
                             />
                           )}

@@ -6,7 +6,7 @@
  * 2. ChannelKit returns TwiML: greeting + record
  * 3. Recording done → POST /inbound/voice/<channel>/recording
  * 4. ChannelKit: STT → webhook → TTS → respond to caller
- * 5. If conversational: loop back to record
+ * 5. Loop back to record (default) — webhook returns { endcall: true } to hang up
  */
 
 import { randomUUID } from 'crypto';
@@ -34,9 +34,12 @@ export class TwilioVoiceChannel extends Channel {
   private pendingCalls: Map<string, PendingCall> = new Map();
   private publicUrl: string | null = null;
   private audioCache: Map<string, AudioCacheEntry> = new Map();
+  public statusMessage: string | null = null;
 
   constructor(name: string, config: TwilioVoiceChannelConfig) {
     super(name, config);
+    this.connected = false;
+    this.statusMessage = 'Waiting for public URL to configure Twilio webhook. Start a tunnel or use --public-url.';
     this.client = Twilio(config.account_sid, config.auth_token);
   }
 
@@ -101,8 +104,18 @@ export class TwilioVoiceChannel extends Channel {
           voiceMethod: 'POST',
         });
         console.log(`  📞 Updated Twilio voice webhook for ${this.cfg.number}`);
+        this.connected = true;
+        this.statusMessage = null;
+        this.emit('connected');
+      } else {
+        this.connected = false;
+        this.statusMessage = `Phone number ${this.cfg.number} not found in your Twilio account. Check your Twilio console.`;
+        this.emit('disconnected');
       }
     } catch (err) {
+      this.connected = false;
+      this.statusMessage = `Failed to configure Twilio webhook: ${(err as Error).message}`;
+      this.emit('disconnected');
       console.error(`[voice:${this.name}] Failed to set webhook:`, err);
     }
   }
@@ -276,9 +289,14 @@ export class TwilioVoiceChannel extends Channel {
       twiml.say(sayOpts, response.text);
     }
 
-    // Conversational mode: loop back to record
-    if (voiceConfig?.conversational) {
-      const maxRecord = voiceConfig.max_record_seconds || 30;
+    if (response.endcall) {
+      // Webhook explicitly asked to end the call
+      twiml.say(sayOpts, 'Goodbye.');
+      twiml.hangup();
+      this.pendingCalls.delete(callSid);
+    } else {
+      // Default: loop back to record (keep the conversation going)
+      const maxRecord = voiceConfig?.max_record_seconds || 30;
       const recordUrl = `${this.publicUrl}/inbound/voice/${this.name}/recording`;
       twiml.record({
         action: recordUrl,
@@ -286,13 +304,10 @@ export class TwilioVoiceChannel extends Channel {
         playBeep: true,
         transcribe: false,
       });
+      // Fallback if caller stays silent
       twiml.say(sayOpts, 'Goodbye.');
+      twiml.hangup();
     }
-
-    twiml.hangup();
-
-    // Clean up
-    this.pendingCalls.delete(callSid);
 
     return twiml.toString();
   }
