@@ -281,9 +281,14 @@ export class ApiServer {
   private async promptPortConflict(port: number): Promise<boolean | number> {
     const { execSync } = await import('child_process');
 
+    // Resolve lsof path — macOS keeps it in /usr/sbin which may not be in PATH for background processes
+    let lsof = 'lsof';
+    try { execSync('which lsof', { encoding: 'utf-8', stdio: 'pipe' }); }
+    catch { try { execSync('/usr/sbin/lsof -v', { encoding: 'utf-8', stdio: 'pipe' }); lsof = '/usr/sbin/lsof'; } catch {} }
+
     let pid: string | undefined;
     try {
-      const out = execSync(`lsof -ti tcp:${port}`, { encoding: 'utf-8' }).trim();
+      const out = execSync(`${lsof} -ti tcp:${port}`, { encoding: 'utf-8' }).trim();
       pid = out.split('\n')[0];
     } catch {}
 
@@ -344,14 +349,14 @@ export class ApiServer {
 
     try {
       try {
-        execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
+        execSync(`${lsof} -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
       } catch {}
       console.log(`   Killed process on port ${port}. Waiting for port to be released...`);
       for (let i = 0; i < 20; i++) {
         await new Promise((r) => setTimeout(r, 500));
         if (!(await this.isPortInUse(port))) return true;
         try {
-          execSync(`lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
+          execSync(`${lsof} -ti tcp:${port} | xargs kill -9 2>/dev/null`, { encoding: 'utf-8' });
         } catch {}
       }
       console.error(`   Port ${port} is still in use after waiting.`);

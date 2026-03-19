@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, join } from 'path';
+import { homedir } from 'os';
 
 export interface GroupMapping {
   groupId: string;
@@ -9,10 +10,13 @@ export interface GroupMapping {
   createdAt: number;
 }
 
+/** Default groups.json path: ~/.channelkit/data/groups.json (absolute, CWD-independent) */
+const DEFAULT_GROUPS_PATH = join(homedir(), '.channelkit', 'data', 'groups.json');
+
 export class GroupStore {
   private groups: Record<string, GroupMapping> = {};
 
-  constructor(private filePath: string = './data/groups.json') {
+  constructor(private filePath: string = DEFAULT_GROUPS_PATH) {
     this.load();
   }
 
