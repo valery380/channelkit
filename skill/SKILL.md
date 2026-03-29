@@ -40,7 +40,7 @@ For voice: ChannelKit handles speech-to-text and text-to-speech transparently. Y
 3. `add_service` — create a service pointing to your app's webhook URL, with optional STT/TTS
 4. `get_status` — verify everything is connected
 
-If ChannelKit is not installed: `npm install -g @dirbalak/channelkit && channelkit`
+If ChannelKit is not installed: `npm install -g channelkit && channelkit`
 
 ## Channel notes
 

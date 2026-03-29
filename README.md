@@ -33,15 +33,15 @@ Your app receives every message in a **unified JSON format**, regardless of sour
 ## Quick Start
 
 ```bash
-npm install -g @dirbalak/channelkit
+npm install -g channelkit
 channelkit
 ```
 
 > **Upgrading?** If you previously installed ChannelKit without the `-g` flag (global), you should uninstall it first and reinstall globally. A local install won't put `channelkit` on your PATH, so the CLI command won't be available system-wide:
 >
 > ```bash
-> npm uninstall @dirbalak/channelkit        # remove the local install
-> npm install -g @dirbalak/channelkit       # reinstall globally
+> npm uninstall channelkit        # remove the local install
+> npm install -g channelkit       # reinstall globally
 > ```
 
 On first run, ChannelKit will ask how you'd like to set up:
@@ -766,7 +766,7 @@ channelkit channel provision
 ## Development
 
 ```bash
-git clone https://github.com/dirbalak/channelkit.git
+git clone https://github.com/valery380/channelkit.git
 cd channelkit
 npm install
 npm run dev    # starts with auto-reload on code changes
