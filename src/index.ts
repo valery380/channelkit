@@ -385,12 +385,13 @@ export class ChannelKit {
       return await this.updater!.performUpdate();
     };
 
-    // Start auto-update (enabled by default)
-    if (this.config.auto_update?.enabled !== false) {
+    // Start auto-update (enabled by default, but npx always uses notify-only)
+    const isNpx = this.updater.getMode() === 'npx';
+    if (!isNpx && this.config.auto_update?.enabled !== false) {
       const interval = this.config.auto_update?.interval || 30;
       this.updater.startAutoUpdate(interval);
     } else {
-      // Auto-update disabled — still check for updates periodically (every 12h) and notify
+      // Auto-update disabled or npx — still check for updates periodically (every 12h) and notify
       this.updater.startUpdateCheck(720);
     }
 

@@ -25,7 +25,9 @@ export default function UpdateBanner() {
 
   if (!update) return null;
 
-  const cmd = update.mode === 'npm'
+  const cmd = update.mode === 'npx'
+    ? 'npx channelkit@latest'
+    : update.mode === 'npm'
     ? 'npm update -g channelkit'
     : 'git pull && npm run build';
 
