@@ -38,8 +38,18 @@ npx channelkit
 
 That's it — no install needed. ChannelKit will download and run.
 
-> **Want to install globally?** Use `npm install -g channelkit` to get the `channelkit` command on your PATH.
-> If you use nvm, this works without sudo. Otherwise, see [npm docs on fixing permissions](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally).
+### Install options
+
+| Method | Command | When to use |
+|--------|---------|-------------|
+| **npx** (no install) | `npx channelkit` | Try it out, quick start |
+| **Global install** | `npm install -g channelkit` | Daily use, shorter commands |
+
+With npx, prefix all commands with `npx` (e.g. `npx channelkit demo`).
+With a global install, just use `channelkit` directly.
+
+> **Permission error on global install?** Use [nvm](https://github.com/nvm-sh/nvm) to manage Node — it installs to your home directory, no sudo needed.
+> Already have Node without nvm? See [npm docs on fixing permissions](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally).
 
 On first run, ChannelKit will ask how you'd like to set up:
 
@@ -52,9 +62,12 @@ All configuration is stored in `~/.channelkit/` (config, auth sessions, logs).
 
 ```bash
 channelkit                         # start (opens dashboard automatically)
-channelkit start -c /path/to.yaml  # use a custom config file
-channelkit start --tunnel           # start with a public URL (Cloudflare tunnel)
+channelkit start --tunnel          # start with a public URL (Cloudflare tunnel)
+channelkit demo                    # run the built-in echo server for testing
+channelkit daemon install          # install as a system service (starts on boot)
 ```
+
+> Using npx? Just prefix: `npx channelkit demo`, `npx channelkit daemon install`, etc.
 
 ### Public URL (Cloudflare Tunnel)
 
