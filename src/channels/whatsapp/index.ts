@@ -148,6 +148,28 @@ export class WhatsAppChannel extends Channel {
     return { id: result.id, subject: name };
   }
 
+  async groupUpdateDescription(groupId: string, description: string): Promise<void> {
+    if (!this.sock) throw new Error('WhatsApp not connected');
+    await this.sock.groupUpdateDescription(groupId, description);
+  }
+
+  async groupUpdateSubject(groupId: string, subject: string): Promise<void> {
+    if (!this.sock) throw new Error('WhatsApp not connected');
+    await this.sock.groupUpdateSubject(groupId, subject);
+  }
+
+  async groupUpdatePhoto(groupId: string, image: Buffer): Promise<void> {
+    if (!this.sock) throw new Error('WhatsApp not connected');
+    await this.sock.updateProfilePicture(groupId, image);
+  }
+
+  async groupInviteCode(groupId: string): Promise<string> {
+    if (!this.sock) throw new Error('WhatsApp not connected');
+    const code = await this.sock.groupInviteCode(groupId);
+    if (!code) throw new Error('Failed to get invite code');
+    return code;
+  }
+
   async sendToJid(jid: string, text: string): Promise<void> {
     if (!this.sock) return;
     await this.sock.sendMessage(jid, { text });

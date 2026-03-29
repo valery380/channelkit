@@ -19,6 +19,7 @@ import { registerDashboardRoutes } from './routes/dashboard';
 import { registerRestartRoutes } from './routes/restart';
 import { registerMcpRoutes } from './routes/mcp';
 import { registerUpdateRoutes } from './routes/update';
+import { registerGroupRoutes } from './routes/groups';
 
 /** Redact patterns that look like API keys/tokens from log text. */
 function redactSecrets(text: string): string {
@@ -169,6 +170,7 @@ export class ApiServer {
     registerRestartRoutes(this.app, this.ctx);
     registerMcpRoutes(this.app, this.ctx);
     registerUpdateRoutes(this.app, this.ctx);
+    registerGroupRoutes(this.app, this.ctx);
   }
 
   // Proxy getters/setters that delegate to ctx for backward compat with index.ts
