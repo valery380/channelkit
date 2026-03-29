@@ -247,6 +247,41 @@ export class Updater {
     }
   }
 
+  /** Check for updates periodically without installing (notify only). */
+  startUpdateCheck(intervalMinutes: number): void {
+    if (this.autoUpdateTimer) {
+      clearInterval(this.autoUpdateTimer);
+    }
+
+    const intervalMs = intervalMinutes * 60 * 1000;
+    this.log(`Update check enabled (notify only): checking every ${intervalMinutes} minute(s)`);
+
+    // Initial check after 10s
+    setTimeout(() => this.notifyUpdateCheck(), 10000);
+
+    this.autoUpdateTimer = setInterval(() => this.notifyUpdateCheck(), intervalMs);
+  }
+
+  private async notifyUpdateCheck(): Promise<void> {
+    try {
+      const status = await this.checkForUpdate();
+      if (status.updateAvailable) {
+        const msg = status.mode === 'npm'
+          ? `Update available: v${status.currentVersion} → v${status.latestVersion}. Run: npm update -g ${PKG_NAME}`
+          : `Update available: ${status.currentVersion} → ${status.latestVersion} (${status.behindCount} commit(s) behind). Run: git pull`;
+        this.log(msg);
+        console.log(`\n  ╭─────────────────────────────────────────╮`);
+        console.log(`  │  🆕 New version available!               │`);
+        console.log(`  │  ${status.currentVersion} → ${status.latestVersion}${' '.repeat(Math.max(0, 27 - status.currentVersion.length - status.latestVersion.length))}│`);
+        console.log(`  │  Auto-update is off. Update manually:    │`);
+        console.log(`  │  ${status.mode === 'npm' ? `npm update -g ${PKG_NAME}` : 'git pull && npm run build'}${' '.repeat(Math.max(0, status.mode === 'npm' ? 5 : 14))}│`);
+        console.log(`  ╰─────────────────────────────────────────╯\n`);
+      }
+    } catch (err: any) {
+      this.log(`Update check failed: ${err.message}`);
+    }
+  }
+
   startAutoUpdate(intervalMinutes: number): void {
     if (this.autoUpdateTimer) {
       clearInterval(this.autoUpdateTimer);

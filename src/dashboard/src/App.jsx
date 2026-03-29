@@ -7,6 +7,7 @@ import Header from './components/Header.jsx';
 import StatsGrid from './components/StatsGrid.jsx';
 import PublicUrlSection from './components/PublicUrlSection.jsx';
 import RestartBanner from './components/RestartBanner.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
 import Tabs from './components/Tabs.jsx';
 import Logs from './components/Logs.jsx';
 import Services from './components/Services.jsx';
@@ -218,6 +219,7 @@ export default function App() {
       <main className="flex-1 flex flex-col items-center px-6 lg:px-10 py-6">
         <div className="w-full max-w-7xl space-y-6">
           <StatsGrid />
+          <UpdateBanner />
           <RestartBanner />
           <PublicUrlSection />
           <Tabs tabs={TABS} active={tab} />
