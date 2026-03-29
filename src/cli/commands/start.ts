@@ -7,6 +7,7 @@ import { ChannelKit } from '../../index';
 import { banner, c, ask, select } from '../helpers';
 import { initCommand } from './init';
 import { DEFAULT_AUTH_DIR } from '../../paths';
+import { promptServiceInstall } from './service-install';
 
 export async function startCommand(configPath: string, opts: { tunnel?: boolean; publicUrl?: string } = {}) {
   banner();
@@ -100,5 +101,11 @@ export async function startCommand(configPath: string, opts: { tunnel?: boolean;
 
   console.log();
   console.log(c('green', '  🚀 ChannelKit is running!\n'));
+
+  // On first interactive run, offer to install as a system service
+  if (process.stdin.isTTY) {
+    await promptServiceInstall(configPath);
+  }
+
   console.log(c('dim', '  Press Ctrl+C to stop\n'));
 }

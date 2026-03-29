@@ -14,6 +14,7 @@ import { serviceAddWizard } from './wizards/service';
 import { channelAddWizard } from './wizards/channel';
 import { provisionWhatsAppWizard } from './wizards/provision';
 import { installSkillCommand } from './commands/install-skill';
+import { installServiceCommand, uninstallServiceCommand, serviceStatusCommand, serviceStopCommand, serviceStartCommand } from './commands/service-install';
 
 const program = new Command();
 
@@ -229,6 +230,37 @@ channel
       rl.close();
     }
   });
+
+// System service management (install/uninstall/status/stop/restart)
+const daemon = program
+  .command('daemon')
+  .description('Manage ChannelKit as a background service (auto-start on boot)');
+
+daemon
+  .command('install')
+  .description('Install ChannelKit as a system service (starts on boot)')
+  .option('-c, --config <path>', 'Path to config file', DEFAULT_CONFIG_PATH)
+  .action((opts) => installServiceCommand(resolve(opts.config)));
+
+daemon
+  .command('uninstall')
+  .description('Remove the system service')
+  .action(() => uninstallServiceCommand());
+
+daemon
+  .command('status')
+  .description('Check if the service is running')
+  .action(() => serviceStatusCommand());
+
+daemon
+  .command('stop')
+  .description('Stop the service')
+  .action(() => serviceStopCommand());
+
+daemon
+  .command('start')
+  .description('Start the service')
+  .action(() => serviceStartCommand());
 
 // Provision command
 const provision = program
