@@ -15,7 +15,6 @@ function parseMultipart(buf, boundary) {
   const files = {};
   const sep = Buffer.from(`--${boundary}`);
 
-  // Split on boundary
   let start = 0;
   const parts = [];
   while (true) {
@@ -23,18 +22,14 @@ function parseMultipart(buf, boundary) {
     if (idx === -1) break;
     if (start > 0) parts.push(buf.slice(start, idx));
     start = idx + sep.length;
-    // skip \r\n after boundary
     if (buf[start] === 0x0d && buf[start + 1] === 0x0a) start += 2;
-    // closing --
     if (buf[start] === 0x2d && buf[start + 1] === 0x2d) break;
   }
 
   for (const part of parts) {
-    // Find the blank line separating headers from body (\r\n\r\n)
     const headerEnd = part.indexOf("\r\n\r\n");
     if (headerEnd === -1) continue;
     const headerStr = part.slice(0, headerEnd).toString();
-    // Body is between header end and trailing \r\n
     let body = part.slice(headerEnd + 4);
     if (body.length >= 2 && body[body.length - 2] === 0x0d && body[body.length - 1] === 0x0a) {
       body = body.slice(0, -2);
@@ -61,46 +56,35 @@ function parseMultipart(buf, boundary) {
 
 function handleRequest(req, msg, savedFile) {
   const channel = msg.channel || "?";
+  const from = msg.from || "unknown";
   const text = msg.text || "(no text)";
 
   console.log(`\n${"=".repeat(60)}`);
-  console.log(`📨 Incoming Request`);
+  console.log(`📨 Incoming message`);
   console.log(`${"=".repeat(60)}`);
-  console.log(`   Method:  ${req.method}`);
-  console.log(`   URL:     ${req.url}`);
-  console.log(`   Headers:`);
-  for (const [key, value] of Object.entries(req.headers)) {
-    console.log(`     ${key}: ${value}`);
-  }
-  console.log(`\n   Body (parsed):`);
-  console.log(JSON.stringify(msg, null, 2).split("\n").map(l => `     ${l}`).join("\n"));
-  if (savedFile) console.log(`\n   💾 Saved attachment: ${savedFile}`);
+  console.log(`   Channel: ${channel}`);
+  console.log(`   From:    ${from}`);
+  console.log(`   Text:    ${text}`);
+  if (msg.media) console.log(`   Media:   ${msg.media.mimetype} (${msg.media.filename || "unnamed"})`);
+  if (savedFile) console.log(`   💾 Saved: ${savedFile}`);
 
   let reply;
-  if (req.url.startsWith("/expenses")) {
-    reply = { text: "💰 Onkosto: got your message!" };
-  } else if (req.url.startsWith("/home")) {
-    reply = { text: "🏠 Smart Home: got your message!" };
-  } else if (req.url.startsWith("/support")) {
-    // Demo: echo back with voice (triggers TTS if configured)
-    reply = { text: `You said: ${text}`, voice: true };
-  } else if (req.url.startsWith("/email")) {
+  if (channel === "voice") {
+    reply = { text: `Echo: ${text}`, voice: true };
+  } else if (msg.email) {
     reply = {
-      text: `Thanks for your email!`,
-      email: { subject: `Re: ${msg.email?.subject || "Your message"}` },
+      text: `Echo: ${text}`,
+      email: { subject: `Re: ${msg.email.subject || "Your message"}` },
     };
-  } else if (channel === "voice") {
-    // Voice: respond with text (will be spoken back via TTS or <Say>)
-    reply = { text: `You said: ${text}`, voice: true };
   } else {
-    reply = { text: `Echo [${channel}]: ${text}` };
+    reply = { text: `Echo: ${text}` };
   }
 
   if (savedFile) {
-    reply.text += ` (attachment saved: ${path.basename(savedFile)})`;
+    reply.text += ` (+ attachment: ${path.basename(savedFile)})`;
   }
 
-  console.log(`📤 ${reply.text}${reply.voice ? " 🔊" : ""}`);
+  console.log(`📤 Reply: ${reply.text}${reply.voice ? " 🔊" : ""}`);
   return reply;
 }
 
@@ -113,7 +97,6 @@ const server = http.createServer((req, res) => {
     let savedFile = null;
 
     if (contentType.includes("multipart/form-data")) {
-      // Parse multipart — ChannelKit sends: metadata (JSON) + file (binary)
       const boundaryMatch = contentType.match(/boundary=(.+)/);
       if (boundaryMatch) {
         const buf = Buffer.concat(chunks);
@@ -129,13 +112,10 @@ const server = http.createServer((req, res) => {
           const dest = path.join(UPLOADS_DIR, safeName);
           fs.writeFileSync(dest, data);
           savedFile = dest;
-
-          // Populate media info on msg so logging picks it up
           msg.media = { mimetype, filename };
         }
       }
     } else {
-      // JSON body (the normal path)
       const raw = Buffer.concat(chunks).toString();
       if (raw.length) {
         try { msg = JSON.parse(raw); } catch {}
@@ -150,14 +130,10 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🔗 Echo server listening on port ${PORT}\n`);
-  console.log("   Routes:");
-  console.log("   /expenses → Onkosto (text reply)");
-  console.log("   /home     → Smart Home (text reply)");
-  console.log("   /support  → Support (voice reply — TTS)");
-  console.log("   /email    → Email (reply with subject)");
-  console.log("   /*        → Generic echo");
-  console.log("   voice     → Echo with TTS 🔊\n");
-  console.log("   Supports: WhatsApp, Telegram, Gmail, Resend, SMS, Voice");
+  console.log(`\n🔗 ChannelKit Echo Server`);
+  console.log(`   Listening on port ${PORT}\n`);
+  console.log(`   Every message is echoed back to the sender.`);
+  console.log(`   Supports: WhatsApp, Telegram, Email, SMS, Voice`);
   console.log(`   Attachments saved to: ${UPLOADS_DIR}\n`);
+  console.log(`   Set your service webhook to: http://localhost:${PORT}\n`);
 });
