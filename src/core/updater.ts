@@ -5,7 +5,7 @@ import { Channel } from '../channels/base';
 import { restartProcess } from './restart';
 
 export interface UpdateStatus {
-  mode: 'git' | 'npm';
+  mode: 'git' | 'npm' | 'npx';
   currentVersion: string;
   latestVersion: string;
   updateAvailable: boolean;
@@ -27,7 +27,7 @@ export class Updater {
   private autoUpdateTimer: ReturnType<typeof setInterval> | null = null;
   private projectRoot: string;
   private updating = false;
-  private mode: 'git' | 'npm';
+  private mode: 'git' | 'npm' | 'npx';
 
   constructor(
     private channels: Map<string, Channel>,
@@ -38,10 +38,16 @@ export class Updater {
     this.log(`Running in ${this.mode} mode`);
   }
 
-  private detectMode(): 'git' | 'npm' {
+  private detectMode(): 'git' | 'npm' | 'npx' {
     // If there's a .git directory in the project root, it's a git clone
     if (existsSync(join(this.projectRoot, '.git'))) return 'git';
+    // Detect npx: running from a _npx cache directory
+    if (__dirname.includes('_npx') || __dirname.includes('.npm/_npx')) return 'npx';
     return 'npm';
+  }
+
+  getMode(): string {
+    return this.mode;
   }
 
   private log(msg: string): void {
@@ -169,6 +175,16 @@ export class Updater {
       return { success: false, previousVersion: '', newVersion: '', error: 'Update already in progress' };
     }
 
+    if (this.mode === 'npx') {
+      const currentVersion = this.getCurrentVersion();
+      return {
+        success: false,
+        previousVersion: currentVersion,
+        newVersion: currentVersion,
+        error: `Auto-update is not supported when running via npx. Run: npx channelkit@latest`,
+      };
+    }
+
     this.updating = true;
 
     if (this.mode === 'git') {
@@ -266,16 +282,20 @@ export class Updater {
     try {
       const status = await this.checkForUpdate();
       if (status.updateAvailable) {
-        const msg = status.mode === 'npm'
-          ? `Update available: v${status.currentVersion} → v${status.latestVersion}. Run: npm update -g ${PKG_NAME}`
-          : `Update available: ${status.currentVersion} → ${status.latestVersion} (${status.behindCount} commit(s) behind). Run: git pull`;
-        this.log(msg);
-        console.log(`\n  ╭─────────────────────────────────────────╮`);
-        console.log(`  │  🆕 New version available!               │`);
-        console.log(`  │  ${status.currentVersion} → ${status.latestVersion}${' '.repeat(Math.max(0, 27 - status.currentVersion.length - status.latestVersion.length))}│`);
-        console.log(`  │  Auto-update is off. Update manually:    │`);
-        console.log(`  │  ${status.mode === 'npm' ? `npm update -g ${PKG_NAME}` : 'git pull && npm run build'}${' '.repeat(Math.max(0, status.mode === 'npm' ? 5 : 14))}│`);
-        console.log(`  ╰─────────────────────────────────────────╯\n`);
+        let updateCmd: string;
+        if (status.mode === 'npx') {
+          updateCmd = `npx ${PKG_NAME}@latest`;
+        } else if (status.mode === 'npm') {
+          updateCmd = `npm update -g ${PKG_NAME}`;
+        } else {
+          updateCmd = 'git pull && npm run build';
+        }
+        this.log(`Update available: ${status.currentVersion} → ${status.latestVersion}. Run: ${updateCmd}`);
+        console.log(`\n  ╭─────────────────────────────────────────────╮`);
+        console.log(`  │  🆕 New version available!                   │`);
+        console.log(`  │  ${status.currentVersion} → ${status.latestVersion}${' '.repeat(Math.max(0, 31 - status.currentVersion.length - status.latestVersion.length))}│`);
+        console.log(`  │  Update: ${updateCmd}${' '.repeat(Math.max(0, 35 - updateCmd.length))}│`);
+        console.log(`  ╰─────────────────────────────────────────────╯\n`);
       }
     } catch (err: any) {
       this.log(`Update check failed: ${err.message}`);

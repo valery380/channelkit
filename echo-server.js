@@ -135,5 +135,5 @@ server.listen(PORT, () => {
   console.log(`   Every message is echoed back to the sender.`);
   console.log(`   Supports: WhatsApp, Telegram, Email, SMS, Voice`);
   console.log(`   Attachments saved to: ${UPLOADS_DIR}\n`);
-  console.log(`   Set your service webhook to: http://localhost:${PORT}\n`);
+  console.log(`   Set your service webhook to: http://localhost:${PORT} (method: POST)\n`);
 });

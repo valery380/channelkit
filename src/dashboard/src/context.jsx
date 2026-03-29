@@ -5,6 +5,7 @@ const initialState = {
   serverLogLines: [],
   channels: {},
   services: {},
+  configLoaded: false,
   settings: {},
   tunnelActive: false,
   tunnelUrl: null,
@@ -43,6 +44,7 @@ function reducer(state, action) {
     case 'SET_CONFIG':
       return {
         ...state,
+        configLoaded: true,
         channels: action.payload.channels || state.channels,
         services: action.payload.services || state.services,
         baileysAvailable: action.payload.baileysAvailable ?? state.baileysAvailable,

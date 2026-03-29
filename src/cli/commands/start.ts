@@ -94,10 +94,12 @@ export async function startCommand(configPath: string, opts: { tunnel?: boolean;
 
   await kit.start();
 
-  // Open the dashboard in the default browser
-  const dashboardUrl = `http://localhost:${port}/dashboard`;
-  const { exec: execCmd } = await import('child_process');
-  execCmd(`open "${dashboardUrl}" 2>/dev/null || xdg-open "${dashboardUrl}" 2>/dev/null || start "${dashboardUrl}" 2>/dev/null`);
+  // Open the dashboard in the default browser (only in interactive terminal, not daemon/background)
+  if (process.stdin.isTTY) {
+    const dashboardUrl = `http://localhost:${port}/dashboard`;
+    const { exec: execCmd } = await import('child_process');
+    execCmd(`open "${dashboardUrl}" 2>/dev/null || xdg-open "${dashboardUrl}" 2>/dev/null || start "${dashboardUrl}" 2>/dev/null`);
+  }
 
   console.log();
   console.log(c('green', '  🚀 ChannelKit is running!\n'));
