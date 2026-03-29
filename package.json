@@ -1,6 +1,6 @@
 {
-  "name": "@dirbalak/channelkit",
-  "version": "0.1.26",
+  "name": "channelkit",
+  "version": "1.0.0",
   "description": "A self-hosted messaging gateway that connects chat channels to any application via webhooks",
   "main": "dist/index.js",
   "bin": {
@@ -13,7 +13,7 @@
     "LICENSE"
   ],
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "scripts": {
     "build": "tsc && cd src/dashboard && npx vite build",
@@ -24,7 +24,7 @@
     "service": "NODE_NO_WARNINGS=1 tsx src/cli.ts service",
     "channel": "NODE_NO_WARNINGS=1 tsx src/cli.ts channel",
     "demo": "NODE_NO_WARNINGS=1 tsx src/cli.ts demo",
-    "postinstall": "echo \"\n  ✅ ChannelKit installed!\n\n  Run 'channelkit' to get started.\n\""
+    "postinstall": "echo \"\n  \u2705 ChannelKit installed!\n\n  Run 'channelkit' to get started.\n\""
   },
   "keywords": [
     "whatsapp",

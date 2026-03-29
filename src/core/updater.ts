@@ -20,7 +20,7 @@ export interface UpdateResult {
   error?: string;
 }
 
-const PKG_NAME = '@dirbalak/channelkit';
+const PKG_NAME = 'channelkit';
 
 export class Updater {
   private lastStatus: UpdateStatus | null = null;

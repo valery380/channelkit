@@ -26,7 +26,7 @@ export default function UpdateBanner() {
   if (!update) return null;
 
   const cmd = update.mode === 'npm'
-    ? 'npm update -g @dirbalak/channelkit'
+    ? 'npm update -g channelkit'
     : 'git pull && npm run build';
 
   return (
