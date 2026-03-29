@@ -33,16 +33,13 @@ Your app receives every message in a **unified JSON format**, regardless of sour
 ## Quick Start
 
 ```bash
-npm install -g channelkit
-channelkit
+npx channelkit
 ```
 
-> **Upgrading?** If you previously installed ChannelKit without the `-g` flag (global), you should uninstall it first and reinstall globally. A local install won't put `channelkit` on your PATH, so the CLI command won't be available system-wide:
->
-> ```bash
-> npm uninstall channelkit        # remove the local install
-> npm install -g channelkit       # reinstall globally
-> ```
+That's it — no install needed. ChannelKit will download and run.
+
+> **Want to install globally?** Use `npm install -g channelkit` to get the `channelkit` command on your PATH.
+> If you use nvm, this works without sudo. Otherwise, see [npm docs on fixing permissions](https://docs.npmjs.com/resolving-eacces-permissions-errors-when-installing-packages-globally).
 
 On first run, ChannelKit will ask how you'd like to set up:
 
@@ -629,68 +626,52 @@ Runs on port 3000 and echoes back any message it receives.
 
 ## Auto-Start on Reboot
 
-To keep ChannelKit running after a system restart, set it up as a system service.
+ChannelKit can install itself as a system service that starts automatically on boot.
 
-### macOS (launchd)
-
-First, find the paths you'll need:
+### Quick setup
 
 ```bash
-which channelkit         # e.g. /Users/you/.nvm/versions/node/v22.0.0/bin/channelkit
-which node               # e.g. /Users/you/.nvm/versions/node/v22.0.0/bin/node
-dirname $(which node)    # e.g. /Users/you/.nvm/versions/node/v22.0.0/bin
+channelkit daemon install
 ```
 
-Then create a plist file at `~/Library/LaunchAgents/com.channelkit.plist`, replacing all three paths below:
+That's it! ChannelKit will start on boot and restart if it crashes.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.channelkit</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>REPLACE_WITH_OUTPUT_OF_DIRNAME_WHICH_NODE:/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
-    <key>ProgramArguments</key>
-    <array>
-        <string>REPLACE_WITH_OUTPUT_OF_WHICH_NODE</string>
-        <string>REPLACE_WITH_OUTPUT_OF_WHICH_CHANNELKIT</string>
-        <string>start</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/channelkit.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/channelkit.err</string>
-</dict>
-</plist>
-```
+> **Tip:** ChannelKit also asks about this on first run — just answer "y" when prompted.
 
-> **Why these settings?** launchd doesn't load your shell profile (where `nvm`/`fnm`/Homebrew set up `PATH`), so both `node` and `npm` would be missing. The `EnvironmentVariables` block sets `PATH` so child processes (like auto-update) can find `npm`, and `ProgramArguments` calls `node` directly to avoid the `env: node: No such file or directory` error.
-
-Load the service:
+### Manage the service
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.channelkit.plist
+channelkit daemon status      # check if running
+channelkit daemon stop        # stop the service
+channelkit daemon start       # start the service
+channelkit daemon uninstall   # remove the service
 ```
 
-To stop and remove:
+### How it works
 
+- **macOS** — creates a LaunchAgent at `~/Library/LaunchAgents/com.channelkit.server.plist` with KeepAlive + RunAtLoad
+- **Linux** — creates a systemd user service at `~/.config/systemd/user/channelkit.service` with Restart=on-failure
+
+Logs:
+- **macOS:** `~/.channelkit/channelkit.log`
+- **Linux:** `journalctl --user -u channelkit -f`
+
+<details>
+<summary>Manual setup (if you prefer)</summary>
+
+#### macOS (launchd)
+
+Find paths:
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.channelkit.plist
+which channelkit
+which node
 ```
 
-### Linux (systemd)
+Create `~/Library/LaunchAgents/com.channelkit.server.plist` with ProgramArguments pointing to node + channelkit, RunAtLoad + KeepAlive enabled, and PATH set to include your node binary directory.
 
-Find the binary path with `which channelkit`, then create a service file at `/etc/systemd/system/channelkit.service`:
+#### Linux (systemd)
 
+Create `~/.config/systemd/user/channelkit.service`:
 ```ini
 [Unit]
 Description=ChannelKit Messaging Gateway
@@ -698,30 +679,22 @@ After=network.target
 
 [Service]
 Type=simple
-User=your-username
-ExecStart=REPLACE_WITH_OUTPUT_OF_WHICH_CHANNELKIT start
-Restart=always
-RestartSec=10
-Environment=NODE_ENV=production
+ExecStart=/path/to/node /path/to/channelkit start
+Restart=on-failure
+RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 ```
-
-Enable and start:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable channelkit    # start on boot
-sudo systemctl start channelkit     # start now
+systemctl --user daemon-reload
+systemctl --user enable channelkit
+systemctl --user start channelkit
+loginctl enable-linger
 ```
 
-Check status and logs:
-
-```bash
-sudo systemctl status channelkit
-journalctl -u channelkit -f         # follow logs
-```
+</details>
 
 ## WhatsApp Setup
 
