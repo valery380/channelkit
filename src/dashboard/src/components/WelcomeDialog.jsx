@@ -1,7 +1,10 @@
 import { useAppState } from '../context.jsx';
 
 export default function WelcomeDialog({ onNavigate }) {
-  const { channels, services } = useAppState();
+  const { channels, services, configLoaded } = useAppState();
+
+  // Don't show until config is actually loaded from the server
+  if (!configLoaded) return null;
 
   const channelCount = Object.keys(channels || {}).length;
   const serviceCount = Object.keys(services || {}).length;
