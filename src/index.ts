@@ -389,6 +389,9 @@ export class ChannelKit {
     if (this.config.auto_update?.enabled !== false) {
       const interval = this.config.auto_update?.interval || 30;
       this.updater.startAutoUpdate(interval);
+    } else {
+      // Auto-update disabled — still check for updates periodically (every 12h) and notify
+      this.updater.startUpdateCheck(720);
     }
 
     // Start MCP server if enabled
