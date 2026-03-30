@@ -217,7 +217,7 @@ function LogRow({ entry, isNew, onToast }) {
 }
 
 export default function Logs({ onSend }) {
-  const { entries } = useAppState();
+  const { entries, channels: appChannels } = useAppState();
   const dispatch = useDispatch();
   const [channel, setChannel] = useState('');
   const [search, setSearch] = useState('');
@@ -226,6 +226,8 @@ export default function Logs({ onSend }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [toast, setToast] = useState(null);
   const toastTimeout = useRef(null);
+
+  const hasSendableChannels = Object.values(appChannels || {}).some(ch => ch.type === 'whatsapp' || ch.type === 'telegram');
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -303,13 +305,15 @@ export default function Logs({ onSend }) {
             Clear
           </button>
         </div>
-        <button
-          onClick={onSend}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-all"
-        >
-          <span className="material-symbols-outlined text-[18px]">send</span>
-          <span>Send Message</span>
-        </button>
+        {hasSendableChannels && (
+          <button
+            onClick={onSend}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">send</span>
+            <span>Send Message</span>
+          </button>
+        )}
       </div>
 
       {/* Messages Table */}
