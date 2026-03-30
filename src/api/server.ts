@@ -97,6 +97,9 @@ export class ApiServer {
       },
     }));
 
+    // Trust proxy (required when behind ALB/reverse proxy for correct IP detection)
+    this.app.set('trust proxy', 1);
+
     // Body size limits
     this.app.use(express.json({ limit: '1mb' }));
     this.app.use(mcpCors(this.ctx));
