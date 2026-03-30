@@ -597,6 +597,7 @@ export default function Channels({ loadConfig }) {
   const [emailPollInterval, setEmailPollInterval] = useState(30);
   const [gmailPollInterval, setGmailPollInterval] = useState(30);
   const [showBuy, setShowBuy] = useState(false);
+  const [showTelegramHelp, setShowTelegramHelp] = useState(false);
   const [qrChannel, setQrChannel] = useState(null);
   const [gmailAuthChannel, setGmailAuthChannel] = useState(null);
   const [smsSettingsTarget, setSmsSettingsTarget] = useState(null);
@@ -1123,6 +1124,29 @@ export default function Channels({ loadConfig }) {
                 </select>
               )}
             </div>}
+
+            {typeKey === 'telegram' && (
+              <div className="mb-3 p-3 bg-bg-light border border-border rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setShowTelegramHelp(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-transparent border-none cursor-pointer p-0"
+                >
+                  <span className="material-symbols-outlined text-[16px]">info</span>
+                  How to get a Telegram Bot Token
+                  <span className="material-symbols-outlined text-[14px]">{showTelegramHelp ? 'expand_less' : 'expand_more'}</span>
+                </button>
+                {showTelegramHelp && (
+                  <ol className="mt-2 ml-4 space-y-1 text-xs text-dim list-decimal">
+                    <li>Open Telegram and search for <strong className="text-text">@BotFather</strong></li>
+                    <li>Send <code className="px-1 py-0.5 rounded bg-surface font-mono text-text">/newbot</code></li>
+                    <li>Follow the prompts to name your bot</li>
+                    <li>Copy the token BotFather gives you</li>
+                    <li>Paste it in the <strong className="text-text">Bot Token</strong> field above</li>
+                  </ol>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button onClick={addChannel} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors">Add Channel</button>
