@@ -292,6 +292,80 @@ program
   .option('--print', 'Output the skill file to stdout instead of installing')
   .action(installSkillCommand);
 
+// Export / Import commands
+program
+  .command('export [output-path]')
+  .description('Export ChannelKit config, groups, and auth to a ZIP file')
+  .action(async (outputPath?: string) => {
+    const { execFileSync } = await import('child_process');
+    const { existsSync } = await import('fs');
+    const { join } = await import('path');
+    const { CHANNELKIT_HOME, DEFAULT_CONFIG_PATH, DEFAULT_AUTH_DIR, DEFAULT_DATA_DIR } = await import('../paths');
+
+    const date = new Date().toISOString().slice(0, 10);
+    const dest = outputPath || `channelkit-backup-${date}.zip`;
+
+    const relPaths: string[] = [];
+    if (existsSync(DEFAULT_CONFIG_PATH)) relPaths.push('config.yaml');
+    if (existsSync(join(DEFAULT_DATA_DIR, 'groups.json'))) relPaths.push(join('data', 'groups.json'));
+    if (existsSync(DEFAULT_AUTH_DIR)) relPaths.push('auth');
+
+    if (relPaths.length === 0) {
+      console.error(c('yellow', '\n  ❌ No data found in ~/.channelkit to export.\n'));
+      process.exit(1);
+    }
+
+    try {
+      // Remove existing file to avoid appending
+      if (existsSync(dest)) {
+        const { unlinkSync } = await import('fs');
+        unlinkSync(dest);
+      }
+      const absOut = resolve(dest);
+      execFileSync('zip', ['-r', absOut, ...relPaths], { cwd: CHANNELKIT_HOME, stdio: 'pipe' });
+      console.log(c('green', `\n  ✅ Exported to ${absOut}\n`));
+      console.log(c('dim', `  Includes: ${relPaths.join(', ')}\n`));
+    } catch (err: any) {
+      console.error(c('yellow', `\n  ❌ Export failed: ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('import <zip-path>')
+  .description('Import ChannelKit data from a ZIP backup')
+  .action(async (zipPath: string) => {
+    const { execFileSync } = await import('child_process');
+    const { existsSync, mkdirSync } = await import('fs');
+    const { CHANNELKIT_HOME } = await import('../paths');
+
+    const absZip = resolve(zipPath);
+    if (!existsSync(absZip)) {
+      console.error(c('yellow', `\n  ❌ File not found: ${absZip}\n`));
+      process.exit(1);
+    }
+
+    console.log(c('yellow', '\n  ⚠️  This will overwrite existing config, groups, and auth data.'));
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const confirm = await ask(rl, '  Continue? [y/N]', 'N');
+    rl.close();
+
+    if (confirm.toLowerCase() !== 'y') {
+      console.log(c('dim', '\n  Cancelled.\n'));
+      process.exit(0);
+    }
+
+    try {
+      if (!existsSync(CHANNELKIT_HOME)) mkdirSync(CHANNELKIT_HOME, { recursive: true });
+      execFileSync('unzip', ['-o', absZip, '-d', CHANNELKIT_HOME], { stdio: 'pipe' });
+      console.log(c('green', '\n  ✅ Import successful.\n'));
+      console.log(c('dim', '  Restart ChannelKit for changes to take effect.\n'));
+    } catch (err: any) {
+      console.error(c('yellow', `\n  ❌ Import failed: ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
 // Default to "start" when no command is given
 const args = process.argv.slice(2);
 const knownCommands = program.commands.map(c => c.name());

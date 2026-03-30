@@ -53,6 +53,8 @@ export default function Settings() {
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [origAutoUpdate, setOrigAutoUpdate] = useState(true);
   const [version, setVersion] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const [importStatusColor, setImportStatusColor] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -221,7 +223,75 @@ export default function Settings() {
           </button>
           {status && <span className={`text-xs ${statusColor}`}>{status}</span>}
         </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="text-sm font-semibold text-text mb-1">Backup &amp; Restore</h3>
+          <p className="text-xs text-dim mb-4">Export or import your ChannelKit configuration, group mappings, and auth data.</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors"
+            >
+              Export Backup
+            </button>
+            <label className="px-4 py-2 bg-surface border border-border text-text rounded-lg text-sm font-semibold hover:bg-bg-light transition-colors cursor-pointer">
+              Import Backup
+              <input type="file" accept=".zip" onChange={handleImport} className="hidden" />
+            </label>
+            {importStatus && <span className={`text-xs ${importStatusColor}`}>{importStatus}</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
+
+  async function handleExport() {
+    try {
+      const res = await apiFetch(API + '/api/export');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `channelkit-backup-${date}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setImportStatus(e.message);
+      setImportStatusColor('text-red');
+      setTimeout(() => setImportStatus(''), 4000);
+    }
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (!confirm('This will overwrite your existing config, groups, and auth data. Continue?')) return;
+
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await apiFetch(API + '/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/zip' },
+        body: buf,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      setImportStatus(data.message || 'Import successful — restart required');
+      setImportStatusColor('text-green');
+      setTimeout(() => setImportStatus(''), 6000);
+    } catch (err) {
+      setImportStatus(err.message);
+      setImportStatusColor('text-red');
+      setTimeout(() => setImportStatus(''), 4000);
+    }
+  }
 }
