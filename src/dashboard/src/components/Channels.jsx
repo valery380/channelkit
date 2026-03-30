@@ -591,6 +591,9 @@ export default function Channels({ loadConfig }) {
   const [fieldValues, setFieldValues] = useState({});
   const [mode, setMode] = useState('service');
   const [unmatched, setUnmatched] = useState('ignore');
+  const [aiProvider, setAiProvider] = useState('openai');
+  const [aiModel, setAiModel] = useState('');
+  const [aiNoMatch, setAiNoMatch] = useState('reply');
   const [smsInbound, setSmsInbound] = useState('polling');
   const [smsPollInterval, setSmsPollInterval] = useState(60);
   const [emailInbound, setEmailInbound] = useState('webhook');
@@ -618,6 +621,7 @@ export default function Channels({ loadConfig }) {
   function backToPicker() {
     setStep('pick'); setTypeKey(''); setChName(''); setFieldValues({}); setMode('service');
     setAllowListEnabled(false); setAllowListText('');
+    setAiProvider('openai'); setAiModel(''); setAiNoMatch('reply');
   }
 
   function updateField(key, val) { setFieldValues(prev => ({ ...prev, [key]: val })); }
@@ -635,6 +639,11 @@ export default function Channels({ loadConfig }) {
     if (!name || !typeKey) { alert('Channel name and type are required'); return; }
     const body = { name, mode };
     if (mode === 'groups') body.unmatched = unmatched;
+    if (mode === 'ai') {
+      body.ai_routing = { provider: aiProvider };
+      if (aiModel.trim()) body.ai_routing.model = aiModel.trim();
+      if (aiNoMatch !== 'reply') body.ai_routing.no_match = aiNoMatch;
+    }
     if (allowListEnabled && allowListText.trim()) {
       body.allow_list = allowListText.split(',').map(n => n.trim()).filter(Boolean);
     }
@@ -1116,12 +1125,34 @@ export default function Channels({ loadConfig }) {
               <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
                 <option value="service">Service mode — single service, no codes needed</option>
                 <option value="groups">Groups mode — multiple services via codes or commands</option>
+                <option value="ai">AI mode — natural language routing to services</option>
               </select>
               {mode === 'groups' && (
                 <select value={unmatched} onChange={e => setUnmatched(e.target.value)} className={selectCls}>
                   <option value="ignore">Unmatched messages: Ignore silently</option>
                   <option value="list">Unmatched messages: Reply with service list</option>
                 </select>
+              )}
+              {mode === 'ai' && (
+                <div className="space-y-2 p-3 bg-bg-light border border-border rounded-lg">
+                  <div className="text-xs font-semibold text-text">AI Routing</div>
+                  <select value={aiProvider} onChange={e => setAiProvider(e.target.value)} className={selectCls}>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google</option>
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Model (optional — uses default)"
+                    value={aiModel}
+                    onChange={e => setAiModel(e.target.value)}
+                    className={inputCls}
+                  />
+                  <select value={aiNoMatch} onChange={e => setAiNoMatch(e.target.value)} className={selectCls}>
+                    <option value="reply">No match: Reply with available services</option>
+                    <option value="ignore">No match: Ignore silently</option>
+                  </select>
+                </div>
               )}
             </div>}
 

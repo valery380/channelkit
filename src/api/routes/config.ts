@@ -265,7 +265,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched, allow_list, mode } = req.body;
+    const { unmatched, allow_list, mode, ai_routing } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
@@ -273,8 +273,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         return;
       }
       if (mode !== undefined) {
-        if (!['service', 'groups'].includes(mode)) {
-          res.status(400).json({ error: 'Mode must be "service" or "groups"' });
+        if (!['service', 'groups', 'ai'].includes(mode)) {
+          res.status(400).json({ error: 'Mode must be "service", "groups", or "ai"' });
           return;
         }
         config.channels[name].mode = mode;
@@ -291,7 +291,18 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           delete config.channels[name].allow_list;
         }
       }
+      // AI routing config
+      if (mode === 'ai' && ai_routing) {
+        (config.channels[name] as any).ai_routing = {
+          provider: ai_routing.provider,
+          ...(ai_routing.model && { model: ai_routing.model }),
+          ...(ai_routing.no_match && { no_match: ai_routing.no_match }),
+        };
+      } else if (mode !== 'ai') {
+        delete (config.channels[name] as any).ai_routing;
+      }
       saveConfig(ctx.configPath, config);
+      ctx.reloadRouter?.();
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {

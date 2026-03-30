@@ -1,12 +1,14 @@
-import { ServiceConfig, RouteConfig, ChannelConfig } from '../config/types';
+import { ServiceConfig, RouteConfig, ChannelConfig, SettingsConfig } from '../config/types';
 import { UnifiedMessage, WebhookResponse } from './types';
 import { dispatchWebhook, resolvePlaceholders, WebhookError } from './webhook';
 import { GroupStore } from './groupStore';
 import { Logger } from './logger';
+import { aiRoute } from './aiRouter';
 
 export class Router {
   private groupStore?: GroupStore;
   private logger?: Logger;
+  private settings: SettingsConfig = {};
   private services: Map<string, ServiceConfig> = new Map();
   // channelName → ServiceConfig[] for quick lookup
   private servicesByChannel: Map<string, ServiceConfig[]> = new Map();
@@ -77,17 +79,52 @@ export class Router {
     this.logger = logger;
   }
 
+  setSettings(settings: SettingsConfig): void {
+    this.settings = settings;
+  }
+
   /**
    * Determine the mode for a channel:
    * - Explicit mode in channel config takes priority
    * - Otherwise: 1 service → direct, 2+ services → groups
    */
-  getChannelMode(channelName: string): 'direct' | 'groups' {
+  getChannelMode(channelName: string): 'direct' | 'groups' | 'ai' {
     const explicitMode = this.channelConfigs[channelName]?.mode;
+    if (explicitMode === 'ai') return 'ai';
     if (explicitMode === 'groups') return 'groups';
     if (explicitMode === 'service') return 'direct';
     const services = this.servicesByChannel.get(channelName) || [];
     return services.length <= 1 ? 'direct' : 'groups';
+  }
+
+  /**
+   * Use AI to route a message to the appropriate service.
+   */
+  async aiRouteMessage(message: UnifiedMessage): Promise<ServiceConfig | undefined> {
+    const channelName = message.channelName || message.channel;
+    const channelConfig = this.channelConfigs[channelName];
+    if (!channelConfig?.ai_routing) return undefined;
+
+    const services = this.getNamedServicesForChannel(channelName);
+    if (services.length === 0) return undefined;
+
+    const serviceInfos = services.map(s => ({ name: s.name, webhook: s.config.webhook }));
+    const result = await aiRoute(message.text || '', serviceInfos, channelConfig, this.settings);
+
+    if (result.error) {
+      console.log(`[router] AI routing error: ${result.error}`);
+    }
+
+    if (result.serviceName) {
+      const matched = this.services.get(result.serviceName);
+      if (matched && matched.channel === channelName) return matched;
+      // Fuzzy match: AI might return slightly different casing
+      for (const [name, svc] of this.services.entries()) {
+        if (svc.channel === channelName && name.toLowerCase() === result.serviceName.toLowerCase()) return svc;
+      }
+    }
+
+    return undefined;
   }
 
   /**

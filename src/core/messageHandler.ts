@@ -74,8 +74,53 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       return;
     }
 
-    // Try onboarding first for DMs (only in groups mode)
+    // AI mode: skip onboarding/groups, route via AI
     const mode = router.getChannelMode(channel.name);
+    if (mode === 'ai' && !message.groupId && !(message as any)._resolvedWebhook) {
+      const aiService = await router.aiRouteMessage(message);
+      if (aiService) {
+        // Found a match — route to it
+        const replyTo = message.from;
+        const replyUrl = apiServer.getReplyUrl(channel.name, replyTo);
+        const { dispatchWebhook } = await import('./webhook');
+        const startTime = Date.now();
+        const { response, error: webhookError } = await dispatchWebhook(aiService.webhook, message, replyUrl, { method: aiService.method, auth: aiService.auth });
+        const latency = Date.now() - startTime;
+        let responseText = response?.text;
+        if (webhookError) {
+          const detail = webhookError.status
+            ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
+            : `[Webhook error: ${webhookError.message}]`;
+          responseText = responseText ? `${responseText}\n${detail}` : detail;
+        }
+        logger.log({
+          id: message.id, timestamp: Date.now(), channel: message.channel,
+          from: message.from, senderName: message.senderName, text: message.text,
+          type: message.type, route: aiService.webhook, responseText,
+          status: response ? 'success' : 'error', latency,
+        });
+        if (response) await channel.send(replyTo, response);
+        return;
+      }
+      // No AI match — check no_match policy
+      const channelCfg = config.channels[channel.name];
+      const noMatch = (channelCfg as any)?.ai_routing?.no_match || 'reply';
+      if (noMatch === 'reply') {
+        const svcs = router.getNamedServicesForChannel(channel.name);
+        if (svcs.length > 0) {
+          const lines = svcs.map(({ name }) => `• ${name}`);
+          await channel.send(message.from, { text: `I couldn't determine the right service for your message. Available services:\n${lines.join('\n')}` });
+        }
+      }
+      logger.log({
+        id: message.id, timestamp: Date.now(), channel: message.channel,
+        from: message.from, senderName: message.senderName, text: message.text,
+        type: message.type, route: 'ai-no-match', status: 'no-route', latency: 0,
+      });
+      return;
+    }
+
+    // Try onboarding first for DMs (only in groups mode)
     if (onboarding && !message.groupId && mode === 'groups' && !(message as any)._resolvedWebhook) {
       const channelUnmatched = (config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
       const handled = await onboarding.handleDirectMessage(message, channelUnmatched);

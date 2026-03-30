@@ -55,6 +55,7 @@ export class ChannelKit {
     }
 
     this.router = new Router(config.services, config.routes, config.channels);
+    if (config.settings) this.router.setSettings(config.settings);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
 
@@ -255,6 +256,7 @@ export class ChannelKit {
         const freshConfig = loadConfig(this.configPath, { validate: false });
         if (freshConfig.services) {
           this.router.reloadServices(freshConfig.services, freshConfig.channels);
+          if (freshConfig.settings) this.router.setSettings(freshConfig.settings);
           console.log('[router] Services reloaded from config');
         }
       } catch (err: any) {

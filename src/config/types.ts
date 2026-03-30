@@ -2,8 +2,9 @@ export interface ChannelConfig {
   type: string;
   /** Explicit routing mode set at channel creation.
    *  'service' — single service, no codes or commands needed
-   *  'groups'  — multiple services, uses magic codes / slash commands */
-  mode?: 'service' | 'groups';
+   *  'groups'  — multiple services, uses magic codes / slash commands
+   *  'ai'      — AI-based natural language routing to services */
+  mode?: 'service' | 'groups' | 'ai';
   /** What to do when a message arrives but no service is matched (groups mode only).
    *  'list'   — reply with a list of available services
    *  'ignore' — silently drop the message (default) */
@@ -12,6 +13,13 @@ export interface ChannelConfig {
    *  If set and non-empty, only senders matching an entry are allowed.
    *  Numbers are normalized (non-digit chars stripped) before comparison. */
   allow_list?: string[];
+  /** AI routing configuration (used when mode is 'ai'). */
+  ai_routing?: {
+    provider: 'openai' | 'anthropic' | 'google';
+    model?: string;
+    /** What to do when AI can't match a service — default 'reply' */
+    no_match?: 'ignore' | 'reply';
+  };
   [key: string]: unknown;
 }
 
