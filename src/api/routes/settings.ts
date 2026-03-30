@@ -24,7 +24,16 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
       if (mcpSecret) {
         masked['mcp_secret'] = mcpSecret.length > 4 ? '•'.repeat(mcpSecret.length - 4) + mcpSecret.slice(-4) : '••••';
       }
-      res.json({ settings: masked, port: config.apiPort || 4000, autoUpdate: config.auto_update?.enabled !== false });
+      // Data store config (mask auth_header)
+      const dataStore: Record<string, any> = { type: config.data_store?.type || 'local' };
+      if (config.data_store?.endpoint) dataStore.endpoint = config.data_store.endpoint;
+      if (config.data_store?.auth_header) {
+        const ah = config.data_store.auth_header;
+        dataStore.auth_header = ah.length > 4 ? '•'.repeat(ah.length - 4) + ah.slice(-4) : '••••';
+      }
+      if (config.data_store?.sync_interval) dataStore.sync_interval = config.data_store.sync_interval;
+
+      res.json({ settings: masked, port: config.apiPort || 4000, autoUpdate: config.auto_update?.enabled !== false, dataStore });
     } catch (err: any) {
       console.error('[api]', err); res.status(500).json({ error: 'Internal server error' });
     }
@@ -88,6 +97,20 @@ export function registerSettingsRoutes(app: Express, ctx: ServerContext): void {
       if ('auto_update' in req.body) {
         if (!config.auto_update) config.auto_update = {};
         config.auto_update.enabled = !!req.body['auto_update'];
+      }
+      // Handle data_store config
+      if ('data_store' in req.body) {
+        const ds = req.body.data_store;
+        if (ds && ds.type === 'remote') {
+          config.data_store = {
+            type: 'remote',
+            ...(ds.endpoint && { endpoint: ds.endpoint }),
+            ...(ds.auth_header && { auth_header: ds.auth_header }),
+            ...(ds.sync_interval && { sync_interval: ds.sync_interval }),
+          };
+        } else {
+          delete config.data_store;
+        }
       }
       // Handle mcp_secret → config.mcp.secret
       if ('mcp_secret' in req.body) {

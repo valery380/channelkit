@@ -183,6 +183,26 @@ export class ChannelKit {
       const onboardingConfig = { codes: onboardingCodes };
       this.onboarding = new Onboarding(onboardingConfig, whatsappChannel, telegramChannel);
       this.router.setGroupStore(this.onboarding.getGroupStore());
+
+      // Wire up remote store sync if configured
+      if (this.config.data_store?.type === 'remote' && this.config.data_store.endpoint) {
+        const { RemoteStore } = await import('./core/remoteStore');
+        const remoteStore = new RemoteStore(this.config.data_store);
+        const groupStore = this.onboarding.getGroupStore();
+
+        // Try to fetch remote groups on startup
+        const remoteGroups = await remoteStore.fetchGroups();
+        if (remoteGroups) {
+          groupStore.replaceAll(remoteGroups);
+          console.log('[remote-store] Loaded groups from remote endpoint');
+        } else {
+          console.warn('[remote-store] Remote unreachable, using local groups');
+        }
+
+        // Sync changes back to remote
+        groupStore.onChange((groups) => remoteStore.pushGroups(groups));
+      }
+
       console.log(`[channelkit] Onboarding enabled with ${onboardingCodes.length} service code(s)`);
     }
 

@@ -186,6 +186,13 @@ export interface AutoUpdateConfig {
   interval?: number;   // check interval in minutes, default: 30
 }
 
+export interface DataStoreConfig {
+  type: 'local' | 'remote';
+  endpoint?: string;       // URL for remote storage
+  auth_header?: string;    // Optional auth header value (sent as Authorization header)
+  sync_interval?: number;  // How often to push changes (seconds, default: 30)
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -199,4 +206,5 @@ export interface AppConfig {
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
   mcp?: McpConfig;             // MCP server configuration
   auto_update?: AutoUpdateConfig; // Auto-update from GitHub
+  data_store?: DataStoreConfig;  // Remote data storage configuration
 }
