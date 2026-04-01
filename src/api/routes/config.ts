@@ -59,7 +59,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   // POST /api/config/services — add a new service
   app.post('/api/config/services', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
-    const { name, channel, webhook, code, command, allow_list, method, auth } = req.body;
+    const { name, channel, webhook, code, command, allow_list, method, auth, description } = req.body;
     if (!name || !channel || !webhook) {
       res.status(400).json({ error: 'name, channel, and webhook are required' });
       return;
@@ -96,6 +96,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         ...(code && { code }),
         ...(command && { command }),
         ...(Array.isArray(allow_list) && allow_list.length > 0 && { allow_list }),
+        ...(description && { description }),
       };
       saveConfig(ctx.configPath, config);
       ctx.reloadRouter?.();
@@ -111,7 +112,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/services/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { webhook, code, command, stt, tts, voice, format, allow_list, method, auth } = req.body;
+    const { webhook, code, command, stt, tts, voice, format, allow_list, method, auth, description } = req.body;
     if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
     const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
     if (method && !validMethods.includes(method.toUpperCase())) {
@@ -149,6 +150,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
       if (auth?.type) { config.services[name].auth = auth; } else { delete config.services[name].auth; }
       if (code) { config.services[name].code = code; } else { delete config.services[name].code; }
       if (command) { config.services[name].command = command; } else { delete config.services[name].command; }
+      if (description) { config.services[name].description = description; } else { delete config.services[name].description; }
       if ('stt' in req.body) {
         if (stt && stt.provider) {
           config.services[name].stt = { provider: stt.provider };
@@ -265,7 +267,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched, allow_list, mode } = req.body;
+    const { unmatched, allow_list, mode, ai_routing } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
@@ -273,8 +275,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         return;
       }
       if (mode !== undefined) {
-        if (!['service', 'groups'].includes(mode)) {
-          res.status(400).json({ error: 'Mode must be "service" or "groups"' });
+        if (!['service', 'groups', 'ai'].includes(mode)) {
+          res.status(400).json({ error: 'Mode must be "service", "groups", or "ai"' });
           return;
         }
         config.channels[name].mode = mode;
@@ -291,7 +293,18 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           delete config.channels[name].allow_list;
         }
       }
+      // AI routing config
+      if (mode === 'ai' && ai_routing) {
+        (config.channels[name] as any).ai_routing = {
+          provider: ai_routing.provider,
+          ...(ai_routing.model && { model: ai_routing.model }),
+          ...(ai_routing.no_match && { no_match: ai_routing.no_match }),
+        };
+      } else if (mode !== 'ai') {
+        delete (config.channels[name] as any).ai_routing;
+      }
       saveConfig(ctx.configPath, config);
+      ctx.reloadRouter?.();
       ctx.broadcast({ type: 'configChanged' });
       res.json({ ok: true });
     } catch (err: any) {

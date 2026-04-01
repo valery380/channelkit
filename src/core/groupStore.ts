@@ -15,6 +15,7 @@ const DEFAULT_GROUPS_PATH = join(homedir(), '.channelkit', 'data', 'groups.json'
 
 export class GroupStore {
   private groups: Record<string, GroupMapping> = {};
+  private onChangeCallback?: (groups: Record<string, GroupMapping>) => void;
 
   constructor(private filePath: string = DEFAULT_GROUPS_PATH) {
     this.load();
@@ -35,6 +36,21 @@ export class GroupStore {
     const dir = dirname(this.filePath);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     writeFileSync(this.filePath, JSON.stringify(this.groups, null, 2));
+    if (this.onChangeCallback) this.onChangeCallback({ ...this.groups });
+  }
+
+  /** Set a callback to be called whenever groups change (for remote sync). */
+  onChange(callback: (groups: Record<string, GroupMapping>) => void): void {
+    this.onChangeCallback = callback;
+  }
+
+  /** Replace all groups with data fetched from a remote source. */
+  replaceAll(groups: Record<string, GroupMapping>): void {
+    this.groups = groups;
+    const dir = dirname(this.filePath);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(this.filePath, JSON.stringify(this.groups, null, 2));
+    // Don't trigger onChange to avoid sync loops
   }
 
   add(groupId: string, mapping: GroupMapping): void {

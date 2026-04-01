@@ -34,6 +34,13 @@ function StatusBadge({ status }) {
         <span className="text-xs font-bold">Blocked</span>
       </div>
     );
+  if (status === 'no-route')
+    return (
+      <div className="flex items-center gap-1.5 text-text-muted">
+        <span className="material-symbols-outlined text-[18px]">alt_route</span>
+        <span className="text-xs font-bold">No Match</span>
+      </div>
+    );
   return (
     <div className="flex items-center gap-1.5 text-orange">
       <span className="material-symbols-outlined text-[18px]">pending</span>
@@ -168,7 +175,7 @@ function LogRow({ entry, isNew, onToast }) {
         </td>
         <td className="px-4 py-4">
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-bg-light text-dim border border-border">
-            {shortUrl(entry.route) || '\u2014'}
+            {entry.serviceName || shortUrl(entry.route) || '\u2014'}
           </span>
         </td>
         <td className="px-4 py-4">
@@ -187,6 +194,7 @@ function LogRow({ entry, isNew, onToast }) {
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">From</label><p className="text-sm">{entry.senderName || ''} ({entry.from})</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Type</label><p className="text-sm">{entry.type}</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Group</label><p className="text-sm">{entry.groupName || entry.groupId || '\u2014'}</p></div>
+                {entry.serviceName && <div><label className="text-[11px] text-dim uppercase block mb-0.5">Service</label><p className="text-sm">{entry.serviceName}</p></div>}
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Webhook</label><p className="text-sm font-mono break-all">{entry.route || '\u2014'}</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Status</label><p className="text-sm">{entry.status}</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Latency</label><p className="text-sm">{entry.latency != null ? entry.latency + 'ms' : '\u2014'}</p></div>
@@ -217,7 +225,7 @@ function LogRow({ entry, isNew, onToast }) {
 }
 
 export default function Logs({ onSend }) {
-  const { entries } = useAppState();
+  const { entries, channels: appChannels } = useAppState();
   const dispatch = useDispatch();
   const [channel, setChannel] = useState('');
   const [search, setSearch] = useState('');
@@ -226,6 +234,8 @@ export default function Logs({ onSend }) {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [toast, setToast] = useState(null);
   const toastTimeout = useRef(null);
+
+  const hasSendableChannels = Object.values(appChannels || {}).some(ch => ch.type === 'whatsapp' || ch.type === 'telegram');
 
   const showToast = useCallback((msg) => {
     setToast(msg);
@@ -303,13 +313,15 @@ export default function Logs({ onSend }) {
             Clear
           </button>
         </div>
-        <button
-          onClick={onSend}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-all"
-        >
-          <span className="material-symbols-outlined text-[18px]">send</span>
-          <span>Send Message</span>
-        </button>
+        {hasSendableChannels && (
+          <button
+            onClick={onSend}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-lg h-9 px-4 bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px]">send</span>
+            <span>Send Message</span>
+          </button>
+        )}
       </div>
 
       {/* Messages Table */}
@@ -320,7 +332,7 @@ export default function Logs({ onSend }) {
               <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Time</th>
               <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">From</th>
               <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Message</th>
-              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Webhook</th>
+              <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Service</th>
               <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Status</th>
               <th className="px-4 py-3 text-[11px] font-bold text-dim uppercase tracking-wider">Latency</th>
             </tr>

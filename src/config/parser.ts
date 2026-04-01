@@ -2,10 +2,17 @@ import { readFileSync, writeFileSync } from 'fs';
 import { parse, stringify } from 'yaml';
 import { AppConfig } from './types';
 
+/** Optional hook called after every saveConfig. Used by remote store to sync. */
+let onSaveHook: ((yaml: string) => void) | null = null;
+
+export function setOnSaveHook(hook: ((yaml: string) => void) | null): void {
+  onSaveHook = hook;
+}
+
 export function loadConfig(path: string, opts: { validate?: boolean } = {}): AppConfig {
   const raw = readFileSync(path, 'utf-8');
   const config = parse(raw) as AppConfig;
-  
+
   const validate = opts.validate !== false;
 
   if (validate) {
@@ -37,5 +44,7 @@ export function loadConfig(path: string, opts: { validate?: boolean } = {}): App
 
 export function saveConfig(path: string, config: AppConfig): void {
   const yaml = stringify(config, { lineWidth: 0 });
-  writeFileSync(path, `# ChannelKit Configuration\n\n${yaml}`);
+  const content = `# ChannelKit Configuration\n\n${yaml}`;
+  writeFileSync(path, content);
+  if (onSaveHook) onSaveHook(content);
 }

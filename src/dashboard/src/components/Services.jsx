@@ -427,6 +427,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const [authToken, setAuthToken] = useState(svc.auth?.token || '');
   const [authHeaderName, setAuthHeaderName] = useState(svc.auth?.header_name || '');
   const [authHeaderValue, setAuthHeaderValue] = useState(svc.auth?.header_value || '');
+  const [editDescription, setEditDescription] = useState(svc.description || '');
   const [editAllowListEnabled, setEditAllowListEnabled] = useState(!!(svc.allow_list?.length));
   const [editAllowListText, setEditAllowListText] = useState((svc.allow_list || []).join(', '));
   const [showExample, setShowExample] = useState(false);
@@ -437,6 +438,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const isEndpoint = channels[svc.channel]?.type === 'endpoint';
   const isVoiceChannel = channels[svc.channel]?.type === 'voice';
   const isPhoneChannel = ['whatsapp', 'sms', 'voice'].includes(channels[svc.channel]?.type);
+  const isAiChannel = channels[svc.channel]?.mode === 'ai';
 
   const endpointUrl = isEndpoint
     ? `${tunnelActive && tunnelUrl ? tunnelUrl.replace(/\/$/, '') : window.location.origin}/inbound/endpoint/${encodeURIComponent(svc.channel)}`
@@ -463,7 +465,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
     const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ webhook, method: webhookMethod, auth: buildAuthPayload(), code: code || null, command: command || null, stt: svc.stt || null, tts: svc.tts || null, voice: svc.voice || null, format: svc.format || null, allow_list: allowList.length > 0 ? allowList : null }),
+      body: JSON.stringify({ webhook, method: webhookMethod, auth: buildAuthPayload(), code: code || null, command: command || null, description: editDescription.trim() || null, stt: svc.stt || null, tts: svc.tts || null, voice: svc.voice || null, format: svc.format || null, allow_list: allowList.length > 0 ? allowList : null }),
     });
     if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Save failed'); return; }
     setEditing(false);
@@ -503,6 +505,9 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
               </select>
               <input value={webhook} onChange={e => setWebhook(e.target.value)} placeholder="Webhook URL" className={inputCls} autoFocus />
             </div>
+            {isAiChannel && (
+              <input value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="What does this service do? (helps AI route messages)" className={inputCls + ' mt-1'} />
+            )}
             <div className="space-y-1 pt-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-dim whitespace-nowrap">Auth:</span>
@@ -562,6 +567,7 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
               {svc.auth && <span className="shrink-0 material-symbols-outlined text-[14px] text-dim" title={svc.auth.type === 'bearer' ? 'Bearer token' : svc.auth.header_name}>lock</span>}
               <span className="block truncate text-xs text-dim font-mono">{svc.webhook}</span>
             </div>
+            {svc.description && <div className="mt-0.5 text-[11px] text-dim italic">{svc.description}</div>}
           </td>
           <td className="px-4 py-4 text-xs text-dim">{svc.code || svc.command || '\u2014'}</td>
           <td className="px-4 py-4 text-right whitespace-nowrap space-x-1">
@@ -608,6 +614,7 @@ export default function Services({ loadConfig }) {
   const [svcAuthHeaderValue, setSvcAuthHeaderValue] = useState('');
   const [svcCode, setSvcCode] = useState('');
   const [svcCommand, setSvcCommand] = useState('');
+  const [svcDescription, setSvcDescription] = useState('');
   const [svcAllowListEnabled, setSvcAllowListEnabled] = useState(false);
   const [svcAllowListText, setSvcAllowListText] = useState('');
 
@@ -636,6 +643,7 @@ export default function Services({ loadConfig }) {
     setSvcAuthHeaderValue('');
     setSvcCode('');
     setSvcCommand('');
+    setSvcDescription('');
     setSvcAllowListEnabled(false);
     setSvcAllowListText('');
   }
@@ -662,6 +670,7 @@ export default function Services({ loadConfig }) {
         ...(svcCode && { code: svcCode }),
         ...(svcCommand && { command: svcCommand }),
         ...(allowList && { allow_list: allowList }),
+        ...(svcDescription.trim() && { description: svcDescription.trim() }),
       }),
     });
     if (!res.ok) { const d = await res.json(); alert(d.error || 'Failed to add service'); return; }
@@ -670,6 +679,7 @@ export default function Services({ loadConfig }) {
   }
 
   const isServiceMode = channels[selectedChannel]?.mode === 'service';
+  const isAiMode = channels[selectedChannel]?.mode === 'ai';
   const svcEntries = Object.entries(services);
   const channelNames = Object.keys(channels);
   const occupiedServiceChannels = new Set(
@@ -768,6 +778,9 @@ export default function Services({ loadConfig }) {
                 <input value={svcWebhook} onChange={e => setSvcWebhook(e.target.value)} placeholder="Webhook URL (e.g. http://localhost:3000/support)" className={inputCls + ' flex-1'} />
               </div>
             </div>
+            {isAiMode && (
+              <input value={svcDescription} onChange={e => setSvcDescription(e.target.value)} placeholder="What does this service do? (helps AI route messages)" className={inputCls + ' mb-3'} />
+            )}
             <div className="flex gap-3 flex-wrap items-start mb-3">
               <div className="flex items-center gap-2 min-w-[140px]">
                 <span className="text-xs text-dim whitespace-nowrap">Auth:</span>

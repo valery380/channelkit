@@ -583,7 +583,13 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
 }
 
 export default function Channels({ loadConfig }) {
-  const { channels, services, twilioDefaults, tunnelActive, qrMessage, smsListenMessage, baileysAvailable } = useAppState();
+  const { channels, services, twilioDefaults, tunnelActive, qrMessage, smsListenMessage, baileysAvailable, settings } = useAppState();
+  const aiProviders = [
+    settings.openai_api_key && { value: 'openai', label: 'OpenAI' },
+    settings.anthropic_api_key && { value: 'anthropic', label: 'Anthropic' },
+    settings.google_api_key && { value: 'google', label: 'Google' },
+  ].filter(Boolean);
+  const hasAiKey = aiProviders.length > 0;
   const dispatch = useDispatch();
   const [step, setStep] = useState('pick');
   const [typeKey, setTypeKey] = useState('');
@@ -591,12 +597,16 @@ export default function Channels({ loadConfig }) {
   const [fieldValues, setFieldValues] = useState({});
   const [mode, setMode] = useState('service');
   const [unmatched, setUnmatched] = useState('ignore');
+  const [aiProvider, setAiProvider] = useState('openai');
+  const [aiModel, setAiModel] = useState('');
+  const [aiNoMatch, setAiNoMatch] = useState('reply');
   const [smsInbound, setSmsInbound] = useState('polling');
   const [smsPollInterval, setSmsPollInterval] = useState(60);
   const [emailInbound, setEmailInbound] = useState('webhook');
   const [emailPollInterval, setEmailPollInterval] = useState(30);
   const [gmailPollInterval, setGmailPollInterval] = useState(30);
   const [showBuy, setShowBuy] = useState(false);
+  const [showTelegramHelp, setShowTelegramHelp] = useState(false);
   const [qrChannel, setQrChannel] = useState(null);
   const [gmailAuthChannel, setGmailAuthChannel] = useState(null);
   const [smsSettingsTarget, setSmsSettingsTarget] = useState(null);
@@ -610,13 +620,24 @@ export default function Channels({ loadConfig }) {
   const [smsListenNumber, setSmsListenNumber] = useState(null);
   const [fetchedTwilioNumbers, setFetchedTwilioNumbers] = useState([]);
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => {
+    loadConfig();
+    apiFetch(API + '/api/settings').then(r => r.json())
+      .then(data => dispatch({ type: 'SET_SETTINGS', payload: data.settings || {} }))
+      .catch(() => {});
+  }, [loadConfig, dispatch]);
+
+  useEffect(() => {
+    if (!hasAiKey && mode === 'ai') setMode('service');
+    if (hasAiKey && mode === 'ai' && !aiProviders.find(p => p.value === aiProvider)) setAiProvider(aiProviders[0].value);
+  }, [hasAiKey, mode, aiProvider, aiProviders]);
 
   function selectType(type) { setTypeKey(type); setStep('form'); setFieldValues({}); setShowBuy(false); setFetchedTwilioNumbers([]); }
 
   function backToPicker() {
     setStep('pick'); setTypeKey(''); setChName(''); setFieldValues({}); setMode('service');
     setAllowListEnabled(false); setAllowListText('');
+    setAiProvider('openai'); setAiModel(''); setAiNoMatch('reply');
   }
 
   function updateField(key, val) { setFieldValues(prev => ({ ...prev, [key]: val })); }
@@ -634,6 +655,11 @@ export default function Channels({ loadConfig }) {
     if (!name || !typeKey) { alert('Channel name and type are required'); return; }
     const body = { name, mode };
     if (mode === 'groups') body.unmatched = unmatched;
+    if (mode === 'ai') {
+      body.ai_routing = { provider: aiProvider };
+      if (aiModel.trim()) body.ai_routing.model = aiModel.trim();
+      if (aiNoMatch !== 'reply') body.ai_routing.no_match = aiNoMatch;
+    }
     if (allowListEnabled && allowListText.trim()) {
       body.allow_list = allowListText.split(',').map(n => n.trim()).filter(Boolean);
     }
@@ -1112,9 +1138,13 @@ export default function Channels({ loadConfig }) {
             )}
 
             {typeKey !== 'endpoint' && <div className="space-y-3 mb-3">
-              <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
+              <select value={mode} onChange={e => { if (e.target.value === 'ai' && !hasAiKey) return; setMode(e.target.value); }} className={selectCls}>
                 <option value="service">Service mode — single service, no codes needed</option>
                 <option value="groups">Groups mode — multiple services via codes or commands</option>
+                {hasAiKey
+                  ? <option value="ai">AI mode — natural language routing to services</option>
+                  : <option value="" disabled>AI mode — requires an API key in Settings</option>
+                }
               </select>
               {mode === 'groups' && (
                 <select value={unmatched} onChange={e => setUnmatched(e.target.value)} className={selectCls}>
@@ -1122,7 +1152,49 @@ export default function Channels({ loadConfig }) {
                   <option value="list">Unmatched messages: Reply with service list</option>
                 </select>
               )}
+              {mode === 'ai' && (
+                <div className="space-y-2 p-3 bg-bg-light border border-border rounded-lg">
+                  <div className="text-xs font-semibold text-text">AI Routing</div>
+                  <select value={aiProvider} onChange={e => setAiProvider(e.target.value)} className={selectCls}>
+                    {aiProviders.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Model (optional — uses default)"
+                    value={aiModel}
+                    onChange={e => setAiModel(e.target.value)}
+                    className={inputCls}
+                  />
+                  <select value={aiNoMatch} onChange={e => setAiNoMatch(e.target.value)} className={selectCls}>
+                    <option value="reply">No match: Reply with available services</option>
+                    <option value="ignore">No match: Ignore silently</option>
+                  </select>
+                </div>
+              )}
             </div>}
+
+            {typeKey === 'telegram' && (
+              <div className="mb-3 p-3 bg-bg-light border border-border rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setShowTelegramHelp(v => !v)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary bg-transparent border-none cursor-pointer p-0"
+                >
+                  <span className="material-symbols-outlined text-[16px]">info</span>
+                  How to get a Telegram Bot Token
+                  <span className="material-symbols-outlined text-[14px]">{showTelegramHelp ? 'expand_less' : 'expand_more'}</span>
+                </button>
+                {showTelegramHelp && (
+                  <ol className="mt-2 ml-4 space-y-1 text-xs text-dim list-decimal">
+                    <li>Open Telegram and search for <strong className="text-text">@BotFather</strong></li>
+                    <li>Send <code className="px-1 py-0.5 rounded bg-surface font-mono text-text">/newbot</code></li>
+                    <li>Follow the prompts to name your bot</li>
+                    <li>Copy the token BotFather gives you</li>
+                    <li>Paste it in the <strong className="text-text">Bot Token</strong> field above</li>
+                  </ol>
+                )}
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button onClick={addChannel} className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors">Add Channel</button>

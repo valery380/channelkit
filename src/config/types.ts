@@ -2,8 +2,9 @@ export interface ChannelConfig {
   type: string;
   /** Explicit routing mode set at channel creation.
    *  'service' — single service, no codes or commands needed
-   *  'groups'  — multiple services, uses magic codes / slash commands */
-  mode?: 'service' | 'groups';
+   *  'groups'  — multiple services, uses magic codes / slash commands
+   *  'ai'      — AI-based natural language routing to services */
+  mode?: 'service' | 'groups' | 'ai';
   /** What to do when a message arrives but no service is matched (groups mode only).
    *  'list'   — reply with a list of available services
    *  'ignore' — silently drop the message (default) */
@@ -12,6 +13,13 @@ export interface ChannelConfig {
    *  If set and non-empty, only senders matching an entry are allowed.
    *  Numbers are normalized (non-digit chars stripped) before comparison. */
   allow_list?: string[];
+  /** AI routing configuration (used when mode is 'ai'). */
+  ai_routing?: {
+    provider: 'openai' | 'anthropic' | 'google';
+    model?: string;
+    /** What to do when AI can't match a service — default 'reply' */
+    no_match?: 'ignore' | 'reply';
+  };
   [key: string]: unknown;
 }
 
@@ -110,6 +118,7 @@ export interface ServiceAuthConfig {
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
+  description?: string;     // what this service does (used by AI routing)
   method?: 'POST' | 'GET' | 'PUT' | 'PATCH';  // HTTP method for webhook (default: POST)
   auth?: ServiceAuthConfig; // authorization for webhook requests
   code?: string;            // magic code for onboarding (groups mode, WhatsApp)
@@ -178,6 +187,13 @@ export interface AutoUpdateConfig {
   interval?: number;   // check interval in minutes, default: 30
 }
 
+export interface DataStoreConfig {
+  type: 'local' | 'remote';
+  endpoint?: string;       // URL for remote storage
+  auth_header?: string;    // Optional auth header value (sent as Authorization header)
+  sync_interval?: number;  // How often to push changes (seconds, default: 30)
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -191,4 +207,5 @@ export interface AppConfig {
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
   mcp?: McpConfig;             // MCP server configuration
   auto_update?: AutoUpdateConfig; // Auto-update from GitHub
+  data_store?: DataStoreConfig;  // Remote data storage configuration
 }

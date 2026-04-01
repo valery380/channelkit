@@ -53,6 +53,13 @@ export default function Settings() {
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [origAutoUpdate, setOrigAutoUpdate] = useState(true);
   const [version, setVersion] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const [importStatusColor, setImportStatusColor] = useState('');
+  const [dataStoreType, setDataStoreType] = useState('local');
+  const [dataStoreEndpoint, setDataStoreEndpoint] = useState('');
+  const [dataStoreAuth, setDataStoreAuth] = useState('');
+  const [dataStoreSyncInterval, setDataStoreSyncInterval] = useState('30');
+  const [origDataStore, setOrigDataStore] = useState({});
 
   useEffect(() => {
     loadSettings();
@@ -76,6 +83,13 @@ export default function Settings() {
       const au = data.autoUpdate !== false;
       setAutoUpdate(au);
       setOrigAutoUpdate(au);
+      // Load data store config
+      const ds = data.dataStore || {};
+      setDataStoreType(ds.type || 'local');
+      setDataStoreEndpoint(ds.endpoint || '');
+      setDataStoreAuth(ds.auth_header || '');
+      setDataStoreSyncInterval(String(ds.sync_interval || 30));
+      setOrigDataStore(ds);
       // Fetch version
       try {
         const ur = await apiFetch(API + '/api/update/status');
@@ -96,6 +110,20 @@ export default function Settings() {
     if (allowLocal !== origAllowLocal) body.allow_local_webhooks = allowLocal;
     if (port !== origPort) body.port = parseInt(port, 10) || 4000;
     if (autoUpdate !== origAutoUpdate) body.auto_update = autoUpdate;
+    // Data store changes
+    const dsChanged = dataStoreType !== (origDataStore.type || 'local')
+      || dataStoreEndpoint !== (origDataStore.endpoint || '')
+      || dataStoreAuth !== (origDataStore.auth_header || '')
+      || dataStoreSyncInterval !== String(origDataStore.sync_interval || 30);
+    if (dsChanged) {
+      body.data_store = { type: dataStoreType };
+      if (dataStoreType === 'remote') {
+        body.data_store.endpoint = dataStoreEndpoint;
+        if (dataStoreAuth) body.data_store.auth_header = dataStoreAuth;
+        const si = parseInt(dataStoreSyncInterval);
+        if (si && si !== 30) body.data_store.sync_interval = si;
+      }
+    }
     if (Object.keys(body).length === 0) {
       setStatus('No changes to save');
       setStatusColor('text-dim');
@@ -221,7 +249,131 @@ export default function Settings() {
           </button>
           {status && <span className={`text-xs ${statusColor}`}>{status}</span>}
         </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="text-sm font-semibold text-text mb-1">Data Storage</h3>
+          <p className="text-xs text-dim mb-4">Store group mappings locally or sync to a remote endpoint.</p>
+          <div className="space-y-3">
+            <select
+              value={dataStoreType}
+              onChange={e => setDataStoreType(e.target.value)}
+              className="w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary"
+            >
+              <option value="local">Local storage (default)</option>
+              <option value="remote">Remote endpoint</option>
+            </select>
+            {dataStoreType === 'remote' && (
+              <div className="space-y-3 p-3 bg-bg-light border border-border rounded-lg">
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">Endpoint URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://your-api.example.com/channelkit"
+                    value={dataStoreEndpoint}
+                    onChange={e => setDataStoreEndpoint(e.target.value)}
+                    className="w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">
+                    Authorization Header <span className="text-dim font-normal">(optional)</span>
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Bearer token or API key"
+                    value={dataStoreAuth}
+                    onChange={e => setDataStoreAuth(e.target.value)}
+                    autoComplete="off"
+                    data-1p-ignore
+                    className="w-full py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">
+                    Sync Interval <span className="text-dim font-normal">(seconds)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="3600"
+                    value={dataStoreSyncInterval}
+                    onChange={e => setDataStoreSyncInterval(e.target.value)}
+                    className="w-32 py-2 px-3 border border-border rounded-lg text-sm bg-bg-light text-text focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="text-sm font-semibold text-text mb-1">Backup &amp; Restore</h3>
+          <p className="text-xs text-dim mb-4">Export or import your ChannelKit configuration, group mappings, and auth data.</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleExport}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-hover transition-colors"
+            >
+              Export Backup
+            </button>
+            <label className="px-4 py-2 bg-surface border border-border text-text rounded-lg text-sm font-semibold hover:bg-bg-light transition-colors cursor-pointer">
+              Import Backup
+              <input type="file" accept=".zip" onChange={handleImport} className="hidden" />
+            </label>
+            {importStatus && <span className={`text-xs ${importStatusColor}`}>{importStatus}</span>}
+          </div>
+        </div>
       </div>
     </div>
   );
+
+  async function handleExport() {
+    try {
+      const res = await apiFetch(API + '/api/export');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `channelkit-backup-${date}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setImportStatus(e.message);
+      setImportStatusColor('text-red');
+      setTimeout(() => setImportStatus(''), 4000);
+    }
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (!confirm('This will overwrite your existing config, groups, and auth data. Continue?')) return;
+
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await apiFetch(API + '/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/zip' },
+        body: buf,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Import failed');
+      setImportStatus(data.message || 'Import successful — restart required');
+      setImportStatusColor('text-green');
+      setTimeout(() => setImportStatus(''), 6000);
+    } catch (err) {
+      setImportStatus(err.message);
+      setImportStatusColor('text-red');
+      setTimeout(() => setImportStatus(''), 4000);
+    }
+  }
 }

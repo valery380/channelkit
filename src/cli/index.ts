@@ -41,9 +41,13 @@ program
   .option('-c, --config <path>', 'Path to config file', DEFAULT_CONFIG_PATH)
   .option('--tunnel', 'Start a cloudflared tunnel automatically')
   .option('--public-url <url>', 'Use a manual public URL')
+  .option('--remote <url>', 'Use a remote store endpoint for all data (config, auth, groups)')
+  .option('--remote-auth <header>', 'Authorization header for the remote store')
   .action(async (opts) => {
     const configPath = resolve(opts.config);
-    await startCommand(configPath, { tunnel: opts.tunnel, publicUrl: opts.publicUrl });
+    const remote = opts.remote || process.env.CHANNELKIT_REMOTE;
+    const remoteAuth = opts.remoteAuth || process.env.CHANNELKIT_REMOTE_AUTH;
+    await startCommand(configPath, { tunnel: opts.tunnel, publicUrl: opts.publicUrl, remote, remoteAuth });
   });
 
 // Service management commands
@@ -287,10 +291,126 @@ program
   .action(demoCommand);
 
 program
+  .command('remote-store')
+  .description('Run the reference remote store server')
+  .option('-p, --port <port>', 'Port to listen on', '4500')
+  .option('-d, --data-dir <path>', 'Directory to store data', '')
+  .option('--auth-token <token>', 'Require Bearer token for access')
+  .action(async (opts) => {
+    const { resolve: resolvePath } = await import('path');
+    const { fork } = await import('child_process');
+    const { existsSync } = await import('fs');
+    const candidates = [
+      resolvePath(__dirname, '..', '..', '..', 'remote-store-server.js'),
+      resolvePath(process.cwd(), 'remote-store-server.js'),
+    ];
+    const serverPath = candidates.find(p => existsSync(p));
+    if (!serverPath) { console.error('  ❌ remote-store-server.js not found'); process.exit(1); }
+    const env: Record<string, string> = { ...process.env, PORT: opts.port };
+    if (opts.dataDir) env.DATA_DIR = resolvePath(opts.dataDir);
+    if (opts.authToken) env.AUTH_TOKEN = opts.authToken;
+    const child = fork(serverPath, [], { env, stdio: 'inherit' });
+    child.on('exit', (code) => process.exit(code || 0));
+  });
+
+program
   .command('install-skill')
   .description('Install the ChannelKit skill for Claude Code')
   .option('--print', 'Output the skill file to stdout instead of installing')
   .action(installSkillCommand);
+
+// Export / Import commands
+program
+  .command('export [output-path]')
+  .description('Export ChannelKit config, groups, and auth to a ZIP file')
+  .action(async (outputPath?: string) => {
+    const { execFileSync } = await import('child_process');
+    const { existsSync } = await import('fs');
+    const { join } = await import('path');
+    const { CHANNELKIT_HOME, DEFAULT_CONFIG_PATH, DEFAULT_AUTH_DIR, DEFAULT_DATA_DIR } = await import('../paths');
+
+    const date = new Date().toISOString().slice(0, 10);
+    const dest = outputPath || `channelkit-backup-${date}.zip`;
+
+    const relPaths: string[] = [];
+    if (existsSync(DEFAULT_CONFIG_PATH)) relPaths.push('config.yaml');
+    if (existsSync(join(DEFAULT_DATA_DIR, 'groups.json'))) relPaths.push(join('data', 'groups.json'));
+    if (existsSync(DEFAULT_AUTH_DIR)) relPaths.push('auth');
+
+    if (relPaths.length === 0) {
+      console.error(c('yellow', '\n  ❌ No data found in ~/.channelkit to export.\n'));
+      process.exit(1);
+    }
+
+    try {
+      // Remove existing file to avoid appending
+      if (existsSync(dest)) {
+        const { unlinkSync } = await import('fs');
+        unlinkSync(dest);
+      }
+      const absOut = resolve(dest);
+      execFileSync('zip', ['-r', absOut, ...relPaths], { cwd: CHANNELKIT_HOME, stdio: 'pipe' });
+      console.log(c('green', `\n  ✅ Exported to ${absOut}\n`));
+      console.log(c('dim', `  Includes: ${relPaths.join(', ')}\n`));
+    } catch (err: any) {
+      console.error(c('yellow', `\n  ❌ Export failed: ${err.message}\n`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command('import <zip-path>')
+  .description('Import ChannelKit data from a ZIP backup')
+  .action(async (zipPath: string) => {
+    const { execFileSync } = await import('child_process');
+    const { existsSync, mkdirSync } = await import('fs');
+    const { CHANNELKIT_HOME } = await import('../paths');
+
+    const absZip = resolve(zipPath);
+    if (!existsSync(absZip)) {
+      console.error(c('yellow', `\n  ❌ File not found: ${absZip}\n`));
+      process.exit(1);
+    }
+
+    console.log(c('yellow', '\n  ⚠️  This will overwrite existing config, groups, and auth data.'));
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const confirm = await ask(rl, '  Continue? [y/N]', 'N');
+    rl.close();
+
+    if (confirm.toLowerCase() !== 'y') {
+      console.log(c('dim', '\n  Cancelled.\n'));
+      process.exit(0);
+    }
+
+    try {
+      if (!existsSync(CHANNELKIT_HOME)) mkdirSync(CHANNELKIT_HOME, { recursive: true });
+
+      // Validate ZIP contents — reject paths with ".." or absolute paths
+      const listing = execFileSync('unzip', ['-l', absZip], { encoding: 'utf-8' });
+      const resolvedHome = resolve(CHANNELKIT_HOME);
+      for (const line of listing.split('\n')) {
+        const match = line.match(/^\s*\d+\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$/);
+        if (!match) continue;
+        const entryPath = match[1].trim();
+        if (entryPath.includes('..') || entryPath.startsWith('/')) {
+          console.error(c('yellow', `\n  ❌ Rejected: ZIP contains unsafe path "${entryPath}"\n`));
+          process.exit(1);
+        }
+        const resolved = resolve(CHANNELKIT_HOME, entryPath);
+        if (!resolved.startsWith(resolvedHome + '/') && resolved !== resolvedHome) {
+          console.error(c('yellow', `\n  ❌ Rejected: ZIP entry "${entryPath}" would extract outside home directory\n`));
+          process.exit(1);
+        }
+      }
+
+      execFileSync('unzip', ['-o', absZip, '-d', CHANNELKIT_HOME], { stdio: 'pipe' });
+      console.log(c('green', '\n  ✅ Import successful.\n'));
+      console.log(c('dim', '  Restart ChannelKit for changes to take effect.\n'));
+    } catch (err: any) {
+      console.error(c('yellow', `\n  ❌ Import failed: ${err.message}\n`));
+      process.exit(1);
+    }
+  });
 
 // Default to "start" when no command is given
 const args = process.argv.slice(2);
