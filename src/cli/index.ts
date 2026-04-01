@@ -41,9 +41,13 @@ program
   .option('-c, --config <path>', 'Path to config file', DEFAULT_CONFIG_PATH)
   .option('--tunnel', 'Start a cloudflared tunnel automatically')
   .option('--public-url <url>', 'Use a manual public URL')
+  .option('--remote <url>', 'Use a remote store endpoint for all data (config, auth, groups)')
+  .option('--remote-auth <header>', 'Authorization header for the remote store')
   .action(async (opts) => {
     const configPath = resolve(opts.config);
-    await startCommand(configPath, { tunnel: opts.tunnel, publicUrl: opts.publicUrl });
+    const remote = opts.remote || process.env.CHANNELKIT_REMOTE;
+    const remoteAuth = opts.remoteAuth || process.env.CHANNELKIT_REMOTE_AUTH;
+    await startCommand(configPath, { tunnel: opts.tunnel, publicUrl: opts.publicUrl, remote, remoteAuth });
   });
 
 // Service management commands
@@ -285,6 +289,29 @@ program
   .description('Run the built-in echo/demo server')
   .option('-p, --port <port>', 'Port to listen on', '3000')
   .action(demoCommand);
+
+program
+  .command('remote-store')
+  .description('Run the reference remote store server')
+  .option('-p, --port <port>', 'Port to listen on', '4500')
+  .option('-d, --data-dir <path>', 'Directory to store data', '')
+  .option('--auth-token <token>', 'Require Bearer token for access')
+  .action(async (opts) => {
+    const { resolve: resolvePath } = await import('path');
+    const { fork } = await import('child_process');
+    const { existsSync } = await import('fs');
+    const candidates = [
+      resolvePath(__dirname, '..', '..', '..', 'remote-store-server.js'),
+      resolvePath(process.cwd(), 'remote-store-server.js'),
+    ];
+    const serverPath = candidates.find(p => existsSync(p));
+    if (!serverPath) { console.error('  ❌ remote-store-server.js not found'); process.exit(1); }
+    const env: Record<string, string> = { ...process.env, PORT: opts.port };
+    if (opts.dataDir) env.DATA_DIR = resolvePath(opts.dataDir);
+    if (opts.authToken) env.AUTH_TOKEN = opts.authToken;
+    const child = fork(serverPath, [], { env, stdio: 'inherit' });
+    child.on('exit', (code) => process.exit(code || 0));
+  });
 
 program
   .command('install-skill')

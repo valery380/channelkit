@@ -154,6 +154,66 @@ ChannelKit will start `cloudflared` automatically and route traffic through your
 
 > **Tip:** If you set `auto_start: true` in the tunnel config, you don't need the `--tunnel` flag — the tunnel starts automatically with `channelkit start`.
 
+## Remote Data Store
+
+Store all ChannelKit data (config, auth sessions, group mappings) on a remote server instead of locally. This lets you run ChannelKit on ephemeral infrastructure, share config across machines, or back up everything to your own database.
+
+### Quick Start
+
+```bash
+# Terminal 1: start the reference remote store server
+channelkit remote-store
+
+# Terminal 2: start ChannelKit in remote mode
+channelkit start --remote http://localhost:4500
+```
+
+On startup, ChannelKit fetches config and auth from the remote endpoint. Any changes you make (via dashboard, CLI, or MCP) are synced back automatically.
+
+### CLI Flags & Environment Variables
+
+| Flag | Env Var | Description |
+|------|---------|-------------|
+| `--remote <url>` | `CHANNELKIT_REMOTE` | Remote store endpoint URL |
+| `--remote-auth <header>` | `CHANNELKIT_REMOTE_AUTH` | Authorization header (e.g. `Bearer mysecret`) |
+
+Example with env vars (useful for Docker / systemd):
+
+```bash
+CHANNELKIT_REMOTE=https://store.example.com CHANNELKIT_REMOTE_AUTH="Bearer mysecret" channelkit start
+```
+
+### Remote Store Server
+
+The reference server (`remote-store-server.js`) stores data as flat files. Use it as-is for testing, or as a template for your own implementation backed by a database, S3, etc.
+
+```bash
+channelkit remote-store                          # default: port 4500, data in ./ck-remote-data
+channelkit remote-store -p 8080                  # custom port
+channelkit remote-store --auth-token mysecret    # require Bearer auth
+```
+
+### API Contract
+
+Implement these 6 endpoints to build your own remote store:
+
+| Method | Endpoint | Content-Type | Description |
+|--------|----------|-------------|-------------|
+| `GET` | `/config` | `text/plain` | Fetch YAML config (return 404 if none) |
+| `PUT` | `/config` | `text/plain` | Store YAML config |
+| `GET` | `/auth` | `application/zip` | Fetch auth files as ZIP (return 404 if none) |
+| `PUT` | `/auth` | `application/zip` | Store auth files as ZIP |
+| `GET` | `/groups` | `application/json` | Fetch group mappings |
+| `PUT` | `/groups` | `application/json` | Store group mappings |
+
+### What Gets Synced
+
+| Data | Fetch | Push |
+|------|-------|------|
+| **Config** (channels, services, settings) | On startup | On every config save |
+| **Auth** (WhatsApp sessions, Gmail tokens) | On startup | Every 60 seconds |
+| **Groups** (user-to-service mappings) | On startup | On change (debounced) |
+
 ## CLI Commands
 
 ```bash
@@ -170,6 +230,9 @@ channelkit service list            # list configured services
 channelkit service remove <name>   # remove a service
 
 channelkit install-skill           # install Claude Code skill
+
+channelkit remote-store            # run the reference remote store server
+channelkit demo                    # run the built-in echo/demo server
 ```
 
 ## Services & Multi-Service

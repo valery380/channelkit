@@ -29,6 +29,7 @@ export class ChannelKit {
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
   private mcpServer?: ChannelKitMcpServer;
   private updater?: Updater;
+  private authSyncTimer?: ReturnType<typeof setInterval>;
 
   constructor(private config: AppConfig, private configPath?: string) {
     // Populate process.env from config.settings (existing env vars take precedence)
@@ -201,9 +202,23 @@ export class ChannelKit {
 
         // Sync changes back to remote
         groupStore.onChange((groups) => remoteStore.pushGroups(groups));
+
       }
 
       console.log(`[channelkit] Onboarding enabled with ${onboardingCodes.length} service code(s)`);
+    }
+
+    // Wire up remote store for config and auth sync
+    if (this.config.data_store?.type === 'remote' && this.config.data_store.endpoint) {
+      const { RemoteStore } = await import('./core/remoteStore');
+      const remoteStore = new RemoteStore(this.config.data_store);
+
+      // Sync config changes back to remote on every save
+      const { setOnSaveHook } = await import('./config/parser');
+      setOnSaveHook((yaml) => remoteStore.pushConfig(yaml));
+
+      // Sync auth changes back to remote (watch for file changes)
+      this.setupAuthSync(remoteStore);
     }
 
     // Wire up message handlers
@@ -540,7 +555,25 @@ export class ChannelKit {
     }
   }
 
+  private setupAuthSync(remoteStore: import('./core/remoteStore').RemoteStore): void {
+    // Sync auth dir to remote every 60 seconds
+    const syncAuth = async () => {
+      const { DEFAULT_AUTH_DIR } = await import('./paths');
+      const { RemoteStore } = await import('./core/remoteStore');
+      const zip = await RemoteStore.zipDirectory(DEFAULT_AUTH_DIR);
+      if (zip) await remoteStore.pushAuth(zip);
+    };
+    // Initial sync after 10s, then every 60s
+    setTimeout(() => {
+      syncAuth();
+      this.authSyncTimer = setInterval(syncAuth, 60_000);
+    }, 10_000);
+  }
+
   async stop(): Promise<void> {
+    if (this.authSyncTimer) {
+      clearInterval(this.authSyncTimer);
+    }
     if (this.updater) {
       this.updater.stopAutoUpdate();
     }
