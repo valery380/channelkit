@@ -153,6 +153,8 @@ export class TelegramChannel extends Channel {
       onStart: (botInfo) => {
         console.log(`✅ Telegram connected: ${this.name} (@${botInfo.username})`);
       },
+    }).catch((err: any) => {
+      console.error(`[telegram:${this.name}] Failed to start: ${err.message || err}`);
     });
   }
 
