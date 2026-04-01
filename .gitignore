@@ -7,4 +7,6 @@ config.yaml
 groups.json
 data/
 .claude/
+.omc/
 uploads/
+ck-remote-data/
