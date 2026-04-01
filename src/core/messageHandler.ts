@@ -77,14 +77,14 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
     // AI mode: skip onboarding/groups, route via AI
     const mode = router.getChannelMode(channel.name);
     if (mode === 'ai' && !message.groupId && !(message as any)._resolvedWebhook) {
-      const aiService = await router.aiRouteMessage(message);
-      if (aiService) {
+      const aiMatch = await router.aiRouteMessage(message);
+      if (aiMatch) {
         // Found a match — route to it
         const replyTo = message.from;
         const replyUrl = apiServer.getReplyUrl(channel.name, replyTo);
         const { dispatchWebhook } = await import('./webhook');
         const startTime = Date.now();
-        const { response, error: webhookError } = await dispatchWebhook(aiService.webhook, message, replyUrl, { method: aiService.method, auth: aiService.auth });
+        const { response, error: webhookError } = await dispatchWebhook(aiMatch.config.webhook, message, replyUrl, { method: aiMatch.config.method, auth: aiMatch.config.auth });
         const latency = Date.now() - startTime;
         let responseText = response?.text;
         if (webhookError) {
@@ -96,7 +96,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
         logger.log({
           id: message.id, timestamp: Date.now(), channel: message.channel,
           from: message.from, senderName: message.senderName, text: message.text,
-          type: message.type, route: aiService.webhook, responseText,
+          type: message.type, route: aiMatch.config.webhook, serviceName: aiMatch.name, responseText,
           status: response ? 'success' : 'error', latency,
         });
         if (response) await channel.send(replyTo, response);
@@ -325,6 +325,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       logResponseText = `${logResponseText ? logResponseText + '\n' : ''}[Delivery failed: ${sendError}]`;
     }
 
+    const resolvedServiceName = routedWebhook ? router.findServiceName(message.channelName || message.channel, routedWebhook) : undefined;
     logger.log({
       id: message.id,
       timestamp: Date.now(),
@@ -336,6 +337,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       groupId: message.groupId,
       groupName: message.groupName,
       route: routedWebhook,
+      serviceName: resolvedServiceName,
       responseText: logResponseText,
       status: (sendError || ttsError || response?._error) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
       latency,

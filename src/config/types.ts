@@ -118,6 +118,7 @@ export interface ServiceAuthConfig {
 export interface ServiceConfig {
   channel: string;          // references a key in channels
   webhook: string;          // endpoint URL
+  description?: string;     // what this service does (used by AI routing)
   method?: 'POST' | 'GET' | 'PUT' | 'PATCH';  // HTTP method for webhook (default: POST)
   auth?: ServiceAuthConfig; // authorization for webhook requests
   code?: string;            // magic code for onboarding (groups mode, WhatsApp)

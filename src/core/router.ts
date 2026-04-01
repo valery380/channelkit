@@ -100,7 +100,7 @@ export class Router {
   /**
    * Use AI to route a message to the appropriate service.
    */
-  async aiRouteMessage(message: UnifiedMessage): Promise<ServiceConfig | undefined> {
+  async aiRouteMessage(message: UnifiedMessage): Promise<{ name: string; config: ServiceConfig } | undefined> {
     const channelName = message.channelName || message.channel;
     const channelConfig = this.channelConfigs[channelName];
     if (!channelConfig?.ai_routing) return undefined;
@@ -108,7 +108,7 @@ export class Router {
     const services = this.getNamedServicesForChannel(channelName);
     if (services.length === 0) return undefined;
 
-    const serviceInfos = services.map(s => ({ name: s.name, webhook: s.config.webhook }));
+    const serviceInfos = services.map(s => ({ name: s.name, webhook: s.config.webhook, description: s.config.description }));
     const result = await aiRoute(message.text || '', serviceInfos, channelConfig, this.settings);
 
     if (result.error) {
@@ -117,10 +117,10 @@ export class Router {
 
     if (result.serviceName) {
       const matched = this.services.get(result.serviceName);
-      if (matched && matched.channel === channelName) return matched;
+      if (matched && matched.channel === channelName) return { name: result.serviceName, config: matched };
       // Fuzzy match: AI might return slightly different casing
       for (const [name, svc] of this.services.entries()) {
-        if (svc.channel === channelName && name.toLowerCase() === result.serviceName.toLowerCase()) return svc;
+        if (svc.channel === channelName && name.toLowerCase() === result.serviceName.toLowerCase()) return { name, config: svc };
       }
     }
 
@@ -192,6 +192,16 @@ export class Router {
     const byType = this.servicesByChannel.get(message.channel) || [];
     if (byType.length === 1) return byType[0];
 
+    return undefined;
+  }
+
+  /**
+   * Find the service name for a given webhook URL on a channel.
+   */
+  findServiceName(channelName: string, webhook: string): string | undefined {
+    for (const [name, svc] of this.services.entries()) {
+      if (svc.channel === channelName && svc.webhook === webhook) return name;
+    }
     return undefined;
   }
 

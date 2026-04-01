@@ -16,6 +16,7 @@ export interface LogEntry {
   groupId?: string;
   groupName?: string;
   route?: string;
+  serviceName?: string;
   responseText?: string;
   status: 'success' | 'error' | 'no-route' | 'blocked' | 'format-error';
   latency?: number;
@@ -71,6 +72,7 @@ export class Logger extends EventEmitter {
     try { this.db.exec('ALTER TABLE logs ADD COLUMN tts_generated INTEGER'); } catch {}
     try { this.db.exec('ALTER TABLE logs ADD COLUMN format_applied INTEGER'); } catch {}
     try { this.db.exec('ALTER TABLE logs ADD COLUMN format_original_text TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN service_name TEXT'); } catch {}
   }
 
   private cleanup(): void {
@@ -83,8 +85,8 @@ export class Logger extends EventEmitter {
 
   log(entry: LogEntry): void {
     this.db.prepare(`
-      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms, stt_transcription, tts_generated, format_applied, format_original_text)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms, stt_transcription, tts_generated, format_applied, format_original_text, service_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.id,
       entry.timestamp,
@@ -102,7 +104,8 @@ export class Logger extends EventEmitter {
       entry.sttTranscription || null,
       entry.ttsGenerated ? 1 : null,
       entry.formatApplied ? 1 : null,
-      entry.formatOriginalText || null
+      entry.formatOriginalText || null,
+      entry.serviceName || null
     );
     this.emit('entry', entry);
   }
@@ -182,6 +185,7 @@ export class Logger extends EventEmitter {
       groupId: row.group_id || undefined,
       groupName: row.group_name || undefined,
       route: row.webhook_url || undefined,
+      serviceName: row.service_name || undefined,
       responseText: row.response_text || undefined,
       status: row.status,
       latency: row.latency_ms ?? undefined,

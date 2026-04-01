@@ -38,16 +38,24 @@ Respond with ONLY the service name (exactly as listed above) that best matches t
 If no service is a good match, respond with "NONE".
 Do not include any explanation or extra text.`;
 
+  console.log(`[ai-router] Provider: ${provider} | Message: "${message}"`);
+  console.log(`[ai-router] System prompt:\n${systemPrompt}`);
+
   try {
+    let result: AIRouterResult;
     if (provider === 'openai') {
-      return await callOpenAI(systemPrompt, message, aiConfig.model || 'gpt-4o-mini', settings.openai_api_key || process.env.OPENAI_API_KEY || '');
+      result = await callOpenAI(systemPrompt, message, aiConfig.model || 'gpt-4o-mini', settings.openai_api_key || process.env.OPENAI_API_KEY || '');
     } else if (provider === 'anthropic') {
-      return await callAnthropic(systemPrompt, message, aiConfig.model || 'claude-haiku-4-5-20251001', settings.anthropic_api_key || process.env.ANTHROPIC_API_KEY || '');
+      result = await callAnthropic(systemPrompt, message, aiConfig.model || 'claude-haiku-4-5-20251001', settings.anthropic_api_key || process.env.ANTHROPIC_API_KEY || '');
     } else if (provider === 'google') {
-      return await callGoogle(systemPrompt, message, aiConfig.model || 'gemini-2.0-flash', settings.google_api_key || process.env.GOOGLE_API_KEY || '');
+      result = await callGoogle(systemPrompt, message, aiConfig.model || 'gemini-2.5-flash', settings.google_api_key || process.env.GOOGLE_API_KEY || '');
+    } else {
+      return { serviceName: null, error: `Unknown AI provider: ${provider}` };
     }
-    return { serviceName: null, error: `Unknown AI provider: ${provider}` };
+    console.log(`[ai-router] Result: serviceName="${result.serviceName}"${result.error ? ` error="${result.error}"` : ''}`);
+    return result;
   } catch (err: any) {
+    console.log(`[ai-router] Exception: ${err.message}`);
     return { serviceName: null, error: err.message };
   }
 }
@@ -64,7 +72,7 @@ async function callOpenAI(systemPrompt: string, userMessage: string, model: stri
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage },
       ],
-      max_tokens: 50,
+      max_tokens: 256,
       temperature: 0,
     }),
   });
@@ -93,7 +101,7 @@ async function callAnthropic(systemPrompt: string, userMessage: string, model: s
       model,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
-      max_tokens: 50,
+      max_tokens: 256,
       temperature: 0,
     }),
   });
@@ -117,7 +125,7 @@ async function callGoogle(systemPrompt: string, userMessage: string, model: stri
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt }] },
       contents: [{ parts: [{ text: userMessage }] }],
-      generationConfig: { maxOutputTokens: 50, temperature: 0 },
+      generationConfig: { maxOutputTokens: 256, temperature: 0 },
     }),
   });
 

@@ -583,7 +583,13 @@ function FetchNumbersPanel({ typeKey, fieldValues, channels, twilioDefaults, onS
 }
 
 export default function Channels({ loadConfig }) {
-  const { channels, services, twilioDefaults, tunnelActive, qrMessage, smsListenMessage, baileysAvailable } = useAppState();
+  const { channels, services, twilioDefaults, tunnelActive, qrMessage, smsListenMessage, baileysAvailable, settings } = useAppState();
+  const aiProviders = [
+    settings.openai_api_key && { value: 'openai', label: 'OpenAI' },
+    settings.anthropic_api_key && { value: 'anthropic', label: 'Anthropic' },
+    settings.google_api_key && { value: 'google', label: 'Google' },
+  ].filter(Boolean);
+  const hasAiKey = aiProviders.length > 0;
   const dispatch = useDispatch();
   const [step, setStep] = useState('pick');
   const [typeKey, setTypeKey] = useState('');
@@ -614,7 +620,17 @@ export default function Channels({ loadConfig }) {
   const [smsListenNumber, setSmsListenNumber] = useState(null);
   const [fetchedTwilioNumbers, setFetchedTwilioNumbers] = useState([]);
 
-  useEffect(() => { loadConfig(); }, [loadConfig]);
+  useEffect(() => {
+    loadConfig();
+    apiFetch(API + '/api/settings').then(r => r.json())
+      .then(data => dispatch({ type: 'SET_SETTINGS', payload: data.settings || {} }))
+      .catch(() => {});
+  }, [loadConfig, dispatch]);
+
+  useEffect(() => {
+    if (!hasAiKey && mode === 'ai') setMode('service');
+    if (hasAiKey && mode === 'ai' && !aiProviders.find(p => p.value === aiProvider)) setAiProvider(aiProviders[0].value);
+  }, [hasAiKey, mode, aiProvider, aiProviders]);
 
   function selectType(type) { setTypeKey(type); setStep('form'); setFieldValues({}); setShowBuy(false); setFetchedTwilioNumbers([]); }
 
@@ -1122,10 +1138,13 @@ export default function Channels({ loadConfig }) {
             )}
 
             {typeKey !== 'endpoint' && <div className="space-y-3 mb-3">
-              <select value={mode} onChange={e => setMode(e.target.value)} className={selectCls}>
+              <select value={mode} onChange={e => { if (e.target.value === 'ai' && !hasAiKey) return; setMode(e.target.value); }} className={selectCls}>
                 <option value="service">Service mode — single service, no codes needed</option>
                 <option value="groups">Groups mode — multiple services via codes or commands</option>
-                <option value="ai">AI mode — natural language routing to services</option>
+                {hasAiKey
+                  ? <option value="ai">AI mode — natural language routing to services</option>
+                  : <option value="" disabled>AI mode — requires an API key in Settings</option>
+                }
               </select>
               {mode === 'groups' && (
                 <select value={unmatched} onChange={e => setUnmatched(e.target.value)} className={selectCls}>
@@ -1137,9 +1156,7 @@ export default function Channels({ loadConfig }) {
                 <div className="space-y-2 p-3 bg-bg-light border border-border rounded-lg">
                   <div className="text-xs font-semibold text-text">AI Routing</div>
                   <select value={aiProvider} onChange={e => setAiProvider(e.target.value)} className={selectCls}>
-                    <option value="openai">OpenAI</option>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="google">Google</option>
+                    {aiProviders.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                   <input
                     type="text"
