@@ -189,6 +189,9 @@ export interface AuthConfig {
   qr_code_length?: number;      // alphanumeric code length for flow B, default 8
   messages?: {
     verify_request?: string;    // message sent to user for flow A
+    qr_link_prefix?: string;    // human-readable line prepended to LOGIN-XXX in wa.me link
+    verify_success?: string;    // reply sent after successful verification
+    verify_error?: string;      // reply sent on wrong code (recognized auth attempt)
   };
 }
 

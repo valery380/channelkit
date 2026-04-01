@@ -15,6 +15,9 @@ export default function Auth({ loadConfig }) {
   const [codeLength, setCodeLength] = useState(6);
   const [qrCodeLength, setQrCodeLength] = useState(8);
   const [verifyMessage, setVerifyMessage] = useState('');
+  const [qrLinkPrefix, setQrLinkPrefix] = useState('');
+  const [verifySuccess, setVerifySuccess] = useState('');
+  const [verifyError, setVerifyError] = useState('');
   const [status, setStatus] = useState('');
   const [statusColor, setStatusColor] = useState('');
   const [tokenVisible, setTokenVisible] = useState(false);
@@ -32,6 +35,9 @@ export default function Auth({ loadConfig }) {
       setCodeLength(savedAuth.code_length || 6);
       setQrCodeLength(savedAuth.qr_code_length || 8);
       setVerifyMessage(savedAuth.messages?.verify_request || '');
+      setQrLinkPrefix(savedAuth.messages?.qr_link_prefix || '');
+      setVerifySuccess(savedAuth.messages?.verify_success || '');
+      setVerifyError(savedAuth.messages?.verify_error || '');
     }
     // Check allow_local setting
     apiFetch(API + '/api/settings')
@@ -52,7 +58,12 @@ export default function Auth({ loadConfig }) {
       session_ttl: sessionTtl,
       code_length: codeLength,
       qr_code_length: qrCodeLength,
-      messages: verifyMessage ? { verify_request: verifyMessage } : undefined,
+      messages: (verifyMessage || qrLinkPrefix || verifySuccess || verifyError) ? {
+        ...(verifyMessage && { verify_request: verifyMessage }),
+        ...(qrLinkPrefix && { qr_link_prefix: qrLinkPrefix }),
+        ...(verifySuccess && { verify_success: verifySuccess }),
+        ...(verifyError && { verify_error: verifyError }),
+      } : undefined,
     };
 
     try {
@@ -224,17 +235,56 @@ export default function Auth({ loadConfig }) {
               </div>
             </div>
 
-            {/* Custom message */}
+            {/* Messages */}
             <div className="border-t border-border pt-6">
-              <h3 className="text-sm font-semibold text-text mb-1">Verify Message</h3>
-              <p className="text-xs text-dim mb-4">Message sent to the user asking them to reply with the code (phone flow).</p>
-              <textarea
-                placeholder="Reply with the code shown on your screen to verify your identity."
-                value={verifyMessage}
-                onChange={e => setVerifyMessage(e.target.value)}
-                rows={2}
-                className={inputCls + ' resize-y'}
-              />
+              <h3 className="text-sm font-semibold text-text mb-1">Messages</h3>
+              <p className="text-xs text-dim mb-4">Customize the WhatsApp messages. Leave empty to use defaults or skip.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">Verify Request <span className="text-dim font-normal">(phone flow)</span></label>
+                  <textarea
+                    placeholder="Reply with the code shown on your screen to verify your identity."
+                    value={verifyMessage}
+                    onChange={e => setVerifyMessage(e.target.value)}
+                    rows={2}
+                    className={inputCls + ' resize-y'}
+                  />
+                  <p className="text-[11px] text-dim mt-1">Sent to the user asking them to reply with the code.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">QR Link Prefix <span className="text-dim font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="Connect me to YourApp:"
+                    value={qrLinkPrefix}
+                    onChange={e => setQrLinkPrefix(e.target.value)}
+                    className={inputCls}
+                  />
+                  <p className="text-[11px] text-dim mt-1">Human-readable line shown before the LOGIN code in the QR/link message.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">Success Reply <span className="text-dim font-normal">(optional)</span></label>
+                  <textarea
+                    placeholder="✅ We connected you successfully, go back to the page to continue."
+                    value={verifySuccess}
+                    onChange={e => setVerifySuccess(e.target.value)}
+                    rows={2}
+                    className={inputCls + ' resize-y'}
+                  />
+                  <p className="text-[11px] text-dim mt-1">Reply sent after successful verification. Leave empty to skip.</p>
+                </div>
+                <div>
+                  <label className="text-xs font-medium block mb-1 text-text">Error Reply <span className="text-dim font-normal">(optional)</span></label>
+                  <textarea
+                    placeholder="This is an invalid code. Please try again."
+                    value={verifyError}
+                    onChange={e => setVerifyError(e.target.value)}
+                    rows={2}
+                    className={inputCls + ' resize-y'}
+                  />
+                  <p className="text-[11px] text-dim mt-1">Reply sent when a wrong code is detected. Leave empty to skip.</p>
+                </div>
+              </div>
             </div>
           </>
         )}

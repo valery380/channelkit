@@ -76,17 +76,28 @@ export class AuthSessionStore {
           return session;
         }
       } else {
-        // Flow B (QR): message should be "LOGIN-XXXXXXXX" (case-insensitive prefix)
-        const prefix = 'LOGIN-';
-        if (trimmedText.toUpperCase().startsWith(prefix)) {
-          const messageCode = trimmedText.slice(prefix.length).trim();
-          if (messageCode.toUpperCase() === session.code.toUpperCase()) {
-            return session;
-          }
+        // Flow B (QR): message contains "LOGIN-XXXXXXXX" (may have a prefix line before it)
+        const loginCode = this.extractLoginCode(trimmedText);
+        if (loginCode && loginCode.toUpperCase() === session.code.toUpperCase()) {
+          return session;
         }
       }
     }
     return null;
+  }
+
+  /**
+   * Check if there's a pending code session for a given phone number.
+   */
+  hasPendingSessionForPhone(phone: string): boolean {
+    const normalized = this.normalizePhone(phone);
+    for (const session of this.sessions.values()) {
+      if (session.status !== 'pending' || Date.now() > session.expiresAt) continue;
+      if (session.method === 'code' && session.phone && this.normalizePhone(session.phone) === normalized) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -141,6 +152,24 @@ export class AuthSessionStore {
         this.phoneThrottles.delete(phone);
       }
     }
+  }
+
+  /**
+   * Extract a LOGIN-XXXX code from a message that may have a prefix line.
+   * Handles both "LOGIN-CODE" and "Some prefix text\nLOGIN-CODE".
+   */
+  extractLoginCode(text: string): string | null {
+    const upper = text.toUpperCase();
+    const idx = upper.indexOf('LOGIN-');
+    if (idx === -1) return null;
+    return text.slice(idx + 'LOGIN-'.length).trim();
+  }
+
+  /**
+   * Check if a message contains a LOGIN- prefix (for detecting QR auth attempts).
+   */
+  hasLoginPrefix(text: string): boolean {
+    return text.toUpperCase().includes('LOGIN-');
   }
 
   /** Normalize a phone-like identifier: strip JID suffix, ensure + prefix. */

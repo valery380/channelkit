@@ -21,7 +21,15 @@ export class AuthModule {
   ) {
     const ttl = config.session_ttl ?? 300;
     this.sessions = new AuthSessionStore(ttl);
-    this.handler = new AuthHandler(this.sessions, config);
+
+    // Build a send function that uses the auth channel
+    const sendReply = async (jid: string, text: string) => {
+      const channel = this.channels.get(this.config.channel);
+      if (!channel || !channel.connected) return;
+      await channel.send(jid, { text });
+    };
+
+    this.handler = new AuthHandler(this.sessions, config, sendReply);
   }
 
   /**
@@ -68,7 +76,10 @@ export class AuthModule {
       const waNumber = this.getChannelNumber();
       if (waNumber) {
         const digits = waNumber.replace(/[^0-9]/g, '');
-        result.link = `https://wa.me/${digits}?text=${encodeURIComponent(`LOGIN-${session.code}`)}`;
+        const codeText = `LOGIN-${session.code}`;
+        const prefix = this.config.messages?.qr_link_prefix;
+        const fullText = prefix ? `${prefix}\n${codeText}` : codeText;
+        result.link = `https://wa.me/${digits}?text=${encodeURIComponent(fullText)}`;
       }
     }
 
@@ -113,14 +124,9 @@ export class AuthModule {
   }
 
   private getChannelNumber(): string | undefined {
-    // Try to get the number from the channel config
-    // The auth config references a channel name, look up its config
-    // We can't directly access the config here, so we get it from the channel
     const channelName = this.config.channel;
     const channel = this.channels.get(channelName);
     if (!channel) return undefined;
-
-    // WhatsApp channels store the number in their config
     return (channel as any).config?.number || this.config.channel_number;
   }
 

@@ -726,8 +726,12 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         if (code_length !== undefined) config.auth.code_length = Number(code_length) || 6;
         if (qr_code_length !== undefined) config.auth.qr_code_length = Number(qr_code_length) || 8;
         if (messages !== undefined) {
-          if (messages?.verify_request) {
-            config.auth.messages = { verify_request: messages.verify_request };
+          if (messages && typeof messages === 'object' && Object.values(messages).some(v => v)) {
+            config.auth.messages = {};
+            if (messages.verify_request) config.auth.messages.verify_request = messages.verify_request;
+            if (messages.qr_link_prefix) config.auth.messages.qr_link_prefix = messages.qr_link_prefix;
+            if (messages.verify_success) config.auth.messages.verify_success = messages.verify_success;
+            if (messages.verify_error) config.auth.messages.verify_error = messages.verify_error;
           } else {
             delete config.auth.messages;
           }

@@ -517,10 +517,13 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
       session_ttl: z.number().optional().describe('Session timeout in seconds (default 300)'),
       code_length: z.number().optional().describe('Digits in phone verification code (default 6)'),
       qr_code_length: z.number().optional().describe('Characters in QR code (default 8)'),
-      verify_message: z.string().optional().describe('Message sent to user asking them to reply with the code'),
+      verify_message: z.string().optional().describe('Message sent to user asking them to reply with the code (phone flow)'),
+      qr_link_prefix: z.string().optional().describe('Human-readable line prepended to LOGIN code in QR/link message (e.g. "Connect me to YourApp:")'),
+      verify_success: z.string().optional().describe('Reply sent after successful verification (e.g. "✅ Connected! Go back to the page.")'),
+      verify_error: z.string().optional().describe('Reply sent on wrong code when auth attempt is recognized (e.g. "Invalid code. Please try again.")'),
       auto_restart: z.boolean().optional().default(false).describe('Automatically restart to apply changes'),
     },
-    async ({ enabled, channel, channel_number, callback_url, callback_token, session_ttl, code_length, qr_code_length, verify_message, auto_restart }) => {
+    async ({ enabled, channel, channel_number, callback_url, callback_token, session_ttl, code_length, qr_code_length, verify_message, qr_link_prefix, verify_success, verify_error, auto_restart }) => {
       if (!ctx.configPath) {
         return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
       }
@@ -553,12 +556,28 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
         if (session_ttl) config.auth.session_ttl = session_ttl;
         if (code_length) config.auth.code_length = code_length;
         if (qr_code_length) config.auth.qr_code_length = qr_code_length;
+        // Update messages (merge with existing)
+        const msgs: Record<string, string> = { ...(config.auth.messages || {}) };
         if (verify_message !== undefined) {
-          if (verify_message) {
-            config.auth.messages = { verify_request: verify_message };
-          } else {
-            delete config.auth.messages;
-          }
+          if (verify_message) msgs.verify_request = verify_message;
+          else delete msgs.verify_request;
+        }
+        if (qr_link_prefix !== undefined) {
+          if (qr_link_prefix) msgs.qr_link_prefix = qr_link_prefix;
+          else delete msgs.qr_link_prefix;
+        }
+        if (verify_success !== undefined) {
+          if (verify_success) msgs.verify_success = verify_success;
+          else delete msgs.verify_success;
+        }
+        if (verify_error !== undefined) {
+          if (verify_error) msgs.verify_error = verify_error;
+          else delete msgs.verify_error;
+        }
+        if (Object.keys(msgs).length > 0) {
+          config.auth.messages = msgs;
+        } else {
+          delete config.auth.messages;
         }
 
         saveConfig(ctx.configPath, config);

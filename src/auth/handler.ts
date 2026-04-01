@@ -11,6 +11,8 @@ export interface AuthCallbackPayload {
   verifiedAt: string;
 }
 
+export type SendReplyFn = (jid: string, text: string) => Promise<void>;
+
 function buildAuthHeaders(auth?: ServiceAuthConfig): Record<string, string> {
   if (!auth) return {};
   if (auth.type === 'bearer' && auth.token) {
@@ -26,6 +28,7 @@ export class AuthHandler {
   constructor(
     private sessions: AuthSessionStore,
     private config: AuthConfig,
+    private sendReply?: SendReplyFn,
   ) {}
 
   /**
@@ -40,18 +43,59 @@ export class AuthHandler {
     if (message.groupId) return false;
 
     const session = this.sessions.matchCode(message.from, message.text);
-    if (!session) return false;
+    if (session) {
+      // Mark as verified
+      this.sessions.verify(session, message.from, message.senderName);
 
-    // Mark as verified
-    this.sessions.verify(session, message.from, message.senderName);
+      // Send success reply if configured
+      const successMsg = this.config.messages?.verify_success;
+      if (successMsg && this.sendReply) {
+        this.sendReply(message.from, successMsg).catch((err) => {
+          console.error(`[auth] Failed to send success reply: ${err.message}`);
+        });
+      }
 
-    // Fire callback asynchronously (don't block message processing)
-    this.fireCallback(session).catch((err) => {
-      console.error(`[auth] Callback failed for session ${session.id}: ${err.message}`);
-    });
+      // Fire callback asynchronously (don't block message processing)
+      this.fireCallback(session).catch((err) => {
+        console.error(`[auth] Callback failed for session ${session.id}: ${err.message}`);
+      });
 
-    console.log(`[auth] Session ${session.id} verified (${session.method}) for ${session.verifiedPhone}`);
-    return true;
+      console.log(`[auth] Session ${session.id} verified (${session.method}) for ${session.verifiedPhone}`);
+      return true;
+    }
+
+    // No match — check if this looks like a failed auth attempt
+    if (this.isAuthAttempt(message.from, message.text)) {
+      const errorMsg = this.config.messages?.verify_error;
+      if (errorMsg && this.sendReply) {
+        this.sendReply(message.from, errorMsg).catch((err) => {
+          console.error(`[auth] Failed to send error reply: ${err.message}`);
+        });
+      }
+      console.log(`[auth] Failed auth attempt from ${message.from}`);
+      return true; // consume the message so it doesn't route to services
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a message looks like a failed auth attempt.
+   * - Phone has a pending code session but sent wrong code
+   * - Message starts with LOGIN- but code doesn't match any QR session
+   */
+  private isAuthAttempt(from: string, text: string): boolean {
+    // Check if this phone has a pending code session (wrong code for phone flow)
+    if (this.sessions.hasPendingSessionForPhone(from)) {
+      return true;
+    }
+
+    // Check if message contains a LOGIN- code (QR auth attempt, possibly with prefix text)
+    if (this.sessions.hasLoginPrefix(text)) {
+      return true;
+    }
+
+    return false;
   }
 
   private async fireCallback(session: AuthSession): Promise<void> {
