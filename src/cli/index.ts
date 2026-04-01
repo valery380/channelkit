@@ -384,6 +384,25 @@ program
 
     try {
       if (!existsSync(CHANNELKIT_HOME)) mkdirSync(CHANNELKIT_HOME, { recursive: true });
+
+      // Validate ZIP contents — reject paths with ".." or absolute paths
+      const listing = execFileSync('unzip', ['-l', absZip], { encoding: 'utf-8' });
+      const resolvedHome = resolve(CHANNELKIT_HOME);
+      for (const line of listing.split('\n')) {
+        const match = line.match(/^\s*\d+\s+\d{2}-\d{2}-\d{2,4}\s+\d{2}:\d{2}\s+(.+)$/);
+        if (!match) continue;
+        const entryPath = match[1].trim();
+        if (entryPath.includes('..') || entryPath.startsWith('/')) {
+          console.error(c('yellow', `\n  ❌ Rejected: ZIP contains unsafe path "${entryPath}"\n`));
+          process.exit(1);
+        }
+        const resolved = resolve(CHANNELKIT_HOME, entryPath);
+        if (!resolved.startsWith(resolvedHome + '/') && resolved !== resolvedHome) {
+          console.error(c('yellow', `\n  ❌ Rejected: ZIP entry "${entryPath}" would extract outside home directory\n`));
+          process.exit(1);
+        }
+      }
+
       execFileSync('unzip', ['-o', absZip, '-d', CHANNELKIT_HOME], { stdio: 'pipe' });
       console.log(c('green', '\n  ✅ Import successful.\n'));
       console.log(c('dim', '  Restart ChannelKit for changes to take effect.\n'));
