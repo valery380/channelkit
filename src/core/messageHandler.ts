@@ -7,6 +7,7 @@ import { Onboarding } from '../onboarding';
 import { ApiServer } from '../api/server';
 import { processInbound, processOutbound } from '../media/processor';
 import { AppConfig, ServiceConfig } from '../config/types';
+import type { AuthModule } from '../auth';
 
 /** Normalize a sender identifier by stripping non-digit characters (for phone numbers). */
 function normalizeSender(sender: string): string {
@@ -45,13 +46,31 @@ export interface MessageHandlerDeps {
   logger: Logger;
   onboarding?: Onboarding;
   config: AppConfig;
+  authModule?: AuthModule;
 }
 
 export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): void {
-  const { router, apiServer, logger, onboarding, config } = deps;
+  const { router, apiServer, logger, onboarding, config, authModule } = deps;
 
   channel.on('message', async (message: UnifiedMessage) => {
     message.channelName = channel.name;
+
+    // Auth module intercept: check if this message is an auth code reply
+    if (authModule && authModule.tryIntercept(message)) {
+      logger.log({
+        id: message.id,
+        timestamp: Date.now(),
+        channel: message.channel,
+        from: message.from,
+        senderName: message.senderName,
+        text: message.text,
+        type: message.type,
+        route: 'auth',
+        status: 'success',
+        latency: 0,
+      });
+      return;
+    }
 
     // Check if sender can interact with this channel at all.
     // A service-level allow list overrides the channel restriction,

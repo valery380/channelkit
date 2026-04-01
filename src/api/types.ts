@@ -1,6 +1,7 @@
 import { WebSocket, WebSocketServer } from 'ws';
 import { Channel } from '../channels/base';
 import { Logger } from '../core/logger';
+import type { AuthModule } from '../auth';
 
 export interface ServerContext {
   channels: Map<string, Channel>;
@@ -32,4 +33,5 @@ export interface ServerContext {
   getReplyUrl: (channelName: string, jid: string) => string;
   setExposeDashboard: (value: boolean) => void;
   setExposeMcp: (value: boolean) => void;
+  authModule?: AuthModule;
 }

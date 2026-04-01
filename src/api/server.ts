@@ -20,6 +20,7 @@ import { registerRestartRoutes } from './routes/restart';
 import { registerMcpRoutes } from './routes/mcp';
 import { registerUpdateRoutes } from './routes/update';
 import { registerGroupRoutes } from './routes/groups';
+import { registerAuthRoutes } from './routes/auth-session';
 
 /** Redact patterns that look like API keys/tokens from log text. */
 function redactSecrets(text: string): string {
@@ -174,6 +175,7 @@ export class ApiServer {
     registerMcpRoutes(this.app, this.ctx);
     registerUpdateRoutes(this.app, this.ctx);
     registerGroupRoutes(this.app, this.ctx);
+    registerAuthRoutes(this.app, this.ctx);
   }
 
   // Proxy getters/setters that delegate to ctx for backward compat with index.ts
@@ -243,6 +245,7 @@ export class ApiServer {
   set updateStatus(fn: (() => Promise<any>) | undefined) { this.ctx.updateStatus = fn; }
   set updateTrigger(fn: (() => Promise<any>) | undefined) { this.ctx.updateTrigger = fn; }
   set reloadRouter(fn: (() => void) | undefined) { this.ctx.reloadRouter = fn; }
+  set authModule(mod: any) { this.ctx.authModule = mod; }
   setExposeMcp(value: boolean): void { this.ctx.setExposeMcp(value); }
   broadcast(msg: any): void { this.ctx.broadcast(msg); }
   getExpressApp() { return this.app; }

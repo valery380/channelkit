@@ -17,6 +17,7 @@ import { loadConfig, saveConfig } from './config/parser';
 import { ChannelKitMcpServer } from './mcp';
 import { Updater } from './core/updater';
 import { setAllowLocalWebhooks } from './core/webhook';
+import { AuthModule } from './auth';
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -29,6 +30,7 @@ export class ChannelKit {
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
   private mcpServer?: ChannelKitMcpServer;
   private updater?: Updater;
+  private authModule?: AuthModule;
 
   constructor(private config: AppConfig, private configPath?: string) {
     // Populate process.env from config.settings (existing env vars take precedence)
@@ -185,6 +187,18 @@ export class ChannelKit {
       console.log(`[channelkit] Onboarding enabled with ${onboardingCodes.length} service code(s)`);
     }
 
+    // Initialize auth module if enabled
+    if (this.config.auth?.enabled) {
+      const authChannel = this.config.auth.channel;
+      if (!this.channelMap.has(authChannel)) {
+        console.error(`[auth] Auth channel "${authChannel}" not found — auth module disabled.`);
+      } else {
+        this.authModule = new AuthModule(this.config.auth, this.channelMap);
+        this.apiServer.authModule = this.authModule;
+        console.log(`[auth] Auth module enabled on channel "${authChannel}"`);
+      }
+    }
+
     // Wire up message handlers
     const handlerDeps = {
       router: this.router,
@@ -192,6 +206,7 @@ export class ChannelKit {
       logger: this.logger,
       onboarding: this.onboarding,
       config: this.config,
+      authModule: this.authModule,
     };
     for (const channel of this.channels) {
       wireMessageHandler(channel, handlerDeps);
@@ -518,6 +533,9 @@ export class ChannelKit {
   }
 
   async stop(): Promise<void> {
+    if (this.authModule) {
+      this.authModule.stop();
+    }
     if (this.updater) {
       this.updater.stopAutoUpdate();
     }
@@ -533,4 +551,5 @@ export class ChannelKit {
 }
 
 export { UnifiedMessage, WebhookResponse } from './core/types';
-export { AppConfig } from './config/types';
+export { AppConfig, AuthConfig } from './config/types';
+export { AuthModule, AuthSession, AuthCallbackPayload } from './auth';

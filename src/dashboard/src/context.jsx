@@ -5,6 +5,7 @@ const initialState = {
   serverLogLines: [],
   channels: {},
   services: {},
+  auth: null,
   settings: {},
   tunnelActive: false,
   tunnelUrl: null,
@@ -45,6 +46,7 @@ function reducer(state, action) {
         ...state,
         channels: action.payload.channels || state.channels,
         services: action.payload.services || state.services,
+        auth: action.payload.auth !== undefined ? action.payload.auth : state.auth,
         baileysAvailable: action.payload.baileysAvailable ?? state.baileysAvailable,
         hasSmsWebhookChannels: Object.values(action.payload.channels || {}).some(
           ch => ch.type === 'sms' && !ch.poll_interval
