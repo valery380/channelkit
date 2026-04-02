@@ -26,6 +26,10 @@ Your app receives every message in a **unified JSON format**, regardless of sour
 - **AI formatting** — transform incoming messages with AI (OpenAI, Anthropic, Google) before forwarding to your webhook
 - **MCP server** — Model Context Protocol server lets AI assistants manage channels, services, and send messages
 - **Web dashboard** — SQLite-backed logs with real-time WebSocket updates
+- **WhatsApp authentication** — code-based and QR-based user verification via WhatsApp
+- **Group management** — create groups, set photos/descriptions, get invite links via API
+- **Message replies & reactions** — quote messages and react with emojis via API
+- **Group participant events** — normalized webhook events for group joins/leaves
 - **Async messaging API** — `replyUrl` in every webhook payload for sending messages anytime
 - **Onboarding flow** — magic codes (WhatsApp) and slash commands (Telegram) for user self-service
 - **Echo server** — included test server for quick experimentation
@@ -455,6 +459,124 @@ services:
     command: "assistant" # slash command for Telegram multi-service
 ```
 
+## WhatsApp Authentication
+
+ChannelKit includes a built-in authentication module that lets users verify their identity via WhatsApp — either by entering a code or scanning a QR code.
+
+### Configuration
+
+```yaml
+auth:
+  enabled: true
+  channel: whatsapp           # which channel to use for auth
+  callback_url: "http://localhost:3000/api/auth/wa/callback"
+  channel_number: "+972..."   # the WhatsApp number shown to users
+  callback_auth:
+    type: bearer
+    token: "your-callback-secret"
+  session_ttl: 300            # session expiry in seconds (default: 5 min)
+  code_length: 6              # digits in the verification code
+  qr_code_length: 8           # digits in the QR code
+  messages:
+    verify_request: "Reply with the *6-digit code* to verify your identity."
+    qr_link_prefix: "Connect to *MyApp:*"
+    verify_success: "✅ Verified successfully!"
+    verify_error: "Invalid code. Please try again."
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/session` | Create a new auth session (`{ method: "code", phone: "+972..." }` or `{ method: "qr" }`) |
+| `GET` | `/api/auth/session/:sessionId` | Poll session status (returns `pending`, `verified`, or `expired`) |
+
+### Flow
+
+**Code-based:** Your app creates a session with the user's phone → ChannelKit sends them a WhatsApp message with a code → user replies with the code → session status changes to `verified` → your app polls and detects verification → callback is fired.
+
+**QR-based:** Your app creates a QR session → gets a `wa.me` link → user scans/taps it → sends the pre-filled message → session verified.
+
+## Group Management API
+
+Create and manage WhatsApp groups programmatically.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/groups/:channel` | Create a group (`{ name, description?, photo?, participants? }`) |
+| `GET` | `/api/groups/:channel/:groupId/invite` | Get a group's invite link |
+
+### Create a group
+
+```bash
+curl -X POST "http://localhost:4000/api/groups/whatsapp" \
+  -H "Authorization: Bearer YOUR_API_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Support - John", "description": "Support group", "participants": ["1234567890@s.whatsapp.net"] }'
+```
+
+Returns `{ id, name, inviteLink }`.
+
+### Get invite link
+
+```bash
+curl "http://localhost:4000/api/groups/whatsapp/GROUP_ID/invite" \
+  -H "Authorization: Bearer YOUR_API_SECRET"
+```
+
+Returns `{ inviteLink }`.
+
+## Message Replies & Reactions
+
+### Reply to a message
+
+Include `quotedMessageId` in the send request to make a message appear as a reply:
+
+```bash
+curl -X POST "http://localhost:4000/api/send/whatsapp/GROUP_JID" \
+  -H "Authorization: Bearer YOUR_API_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{ "text": "Got it!", "quotedMessageId": "3EB0ABC123..." }'
+```
+
+The send endpoint now returns `messageId` in the response, so you can chain replies:
+
+```json
+{ "ok": true, "messageId": "3EB0DEF456..." }
+```
+
+### React to a message
+
+```bash
+curl -X POST "http://localhost:4000/api/react/whatsapp/GROUP_JID" \
+  -H "Authorization: Bearer YOUR_API_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{ "messageId": "3EB0ABC123...", "emoji": "✅" }'
+```
+
+To remove a reaction, send an empty emoji: `{ "emoji": "" }`.
+
+## Group Participant Events
+
+When participants join or leave a WhatsApp group, ChannelKit dispatches the event to all services connected to that channel:
+
+```json
+{
+  "groupId": "120363...@g.us",
+  "participants": [
+    { "id": "123@lid", "phoneNumber": "1234567890@s.whatsapp.net" }
+  ],
+  "action": "add",
+  "channel": "whatsapp",
+  "channelName": "WA-DEV",
+  "timestamp": 1708420200
+}
+```
+
+Supported actions: `add`, `remove`, `join`, `promote`, `demote`.
+
+Participants are normalized to objects with `id` and `phoneNumber` fields, regardless of the format Baileys provides.
+
 ## Async Messaging API
 
 Every webhook payload includes a `replyUrl` — a callback endpoint your service can use to send messages at any time.
@@ -781,6 +903,9 @@ ChannelKit is designed to run on a dedicated server. Follow these guidelines to 
 | Dashboard & admin APIs        | `api_secret` Bearer token                 |
 | WebSocket (real-time updates) | Token validated on connection             |
 | `/api/send` endpoint          | `api_secret` Bearer token                 |
+| `/api/react` endpoint         | `api_secret` Bearer token                 |
+| `/api/groups` endpoint        | `api_secret` Bearer token                 |
+| `/api/auth` endpoint          | `api_secret` Bearer token                 |
 | MCP server                    | `mcp.secret` Bearer token (external only) |
 | Inbound webhooks (Twilio)     | Request signature verification            |
 | Inbound webhooks (Resend)     | Svix signature verification               |
