@@ -64,6 +64,10 @@ export function mcpAuthCheck(ctx: ServerContext) {
 export function apiSecretCheck(ctx: ServerContext) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!ctx.apiSecret) { next(); return; }
+    const p = req.path;
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
+      next(); return;
+    }
     const auth = req.headers.authorization;
     if (!auth || !safeEqual(auth, `Bearer ${ctx.apiSecret}`)) {
       res.status(401).json({ error: 'Invalid or missing Authorization header' });
@@ -83,7 +87,7 @@ export function adminAuthCheck(ctx: ServerContext) {
     if (!ctx.apiSecret) { next(); return; }
     const p = req.path;
     // Allow inbound webhooks, health check, static dashboard assets, QR page, and auth check
-    if (p.startsWith('/inbound/') || p === '/api/health' || p === '/api/auth/check'
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health' || p === '/api/auth/check'
         || p === '/qr' || p === '/dashboard' || p.startsWith('/dashboard/')) {
       next(); return;
     }

@@ -4,7 +4,7 @@ import { ServerContext } from '../types';
 import { apiSecretCheck } from '../middleware/auth';
 
 export function registerSendRoutes(app: Express, ctx: ServerContext): void {
-  app.post('/api/send/:channel/:jid', apiSecretCheck(ctx), async (req: any, res: any) => {
+  app.post('/api/send/:channel/:jid', async (req: any, res: any) => {
     const { channel: channelName, jid } = req.params;
     const { text, media } = req.body;
 
