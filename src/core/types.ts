@@ -35,6 +35,15 @@ export interface UnifiedMessage {
   };
 }
 
+export interface GroupUpdateEvent {
+  groupId: string;
+  participants: string[];
+  action: 'add' | 'remove' | 'promote' | 'demote';
+  channel: string;
+  channelName: string;
+  timestamp: number;
+}
+
 export interface WebhookResponse {
   text?: string;
   voice?: boolean;          // if true + TTS configured → convert text to voice message

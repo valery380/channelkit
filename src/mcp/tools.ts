@@ -481,6 +481,117 @@ export function registerTools(mcp: McpServer, ctx: McpContext): void {
     }
   );
 
+  // ── Auth Module ──────────────────────────────────────────────
+
+  mcp.tool(
+    'get_auth_config',
+    'Get the current WhatsApp auth module configuration. Returns enabled status, channel, callback URL, session settings, and custom messages.',
+    {},
+    async () => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      const config = loadConfig(ctx.configPath, { validate: false });
+      const auth = config.auth || null;
+      if (!auth) {
+        return { content: [{ type: 'text', text: 'Auth module is not configured. Use set_auth_config to enable it.' }] };
+      }
+      // Mask callback token
+      const display = { ...auth };
+      if (display.callback_auth?.token) {
+        display.callback_auth = { ...display.callback_auth, token: '••••' + display.callback_auth.token.slice(-4) };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify(display, null, 2) }] };
+    }
+  );
+
+  mcp.tool(
+    'set_auth_config',
+    'Configure the WhatsApp auth module. Enables user verification via WhatsApp (phone+code and QR scan flows). When enabled, ChannelKit intercepts auth messages before normal routing and calls your callback URL on successful verification.',
+    {
+      enabled: z.boolean().describe('Enable or disable the auth module'),
+      channel: z.string().optional().describe('WhatsApp channel name to use for auth messages'),
+      channel_number: z.string().optional().describe('WhatsApp number override for wa.me QR links (e.g. +972501234567)'),
+      callback_url: z.string().optional().describe('URL to POST when verification completes (receives phone, senderName, method)'),
+      callback_token: z.string().optional().describe('Bearer token for authenticating callback requests'),
+      session_ttl: z.number().optional().describe('Session timeout in seconds (default 300)'),
+      code_length: z.number().optional().describe('Digits in phone verification code (default 6)'),
+      qr_code_length: z.number().optional().describe('Characters in QR code (default 8)'),
+      verify_message: z.string().optional().describe('Message sent to user asking them to reply with the code (phone flow)'),
+      qr_link_prefix: z.string().optional().describe('Human-readable line prepended to LOGIN code in QR/link message (e.g. "Connect me to YourApp:")'),
+      verify_success: z.string().optional().describe('Reply sent after successful verification (e.g. "✅ Connected! Go back to the page.")'),
+      verify_error: z.string().optional().describe('Reply sent on wrong code when auth attempt is recognized (e.g. "Invalid code. Please try again.")'),
+      auto_restart: z.boolean().optional().default(false).describe('Automatically restart to apply changes'),
+    },
+    async ({ enabled, channel, channel_number, callback_url, callback_token, session_ttl, code_length, qr_code_length, verify_message, qr_link_prefix, verify_success, verify_error, auto_restart }) => {
+      if (!ctx.configPath) {
+        return { content: [{ type: 'text', text: 'Config path not set' }], isError: true };
+      }
+      try {
+        const config = loadConfig(ctx.configPath, { validate: false });
+
+        if (!enabled) {
+          delete config.auth;
+          saveConfig(ctx.configPath, config);
+          if (auto_restart) {
+            setTimeout(() => restartProcess(ctx.channels), 500);
+            return { content: [{ type: 'text', text: 'Auth module disabled. ChannelKit is restarting...' }] };
+          }
+          return { content: [{ type: 'text', text: 'Auth module disabled. Restart to apply.' }] };
+        }
+
+        if (!config.auth) {
+          config.auth = { enabled: true, channel: '', callback_url: '' };
+        }
+        config.auth.enabled = true;
+        if (channel) config.auth.channel = channel;
+        if (channel_number !== undefined) {
+          if (channel_number) config.auth.channel_number = channel_number;
+          else delete config.auth.channel_number;
+        }
+        if (callback_url) config.auth.callback_url = callback_url;
+        if (callback_token) {
+          config.auth.callback_auth = { type: 'bearer', token: callback_token };
+        }
+        if (session_ttl) config.auth.session_ttl = session_ttl;
+        if (code_length) config.auth.code_length = code_length;
+        if (qr_code_length) config.auth.qr_code_length = qr_code_length;
+        // Update messages (merge with existing)
+        const msgs: Record<string, string> = { ...(config.auth.messages || {}) };
+        if (verify_message !== undefined) {
+          if (verify_message) msgs.verify_request = verify_message;
+          else delete msgs.verify_request;
+        }
+        if (qr_link_prefix !== undefined) {
+          if (qr_link_prefix) msgs.qr_link_prefix = qr_link_prefix;
+          else delete msgs.qr_link_prefix;
+        }
+        if (verify_success !== undefined) {
+          if (verify_success) msgs.verify_success = verify_success;
+          else delete msgs.verify_success;
+        }
+        if (verify_error !== undefined) {
+          if (verify_error) msgs.verify_error = verify_error;
+          else delete msgs.verify_error;
+        }
+        if (Object.keys(msgs).length > 0) {
+          config.auth.messages = msgs;
+        } else {
+          delete config.auth.messages;
+        }
+
+        saveConfig(ctx.configPath, config);
+        if (auto_restart) {
+          setTimeout(() => restartProcess(ctx.channels), 500);
+          return { content: [{ type: 'text', text: 'Auth module configured. ChannelKit is restarting...' }] };
+        }
+        return { content: [{ type: 'text', text: 'Auth module configured. Restart to apply changes.' }] };
+      } catch (err: any) {
+        return { content: [{ type: 'text', text: `Failed: ${err.message}` }], isError: true };
+      }
+    }
+  );
+
   // ── Configuration ───────────────────────────────────────────
 
   mcp.tool(

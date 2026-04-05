@@ -14,6 +14,7 @@ import Services from './components/Services.jsx';
 import Channels from './components/Channels.jsx';
 import ServerLogs from './components/ServerLogs.jsx';
 import Settings from './components/Settings.jsx';
+import Auth from './components/Auth.jsx';
 import SendModal from './components/SendModal.jsx';
 import Footer from './components/Footer.jsx';
 import WelcomeDialog from './components/WelcomeDialog.jsx';
@@ -22,6 +23,7 @@ const TABS = [
   { hash: '#logs', label: 'Messages', icon: 'chat' },
   { hash: '#services', label: 'Services', icon: 'dns' },
   { hash: '#channels', label: 'Channels', icon: 'alt_route' },
+  { hash: '#auth', label: 'Auth', icon: 'verified_user' },
   { hash: '#server-logs', label: 'Server Log', icon: 'terminal' },
   { hash: '#settings', label: 'Settings', icon: 'settings' },
 ];
@@ -135,7 +137,7 @@ export default function App() {
       .then(r => r.json())
       .then(data => {
         if (data.channels) {
-          dispatch({ type: 'SET_CONFIG', payload: { channels: data.channels, services: data.services, baileysAvailable: data.baileysAvailable } });
+          dispatch({ type: 'SET_CONFIG', payload: { channels: data.channels, services: data.services, auth: data.auth, baileysAvailable: data.baileysAvailable } });
         }
       })
       .catch(() => {});
@@ -169,7 +171,7 @@ export default function App() {
     apiFetch(API + '/api/config')
       .then(r => r.json())
       .then(data => {
-        dispatch({ type: 'SET_CONFIG', payload: { channels: data.channels, services: data.services, baileysAvailable: data.baileysAvailable } });
+        dispatch({ type: 'SET_CONFIG', payload: { channels: data.channels, services: data.services, auth: data.auth, baileysAvailable: data.baileysAvailable } });
       })
       .catch(() => {});
   }, [state.configChanged, dispatch]);
@@ -205,6 +207,9 @@ export default function App() {
       break;
     case '#server-logs':
       page = <ServerLogs />;
+      break;
+    case '#auth':
+      page = <Auth loadConfig={loadConfig} />;
       break;
     case '#settings':
       page = <Settings />;

@@ -12,9 +12,10 @@ export class Onboarding {
   constructor(
     private config: OnboardingConfig,
     private whatsappChannel?: WhatsAppChannel,
-    private telegramChannel?: TelegramChannel
+    private telegramChannel?: TelegramChannel,
+    groupStore?: GroupStore
   ) {
-    this.groupStore = new GroupStore();
+    this.groupStore = groupStore || new GroupStore();
   }
 
   getGroupStore(): GroupStore {

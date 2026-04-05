@@ -50,7 +50,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         (ch as any).connected = runtime ? runtime.connected : false;
         (ch as any).statusMessage = runtime ? (runtime as any).statusMessage || null : null;
       }
-      res.json({ channels, services: config.services || {}, baileysAvailable: isBaileysAvailable() });
+      res.json({ channels, services: config.services || {}, auth: config.auth || null, baileysAvailable: isBaileysAvailable() });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to load config' });
     }
@@ -702,6 +702,58 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
 
       res.json({ ok: true, auth_url: authUrl });
       ctx.broadcast({ type: 'gmail-auth-url', channel: name, authUrl });
+    } catch (err: any) {
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PUT /api/config/auth — update auth module configuration
+  app.put('/api/config/auth', (req, res) => {
+    if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+    const { enabled, channel, channel_number, callback_url, callback_auth, session_ttl, code_length, qr_code_length, messages } = req.body;
+    try {
+      const config = loadConfig(ctx.configPath, { validate: false });
+
+      if (enabled === false) {
+        delete config.auth;
+      } else {
+        if (!config.auth) {
+          config.auth = { enabled: true, channel: '', callback_url: '' };
+        }
+        if (enabled !== undefined) config.auth.enabled = !!enabled;
+        if (channel !== undefined) config.auth.channel = channel;
+        if (channel_number !== undefined) {
+          if (channel_number) config.auth.channel_number = channel_number;
+          else delete config.auth.channel_number;
+        }
+        if (callback_url !== undefined) config.auth.callback_url = callback_url;
+        if (callback_auth !== undefined) {
+          if (callback_auth?.type && callback_auth?.token) {
+            config.auth.callback_auth = callback_auth;
+          } else {
+            delete config.auth.callback_auth;
+          }
+        }
+        if (session_ttl !== undefined) config.auth.session_ttl = Number(session_ttl) || 300;
+        if (code_length !== undefined) config.auth.code_length = Number(code_length) || 6;
+        if (qr_code_length !== undefined) config.auth.qr_code_length = Number(qr_code_length) || 8;
+        if (messages !== undefined) {
+          if (messages && typeof messages === 'object' && Object.values(messages).some(v => v)) {
+            config.auth.messages = {};
+            if (messages.verify_request) config.auth.messages.verify_request = messages.verify_request;
+            if (messages.qr_link_prefix) config.auth.messages.qr_link_prefix = messages.qr_link_prefix;
+            if (messages.verify_success) config.auth.messages.verify_success = messages.verify_success;
+            if (messages.verify_error) config.auth.messages.verify_error = messages.verify_error;
+          } else {
+            delete config.auth.messages;
+          }
+        }
+      }
+
+      saveConfig(ctx.configPath, config);
+      ctx.broadcast({ type: 'configChanged' });
+      res.json({ ok: true, needsRestart: true });
     } catch (err: any) {
       console.error('[config]', err);
       res.status(500).json({ error: 'Internal server error' });
