@@ -6,8 +6,11 @@ import { UnifiedMessage } from '../core/types';
 
 export class Onboarding {
   private groupStore: GroupStore;
-  // Track telegram user→service mappings (chatId → serviceName)
-  private telegramMappings: Map<string, string> = new Map();
+
+  /** Namespaced GroupStore key for a Telegram chat→service mapping. */
+  private tgKey(chatId: string): string {
+    return `tg:${chatId}`;
+  }
 
   constructor(
     private config: OnboardingConfig,
@@ -42,10 +45,12 @@ export class Onboarding {
    * Check if a Telegram chat has a service mapping. Returns the webhook URL if so.
    */
   getTelegramServiceWebhook(chatId: string): string | undefined {
-    const serviceName = this.telegramMappings.get(chatId);
-    if (!serviceName) return undefined;
-    const code = (this.config.codes || []).find(c => c.name === serviceName);
-    return code?.webhook;
+    const mapping = this.groupStore.get(this.tgKey(chatId));
+    if (!mapping) return undefined;
+    // Prefer the current webhook from config (handles config edits),
+    // falling back to the one stored at onboarding time.
+    const code = (this.config.codes || []).find(c => c.name === mapping.serviceName);
+    return code?.webhook || mapping.webhook;
   }
 
   // --- WhatsApp ---
@@ -137,8 +142,8 @@ export class Onboarding {
     const matched = codes.find(c => c.code.toUpperCase() === text);
     if (matched) {
       // Check if already connected
-      const existingService = this.telegramMappings.get(message.from);
-      if (existingService === matched.name) {
+      const existing = this.groupStore.get(this.tgKey(message.from));
+      if (existing?.serviceName === matched.name) {
         await this.telegramChannel.sendToChat(
           message.from,
           `You're already connected to ${matched.name}! Just send messages here.`
@@ -146,9 +151,15 @@ export class Onboarding {
         return true;
       }
 
-      // Map this chat to the service
-      this.telegramMappings.set(message.from, matched.name);
-      
+      // Map this chat to the service (persisted, survives restarts)
+      this.groupStore.add(this.tgKey(message.from), {
+        groupId: this.tgKey(message.from),
+        serviceName: matched.name,
+        webhook: matched.webhook,
+        userId: message.from,
+        createdAt: Date.now(),
+      });
+
       await this.telegramChannel.sendToChat(
         message.from,
         `Welcome to ${matched.name}! 🎉\nAll messages here will be forwarded to the service.`
@@ -159,7 +170,7 @@ export class Onboarding {
     }
 
     // If already mapped to a service, don't show menu — let it route
-    if (this.telegramMappings.has(message.from)) {
+    if (this.groupStore.get(this.tgKey(message.from))) {
       return false;
     }
 
