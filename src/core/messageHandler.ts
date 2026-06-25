@@ -159,40 +159,14 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
         return;
       }
 
-      // Check if Telegram user has a service mapping
+      // Check if Telegram user has a service mapping from onboarding.
+      // Resolve it to the service webhook and fall through to the normal
+      // routing pipeline below, which applies the service's auth (headers),
+      // STT, and formatting — rather than dispatching the webhook directly.
       if (message.channel === 'telegram') {
         const webhook = onboarding.getTelegramServiceWebhook(message.from);
         if (webhook) {
-          const replyTo = message.from;
-          const replyUrl = apiServer.getReplyUrl(message.channel, replyTo);
-          const { dispatchWebhook } = await import('./webhook');
-          const startTime = Date.now();
-          const { response, error: webhookError } = await dispatchWebhook(webhook, message, replyUrl);
-          const latency = Date.now() - startTime;
-          let responseText = response?.text;
-          if (webhookError) {
-            const detail = webhookError.status
-              ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
-              : `[Webhook error: ${webhookError.message}]`;
-            responseText = responseText ? `${responseText}\n${detail}` : detail;
-          }
-          logger.log({
-            id: message.id,
-            timestamp: Date.now(),
-            channel: message.channel,
-            from: message.from,
-            senderName: message.senderName,
-            text: message.text,
-            type: message.type,
-            route: webhook,
-            responseText,
-            status: response ? 'success' : 'error',
-            latency,
-          });
-          if (response) {
-            await channel.send(replyTo, response);
-          }
-          return;
+          (message as any)._resolvedWebhook = webhook;
         }
       }
     }

@@ -222,6 +222,7 @@ export interface AppConfig {
   tunnel?: TunnelConfig;
   settings?: SettingsConfig;
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
+  provision_secret?: string;   // Scoped Bearer token for POST /api/provision/services (create-only)
   mcp?: McpConfig;             // MCP server configuration
   auto_update?: AutoUpdateConfig; // Auto-update from GitHub
   data_store?: DataStoreConfig;  // Remote data storage configuration
