@@ -7,7 +7,7 @@ function isMcpPath(p: string): boolean {
 }
 
 /** Timing-safe string comparison to prevent timing attacks. */
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
@@ -36,7 +36,8 @@ export function externalAccessGuard(ctx: ServerContext) {
       (req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1'));
     if (!isExternal) { next(); return; }
     const p = req.path;
-    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health'
+        || p.startsWith('/api/provision/')) {
       next(); return;
     }
     if (ctx.exposeMcp && isMcpPath(p)) {
@@ -88,9 +89,11 @@ export function adminAuthCheck(ctx: ServerContext) {
     const p = req.path;
     // Allow inbound webhooks, health check, static dashboard assets, QR page, and auth check
     if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health' || p === '/api/auth/check'
-        || p === '/qr' || p === '/dashboard' || p.startsWith('/dashboard/')) {
+        || p === '/qr' || p === '/dashboard' || p.startsWith('/dashboard/')
+        || p.startsWith('/api/provision/')) {
       next(); return;
     }
+    // /api/provision/* enforces its own provision_secret inside the route handler.
     // MCP paths have their own auth
     if (isMcpPath(p)) { next(); return; }
     const auth = req.headers.authorization;

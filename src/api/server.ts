@@ -11,6 +11,7 @@ import { mcpCors, externalAccessGuard, mcpAuthCheck, adminAuthCheck } from './mi
 import { registerSendRoutes } from './routes/send';
 import { registerInboundRoutes } from './routes/inbound';
 import { registerConfigRoutes } from './routes/config';
+import { registerProvisionRoutes } from './routes/provision';
 import { registerTunnelRoutes } from './routes/tunnel';
 import { registerSettingsRoutes } from './routes/settings';
 import { registerTwilioRoutes } from './routes/twilio';
@@ -61,6 +62,7 @@ export class ApiServer {
       exposeDashboard: false,
       exposeMcp: false,
       apiSecret: null,
+      provisionSecret: null,
       mcpSecret: null,
       startTime: Date.now(),
       serverLogBuffer: [],
@@ -167,6 +169,7 @@ export class ApiServer {
     registerSendRoutes(this.app, this.ctx);
     registerInboundRoutes(this.app, this.ctx);
     registerConfigRoutes(this.app, this.ctx);
+    registerProvisionRoutes(this.app, this.ctx);
     registerTunnelRoutes(this.app, this.ctx);
     registerSettingsRoutes(this.app, this.ctx);
     registerTwilioRoutes(this.app, this.ctx);
@@ -184,6 +187,7 @@ export class ApiServer {
   setExposeDashboard(value: boolean): void { this.ctx.setExposeDashboard(value); }
   getExposeDashboard(): boolean { return this.ctx.exposeDashboard; }
   setApiSecret(secret: string | number | undefined): void { this.ctx.apiSecret = secret != null ? String(secret) : null; }
+  setProvisionSecret(secret: string | number | undefined): void { this.ctx.provisionSecret = secret != null ? String(secret) : null; }
   setMcpSecret(secret: string | number | undefined): void { this.ctx.mcpSecret = secret != null ? String(secret) : null; }
 
   setLogger(logger: Logger): void {

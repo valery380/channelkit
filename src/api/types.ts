@@ -11,6 +11,7 @@ export interface ServerContext {
   exposeDashboard: boolean;
   exposeMcp: boolean;
   apiSecret: string | null;
+  provisionSecret: string | null;
   mcpSecret: string | null;
   startTime: number;
   serverLogBuffer: Array<{ level: string; text: string; ts: number }>;

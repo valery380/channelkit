@@ -278,6 +278,9 @@ export class ChannelKit {
     } else {
       console.warn('[security] No api_secret configured — dashboard and API endpoints are unauthenticated.');
     }
+    if (this.config.provision_secret) {
+      this.apiServer.setProvisionSecret(this.config.provision_secret);
+    }
     if (this.config.mcp?.secret) {
       this.apiServer.setMcpSecret(this.config.mcp.secret);
     }

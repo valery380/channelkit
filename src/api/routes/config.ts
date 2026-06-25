@@ -3,6 +3,7 @@ import { ServerContext } from '../types';
 import { loadConfig, saveConfig } from '../../config/parser';
 import { WhatsAppChannel, isBaileysAvailable } from '../../channels/whatsapp';
 import { DEFAULT_AUTH_DIR } from '../../paths';
+import { createService } from '../services/createService';
 
 /** Per-channel QR state for polling. */
 const pairState = new Map<string, { qr: string | null; status: 'waiting' | 'paired' | 'error'; error?: string }>();
@@ -58,54 +59,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
 
   // POST /api/config/services — add a new service
   app.post('/api/config/services', (req, res) => {
-    if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
-    const { name, channel, webhook, code, command, allow_list, method, auth, description } = req.body;
-    if (!name || !channel || !webhook) {
-      res.status(400).json({ error: 'name, channel, and webhook are required' });
-      return;
-    }
-    if (!isValidName(name)) {
-      res.status(400).json({ error: 'Name must contain only letters, numbers, hyphens, and underscores' });
-      return;
-    }
-    const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
-    if (method && !validMethods.includes(method.toUpperCase())) {
-      res.status(400).json({ error: `Invalid method. Must be one of: ${validMethods.join(', ')}` });
-      return;
-    }
-    if (auth && !['bearer', 'header'].includes(auth.type)) {
-      res.status(400).json({ error: 'Invalid auth type. Must be "bearer" or "header"' });
-      return;
-    }
-    try {
-      const config = loadConfig(ctx.configPath, { validate: false });
-      if (!config.services) config.services = {};
-      if (config.services[name]) {
-        res.status(409).json({ error: `Service "${name}" already exists` });
-        return;
-      }
-      if (!config.channels[channel]) {
-        res.status(400).json({ error: `Channel "${channel}" does not exist` });
-        return;
-      }
-      const methodUpper = method ? method.toUpperCase() : undefined;
-      config.services[name] = {
-        channel, webhook,
-        ...(methodUpper && methodUpper !== 'POST' && { method: methodUpper }),
-        ...(auth?.type && { auth }),
-        ...(code && { code }),
-        ...(command && { command }),
-        ...(Array.isArray(allow_list) && allow_list.length > 0 && { allow_list }),
-        ...(description && { description }),
-      };
-      saveConfig(ctx.configPath, config);
-      ctx.reloadRouter?.();
-      ctx.broadcast({ type: 'configChanged' });
-      res.json({ ok: true });
-    } catch (err: any) {
-      console.error('[config]', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
+    const { status, body } = createService(ctx, req.body || {});
+    res.status(status).json(body);
   });
 
   // PUT /api/config/services/:name — update service fields
