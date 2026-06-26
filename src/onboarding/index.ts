@@ -37,6 +37,11 @@ export class Onboarding {
     return this.groupStore;
   }
 
+  /** Replace onboarding codes (e.g. after services change via the API) — no restart needed. */
+  reloadCodes(codes: OnboardingCodeConfig[]): void {
+    this.config = { ...this.config, codes };
+  }
+
   /**
    * Handle a direct message for onboarding. Returns true if handled.
    * @param ctx - per-message context (unmatched policy, channel config, settings)

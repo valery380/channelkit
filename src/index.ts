@@ -20,6 +20,34 @@ import { setAllowLocalWebhooks } from './core/webhook';
 import { AuthModule } from './auth';
 import { GroupStore } from './core/groupStore';
 
+/**
+ * Build onboarding codes from a config: each service's `code` (or `command`
+ * fallback) plus any legacy onboarding.codes. Used at startup and on hot-reload.
+ */
+function buildOnboardingCodes(config: AppConfig): any[] {
+  const codes: any[] = [];
+  if (config.services) {
+    for (const [svcName, svc] of Object.entries(config.services)) {
+      // In groups mode the connect keyword is the service's `code`, falling
+      // back to its slash `command` (without the leading slash) if no code is set.
+      const connectCode = svc.code || svc.command?.replace(/^\//, '');
+      if (connectCode) {
+        codes.push({
+          code: connectCode.toUpperCase(),
+          name: svcName,
+          webhook: svc.webhook,
+          channels: [svc.channel],
+          description: svc.description,
+        });
+      }
+    }
+  }
+  if (config.onboarding?.codes) {
+    codes.push(...config.onboarding.codes);
+  }
+  return codes;
+}
+
 export class ChannelKit {
   private channels: Channel[] = [];
   private channelMap: Map<string, Channel> = new Map();
@@ -173,29 +201,7 @@ export class ChannelKit {
     }
 
     // Set up onboarding for channels in groups mode
-    // Build onboarding codes from services that have codes
-    const onboardingCodes: any[] = [];
-    if (this.config.services) {
-      for (const [svcName, svc] of Object.entries(this.config.services)) {
-        // In groups mode the connect keyword is the service's `code`, falling
-        // back to its slash `command` (without the leading slash) if no code is set.
-        const connectCode = svc.code || svc.command?.replace(/^\//, '');
-        if (connectCode) {
-          onboardingCodes.push({
-            code: connectCode.toUpperCase(),
-            name: svcName,
-            webhook: svc.webhook,
-            channels: [svc.channel],
-            description: svc.description,
-          });
-        }
-      }
-    }
-
-    // Also support legacy onboarding config
-    if (this.config.onboarding?.codes) {
-      onboardingCodes.push(...this.config.onboarding.codes);
-    }
+    const onboardingCodes = buildOnboardingCodes(this.config);
 
     if (onboardingCodes.length > 0) {
       const onboardingConfig = { codes: onboardingCodes };
@@ -325,6 +331,12 @@ export class ChannelKit {
           this.router.reloadServices(freshConfig.services, freshConfig.channels);
           if (freshConfig.settings) this.router.setSettings(freshConfig.settings);
           console.log('[router] Services reloaded from config');
+        }
+        // Also refresh onboarding codes so a newly-created service is connectable
+        // immediately — no restart needed.
+        if (this.onboarding) {
+          this.onboarding.reloadCodes(buildOnboardingCodes(freshConfig));
+          console.log('[onboarding] Codes reloaded from config');
         }
       } catch (err: any) {
         console.error(`[router] Failed to reload services: ${err.message}`);
