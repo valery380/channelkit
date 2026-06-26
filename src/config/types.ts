@@ -29,6 +29,13 @@ export interface ChannelConfig {
     webhook?: string;
     auth?: ServiceAuthConfig;
   };
+  /** Behavior when onboarding connects a user to a service (groups mode).
+   *  welcome: send the "Welcome to X" reply (default true).
+   *  forward: also forward the connecting message to the service (default true). */
+  connect?: {
+    welcome?: boolean;
+    forward?: boolean;
+  };
   [key: string]: unknown;
 }
 
