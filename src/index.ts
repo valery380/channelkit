@@ -152,19 +152,22 @@ export class ChannelKit {
       console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
     }
 
-    // Set up Telegram command menu: /start + /quit for groups-mode channels,
-    // and slash commands for multi-service channels.
+    // Set up the Telegram command menu / routing mode per channel.
+    // Groups mode is owned by the onboarding flow (code/keyword/AI), so the
+    // slash-command "switch service" mechanism must NOT be activated there —
+    // it would intercept /start and route messages before onboarding runs.
     for (const [name, channel] of this.channelMap.entries()) {
       if (channel instanceof TelegramChannel) {
         if (this.router.getChannelMode(name) === 'groups') {
           (channel as TelegramChannel).enableOnboardingCommands();
-        }
-        const services = this.router.getServicesForChannel(name);
-        if (services.length > 1) {
-          const svcEntries = Object.entries(this.config.services || {})
-            .filter(([_, svc]) => svc.channel === name)
-            .map(([svcName, svc]) => ({ name: svcName, config: svc }));
-          (channel as TelegramChannel).setSlashCommands(svcEntries);
+        } else {
+          const services = this.router.getServicesForChannel(name);
+          if (services.length > 1) {
+            const svcEntries = Object.entries(this.config.services || {})
+              .filter(([_, svc]) => svc.channel === name)
+              .map(([svcName, svc]) => ({ name: svcName, config: svc }));
+            (channel as TelegramChannel).setSlashCommands(svcEntries);
+          }
         }
       }
     }
@@ -174,9 +177,12 @@ export class ChannelKit {
     const onboardingCodes: any[] = [];
     if (this.config.services) {
       for (const [svcName, svc] of Object.entries(this.config.services)) {
-        if (svc.code) {
+        // In groups mode the connect keyword is the service's `code`, falling
+        // back to its slash `command` (without the leading slash) if no code is set.
+        const connectCode = svc.code || svc.command?.replace(/^\//, '');
+        if (connectCode) {
           onboardingCodes.push({
-            code: svc.code.toUpperCase(),
+            code: connectCode.toUpperCase(),
             name: svcName,
             webhook: svc.webhook,
             channels: [svc.channel],
