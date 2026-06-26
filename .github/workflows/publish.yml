@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write   # required for npm Trusted Publishing (OIDC)
 
 jobs:
   publish:
@@ -18,6 +19,9 @@ jobs:
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing requires npm >= 11.5.1 (newer than what Node 20 ships).
+      - run: npm install -g npm@latest
 
       - run: npm ci
       - run: npm run build
@@ -35,8 +39,8 @@ jobs:
             echo "Publishing $CURRENT (npm has $PUBLISHED)"
           fi
 
+      # Auth comes from GitHub OIDC via the Trusted Publisher configured on npm —
+      # no NPM_TOKEN secret. Provenance is attached automatically.
       - name: Publish
         if: steps.check.outputs.skip != 'true'
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
