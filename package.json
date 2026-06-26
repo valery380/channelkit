@@ -1,6 +1,6 @@
 {
   "name": "channelkit",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A self-hosted messaging gateway that connects chat channels to any application via webhooks",
   "repository": {
     "type": "git",
