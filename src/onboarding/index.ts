@@ -1,8 +1,20 @@
-import { OnboardingConfig, OnboardingCodeConfig } from '../config/types';
+import { OnboardingConfig, OnboardingCodeConfig, ChannelConfig, SettingsConfig } from '../config/types';
 import { WhatsAppChannel } from '../channels/whatsapp';
 import { TelegramChannel } from '../channels/telegram';
 import { GroupStore } from '../core/groupStore';
 import { UnifiedMessage } from '../core/types';
+
+/** Per-message context passed from the message handler into onboarding. */
+export interface DirectMessageContext {
+  unmatchedPolicy?: 'list' | 'ignore';
+  channelConfig?: ChannelConfig;
+  settings?: SettingsConfig;
+}
+
+/** Escape a string for safe use inside a RegExp. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export class Onboarding {
   private groupStore: GroupStore;
@@ -27,16 +39,16 @@ export class Onboarding {
 
   /**
    * Handle a direct message for onboarding. Returns true if handled.
-   * @param unmatchedPolicy - what to do when no code matches ('list' = send menu, 'ignore' or undefined = silent)
+   * @param ctx - per-message context (unmatched policy, channel config, settings)
    */
-  async handleDirectMessage(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
+  async handleDirectMessage(message: UnifiedMessage, ctx: DirectMessageContext = {}): Promise<boolean> {
     if (message.groupId) return false;
 
     if (message.channel === 'whatsapp') {
-      return this.handleWhatsApp(message, unmatchedPolicy);
+      return this.handleWhatsApp(message, ctx.unmatchedPolicy);
     }
     if (message.channel === 'telegram') {
-      return this.handleTelegram(message, unmatchedPolicy);
+      return this.handleTelegram(message, ctx);
     }
     return false;
   }
@@ -128,13 +140,15 @@ export class Onboarding {
 
   // --- Telegram ---
 
-  private async handleTelegram(message: UnifiedMessage, unmatchedPolicy?: 'list' | 'ignore'): Promise<boolean> {
+  private async handleTelegram(message: UnifiedMessage, ctx: DirectMessageContext = {}): Promise<boolean> {
     if (!this.telegramChannel) return false;
 
     const codes = this.getCodesForChannel(message.channelName || message.channel);
     if (codes.length === 0) return false;
-    // Support both plain code and /start CODE
-    let text = (message.text || '').trim().toUpperCase();
+
+    const raw = (message.text || '').trim();
+    // Support both plain code and "/start CODE" deep links
+    let text = raw.toUpperCase();
     if (text.startsWith('/START ')) {
       text = text.slice(7).trim();
     }
@@ -159,13 +173,30 @@ export class Onboarding {
       return true;
     }
 
-    // /start (or bare "start") — always show the welcome menu, regardless of unmatched policy
+    // /start (or bare "start") — show the configured welcome (webhook → static → default menu)
     if (text === 'START' || text === '/START') {
-      await this.telegramChannel.sendToChat(message.from, this.telegramWelcome(codes, connected?.serviceName));
+      const reply = await this.buildStartReply(message, connected?.serviceName, ctx);
+      await this.telegramChannel.sendToChat(message.from, reply);
       return true;
     }
 
-    const matched = codes.find(c => c.code.toUpperCase() === text);
+    // Resolve which service to connect to: exact code → regex → AI.
+    // Exact match works even while connected (lets the user switch services).
+    let matched = codes.find(c => c.code.toUpperCase() === text);
+
+    // Regex and AI only run for not-yet-connected users, so they never hijack a
+    // connected user's normal messages.
+    if (!matched && !connected) {
+      // Regex: a code appears as a whole word somewhere in the sentence.
+      const regexHits = codes.filter(c => new RegExp(`\\b${escapeRegex(c.code)}\\b`, 'i').test(raw));
+      if (regexHits.length === 1) {
+        matched = regexHits[0];
+      } else if (ctx.channelConfig?.ai_routing) {
+        // 0 or multiple regex hits — let AI infer the intended service.
+        matched = await this.aiMatchTelegram(raw, codes, ctx);
+      }
+    }
+
     if (matched) {
       // Check if already connected
       if (connected?.serviceName === matched.name) {
@@ -200,20 +231,71 @@ export class Onboarding {
     }
 
     // No match, no mapping — send menu only if the channel's unmatched policy is 'list'
-    if (unmatchedPolicy === 'list' && codes.length > 0) {
-      await this.telegramChannel.sendToChat(message.from, this.telegramWelcome(codes));
+    if (ctx.unmatchedPolicy === 'list' && codes.length > 0) {
+      await this.telegramChannel.sendToChat(message.from, this.telegramServiceList(codes));
     }
     return true;
   }
 
-  /** Build the Telegram welcome / service-menu text. */
-  private telegramWelcome(codes: OnboardingCodeConfig[], connectedService?: string): string {
-    const codeList = codes.map(c => `• ${c.code} → ${c.name}`).join('\n');
-    if (connectedService) {
-      return `You're connected to ${connectedService}.\n\n` +
-        `Send "quit" to disconnect, or send another code to switch:\n${codeList}`;
+  /** Build the /start reply: configured webhook (dynamic) → static message → default welcome. */
+  private async buildStartReply(
+    message: UnifiedMessage,
+    connectedService: string | undefined,
+    ctx: DirectMessageContext,
+  ): Promise<string> {
+    const startCfg = ctx.channelConfig?.start;
+    if (startCfg?.webhook) {
+      try {
+        const { dispatchWebhook } = await import('../core/webhook');
+        const { response } = await dispatchWebhook(startCfg.webhook, message, undefined, { auth: startCfg.auth });
+        if (response?.text) return response.text;
+      } catch (err: any) {
+        console.error(`[onboarding] /start webhook failed: ${err?.message || err}`);
+      }
     }
-    return `👋 Welcome!\n\nSend a code to connect to a service:\n${codeList}`;
+    if (startCfg?.message) return startCfg.message;
+    return this.telegramWelcome(connectedService);
+  }
+
+  /** Use the AI router to infer which service a free-text message wants to connect to. */
+  private async aiMatchTelegram(
+    text: string,
+    codes: OnboardingCodeConfig[],
+    ctx: DirectMessageContext,
+  ): Promise<OnboardingCodeConfig | undefined> {
+    if (!ctx.channelConfig) return undefined;
+    try {
+      const { aiRoute } = await import('../core/aiRouter');
+      // Fold the connection keyword into the description so the AI can match on it too.
+      const services = codes.map(c => ({
+        name: c.name,
+        webhook: c.webhook,
+        description: [c.description, `keyword: ${c.code}`].filter(Boolean).join(' — '),
+      }));
+      const result = await aiRoute(text, services, ctx.channelConfig, ctx.settings || {});
+      if (result.serviceName && result.serviceName.toUpperCase() !== 'NONE') {
+        const hit = codes.find(c => c.name === result.serviceName);
+        if (hit) console.log(`[onboarding] AI matched "${text}" → ${hit.name}`);
+        return hit;
+      }
+    } catch (err: any) {
+      console.error(`[onboarding] AI onboarding match failed: ${err?.message || err}`);
+    }
+    return undefined;
+  }
+
+  /** Default Telegram welcome text. Codes are not listed (they act as access keys). */
+  private telegramWelcome(connectedService?: string): string {
+    if (connectedService) {
+      return `You're connected to ${connectedService}.\n\nSend "quit" to disconnect.`;
+    }
+    return `👋 Welcome!\n\nSend a code to connect to a service.`;
+  }
+
+  /** Explicit service list — only used when a channel's unmatched policy is 'list'. */
+  private telegramServiceList(codes: OnboardingCodeConfig[]): string {
+    const codeList = codes.map(c => `• ${c.code} → ${c.name}`).join('\n');
+    return `Available services:\n${codeList}\n\nSend a code to connect.`;
   }
 
   // --- Helpers ---

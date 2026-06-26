@@ -141,8 +141,12 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // Try onboarding first for DMs (only in groups mode)
     if (onboarding && !message.groupId && mode === 'groups' && !(message as any)._resolvedWebhook) {
-      const channelUnmatched = (config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
-      const handled = await onboarding.handleDirectMessage(message, channelUnmatched);
+      const channelCfg = config.channels[channel.name];
+      const handled = await onboarding.handleDirectMessage(message, {
+        unmatchedPolicy: (channelCfg as any)?.unmatched as 'list' | 'ignore' | undefined,
+        channelConfig: channelCfg,
+        settings: config.settings,
+      });
       if (handled) {
         logger.log({
           id: message.id,
