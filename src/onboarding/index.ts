@@ -139,11 +139,36 @@ export class Onboarding {
       text = text.slice(7).trim();
     }
 
+    const connected = this.groupStore.get(this.tgKey(message.from));
+
+    // QUIT — disconnect from the current service, back to the channel
+    if (text === 'QUIT' || text === '/QUIT') {
+      if (connected) {
+        this.groupStore.remove(this.tgKey(message.from));
+        await this.telegramChannel.sendToChat(
+          message.from,
+          `Disconnected from ${connected.serviceName}. Send a code to connect again, or /start to see options.`
+        );
+        console.log(`[onboarding] Telegram user ${message.senderName || message.from} disconnected from ${connected.serviceName}`);
+      } else {
+        await this.telegramChannel.sendToChat(
+          message.from,
+          `You're not connected to any service.`
+        );
+      }
+      return true;
+    }
+
+    // /start (or bare "start") — always show the welcome menu, regardless of unmatched policy
+    if (text === 'START' || text === '/START') {
+      await this.telegramChannel.sendToChat(message.from, this.telegramWelcome(codes, connected?.serviceName));
+      return true;
+    }
+
     const matched = codes.find(c => c.code.toUpperCase() === text);
     if (matched) {
       // Check if already connected
-      const existing = this.groupStore.get(this.tgKey(message.from));
-      if (existing?.serviceName === matched.name) {
+      if (connected?.serviceName === matched.name) {
         await this.telegramChannel.sendToChat(
           message.from,
           `You're already connected to ${matched.name}! Just send messages here.`
@@ -170,19 +195,25 @@ export class Onboarding {
     }
 
     // If already mapped to a service, don't show menu — let it route
-    if (this.groupStore.get(this.tgKey(message.from))) {
+    if (connected) {
       return false;
     }
 
     // No match, no mapping — send menu only if the channel's unmatched policy is 'list'
     if (unmatchedPolicy === 'list' && codes.length > 0) {
-      const codeList = codes.map(c => `\`${c.code}\` → ${c.name}`).join('\n');
-      await this.telegramChannel.sendToChat(
-        message.from,
-        `Available services:\n${codeList}\n\nSend a code to connect.`
-      );
+      await this.telegramChannel.sendToChat(message.from, this.telegramWelcome(codes));
     }
     return true;
+  }
+
+  /** Build the Telegram welcome / service-menu text. */
+  private telegramWelcome(codes: OnboardingCodeConfig[], connectedService?: string): string {
+    const codeList = codes.map(c => `• ${c.code} → ${c.name}`).join('\n');
+    if (connectedService) {
+      return `You're connected to ${connectedService}.\n\n` +
+        `Send "quit" to disconnect, or send another code to switch:\n${codeList}`;
+    }
+    return `👋 Welcome!\n\nSend a code to connect to a service:\n${codeList}`;
   }
 
   // --- Helpers ---
