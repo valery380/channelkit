@@ -13,12 +13,21 @@ export interface ChannelConfig {
    *  If set and non-empty, only senders matching an entry are allowed.
    *  Numbers are normalized (non-digit chars stripped) before comparison. */
   allow_list?: string[];
-  /** AI routing configuration (used when mode is 'ai'). */
+  /** AI routing configuration (used when mode is 'ai', and for AI-assisted
+   *  onboarding keyword extraction in groups mode). */
   ai_routing?: {
     provider: 'openai' | 'anthropic' | 'google';
     model?: string;
     /** What to do when AI can't match a service — default 'reply' */
     no_match?: 'ignore' | 'reply';
+  };
+  /** Customizes the Telegram /start reply (groups mode).
+   *  If `webhook` is set, ChannelKit POSTs the message context to it and replies
+   *  with the returned text; else `message` is sent; else the default service menu. */
+  start?: {
+    message?: string;
+    webhook?: string;
+    auth?: ServiceAuthConfig;
   };
   [key: string]: unknown;
 }
@@ -145,6 +154,7 @@ export interface OnboardingCodeConfig {
   name: string;
   webhook: string;
   channels?: string[];
+  description?: string;   // used for AI-assisted keyword extraction
 }
 
 export interface OnboardingConfig {

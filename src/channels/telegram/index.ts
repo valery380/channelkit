@@ -14,6 +14,8 @@ export class TelegramChannel extends Channel {
   private slashCommands: SlashCommandService[] = [];
   // userId → active service webhook (for multi-service routing)
   private activeService: Map<string, string> = new Map();
+  // Whether to advertise /start and /quit in the Telegram command menu (groups mode)
+  private showOnboardingCommands = false;
 
   constructor(name: string, config: TelegramChannelConfig) {
     super(name, config);
@@ -37,18 +39,24 @@ export class TelegramChannel extends Channel {
       }));
   }
 
+  /** Advertise /start and /quit in the Telegram command menu (groups mode). */
+  enableOnboardingCommands(): void {
+    this.showOnboardingCommands = true;
+  }
+
   async connect(): Promise<void> {
     this.bot = new Bot(this.token);
 
-    // Register slash commands with Telegram if we have any
-    if (this.slashCommands.length > 0) {
-      await this.bot.api.setMyCommands(
-        this.slashCommands.map(sc => ({
-          command: sc.command,
-          description: sc.serviceName,
-        }))
-      );
-      console.log(`  📋 Registered ${this.slashCommands.length} slash command(s): ${this.slashCommands.map(sc => '/' + sc.command).join(', ')}`);
+    // Build the Telegram command menu: onboarding commands (groups mode) + any service slash commands.
+    const menuCommands: { command: string; description: string }[] = [];
+    if (this.showOnboardingCommands) {
+      menuCommands.push({ command: 'start', description: 'Show options / welcome' });
+      menuCommands.push({ command: 'quit', description: 'Disconnect from the current service' });
+    }
+    menuCommands.push(...this.slashCommands.map(sc => ({ command: sc.command, description: sc.serviceName })));
+    if (menuCommands.length > 0) {
+      await this.bot.api.setMyCommands(menuCommands);
+      console.log(`  📋 Registered ${menuCommands.length} command(s): ${menuCommands.map(c => '/' + c.command).join(', ')}`);
     }
 
     this.bot.on('message', async (ctx) => {

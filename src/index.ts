@@ -152,9 +152,13 @@ export class ChannelKit {
       console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
     }
 
-    // Set up Telegram slash commands for multi-service channels
+    // Set up Telegram command menu: /start + /quit for groups-mode channels,
+    // and slash commands for multi-service channels.
     for (const [name, channel] of this.channelMap.entries()) {
       if (channel instanceof TelegramChannel) {
+        if (this.router.getChannelMode(name) === 'groups') {
+          (channel as TelegramChannel).enableOnboardingCommands();
+        }
         const services = this.router.getServicesForChannel(name);
         if (services.length > 1) {
           const svcEntries = Object.entries(this.config.services || {})
@@ -176,6 +180,7 @@ export class ChannelKit {
             name: svcName,
             webhook: svc.webhook,
             channels: [svc.channel],
+            description: svc.description,
           });
         }
       }
