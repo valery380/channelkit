@@ -215,14 +215,23 @@ export class Onboarding {
         userId: message.from,
         createdAt: Date.now(),
       });
-
-      await this.telegramChannel.sendToChat(
-        message.from,
-        `Welcome to ${matched.name}! 🎉\nAll messages here will be forwarded to the service.`
-      );
-
       console.log(`[onboarding] Telegram user ${message.senderName || message.from} connected to ${matched.name}`);
-      return true;
+
+      // Connect behavior is configurable per channel (defaults: welcome + forward).
+      const connectCfg = ctx.channelConfig?.connect;
+      const sendWelcome = connectCfg?.welcome !== false;
+      const forwardMessage = connectCfg?.forward !== false;
+
+      if (sendWelcome) {
+        await this.telegramChannel.sendToChat(
+          message.from,
+          `Welcome to ${matched.name}! 🎉\nAll messages here will be forwarded to the service.`
+        );
+      }
+
+      // Returning false lets the message handler forward this same message to the
+      // newly-connected service (via the mapping just stored). Return true to consume it.
+      return !forwardMessage;
     }
 
     // If already mapped to a service, don't show menu — let it route

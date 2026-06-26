@@ -222,7 +222,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched, allow_list, mode, ai_routing } = req.body;
+    const { unmatched, allow_list, mode, ai_routing, start, connect } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
@@ -248,15 +248,38 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           delete config.channels[name].allow_list;
         }
       }
-      // AI routing config
-      if (mode === 'ai' && ai_routing) {
+      // AI routing config — used for 'ai' mode and AI-assisted onboarding in 'groups' mode.
+      if (ai_routing && (mode === 'ai' || mode === 'groups')) {
         (config.channels[name] as any).ai_routing = {
           provider: ai_routing.provider,
           ...(ai_routing.model && { model: ai_routing.model }),
           ...(ai_routing.no_match && { no_match: ai_routing.no_match }),
         };
-      } else if (mode !== 'ai') {
+      } else if (mode === 'service') {
         delete (config.channels[name] as any).ai_routing;
+      }
+      // /start customization (groups mode)
+      if (start !== undefined) {
+        if (start && (start.message || start.webhook)) {
+          (config.channels[name] as any).start = {
+            ...(start.message && { message: start.message }),
+            ...(start.webhook && { webhook: start.webhook }),
+            ...(start.auth?.type && { auth: start.auth }),
+          };
+        } else {
+          delete (config.channels[name] as any).start;
+        }
+      }
+      // Connect behavior (groups mode): send welcome / forward connecting message
+      if (connect !== undefined) {
+        if (connect && (connect.welcome !== undefined || connect.forward !== undefined)) {
+          (config.channels[name] as any).connect = {
+            ...(connect.welcome !== undefined && { welcome: !!connect.welcome }),
+            ...(connect.forward !== undefined && { forward: !!connect.forward }),
+          };
+        } else {
+          delete (config.channels[name] as any).connect;
+        }
       }
       saveConfig(ctx.configPath, config);
       ctx.reloadRouter?.();
