@@ -1,12 +1,13 @@
 import { Channel } from '../channels/base';
 import { TwilioVoiceChannel } from '../channels/voice';
-import { UnifiedMessage } from './types';
+import { UnifiedMessage, GroupUpdateEvent } from './types';
 import { Logger } from './logger';
 import { Router } from './router';
 import { Onboarding } from '../onboarding';
 import { ApiServer } from '../api/server';
 import { processInbound, processOutbound } from '../media/processor';
 import { AppConfig, ServiceConfig } from '../config/types';
+import type { AuthModule } from '../auth';
 
 /** Normalize a sender identifier by stripping non-digit characters (for phone numbers). */
 function normalizeSender(sender: string): string {
@@ -45,13 +46,31 @@ export interface MessageHandlerDeps {
   logger: Logger;
   onboarding?: Onboarding;
   config: AppConfig;
+  authModule?: AuthModule;
 }
 
 export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): void {
-  const { router, apiServer, logger, onboarding, config } = deps;
+  const { router, apiServer, logger, onboarding, config, authModule } = deps;
 
   channel.on('message', async (message: UnifiedMessage) => {
     message.channelName = channel.name;
+
+    // Auth module intercept: check if this message is an auth code reply
+    if (authModule && authModule.tryIntercept(message)) {
+      logger.log({
+        id: message.id,
+        timestamp: Date.now(),
+        channel: message.channel,
+        from: message.from,
+        senderName: message.senderName,
+        text: message.text,
+        type: message.type,
+        route: 'auth',
+        status: 'success',
+        latency: 0,
+      });
+      return;
+    }
 
     // Check if sender can interact with this channel at all.
     // A service-level allow list overrides the channel restriction,
@@ -123,8 +142,12 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // Try onboarding first for DMs (only in groups mode)
     if (onboarding && !message.groupId && mode === 'groups' && !(message as any)._resolvedWebhook) {
-      const channelUnmatched = (config.channels[channel.name] as any)?.unmatched as 'list' | 'ignore' | undefined;
-      const handled = await onboarding.handleDirectMessage(message, channelUnmatched);
+      const channelCfg = config.channels[channel.name];
+      const handled = await onboarding.handleDirectMessage(message, {
+        unmatchedPolicy: (channelCfg as any)?.unmatched as 'list' | 'ignore' | undefined,
+        channelConfig: channelCfg,
+        settings: config.settings,
+      });
       if (handled) {
         logger.log({
           id: message.id,
@@ -141,41 +164,14 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
         return;
       }
 
-      // Check if Telegram user has a service mapping
+      // Check if Telegram user has a service mapping from onboarding.
+      // Resolve it to the service webhook and fall through to the normal
+      // routing pipeline below, which applies the service's auth (headers),
+      // STT, and formatting — rather than dispatching the webhook directly.
       if (message.channel === 'telegram') {
         const webhook = onboarding.getTelegramServiceWebhook(message.from);
         if (webhook) {
-          const replyTo = message.from;
-          const replyUrl = apiServer.getReplyUrl(message.channel, replyTo);
-          const { dispatchWebhook } = await import('./webhook');
-          const startTime = Date.now();
-          const { response, error: webhookError, transcript } = await dispatchWebhook(webhook, message, replyUrl);
-          const latency = Date.now() - startTime;
-          let responseText = response?.text;
-          if (webhookError) {
-            const detail = webhookError.status
-              ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
-              : `[Webhook error: ${webhookError.message}]`;
-            responseText = responseText ? `${responseText}\n${detail}` : detail;
-          }
-          logger.log({
-            id: message.id,
-            timestamp: Date.now(),
-            channel: message.channel,
-            from: message.from,
-            senderName: message.senderName,
-            text: message.text,
-            type: message.type,
-            route: webhook,
-            responseText,
-            status: response ? 'success' : 'error',
-            latency,
-            httpCall: transcript,
-          });
-          if (response) {
-            await channel.send(replyTo, response);
-          }
-          return;
+          (message as any)._resolvedWebhook = webhook;
         }
       }
     }
@@ -366,5 +362,30 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       formatOriginalText,
       httpCall: routedTranscript,
     });
+  });
+
+  // Group participant events → forward to services connected to this channel
+  channel.on('group_update', async (event: GroupUpdateEvent) => {
+    const services = router.getServicesForChannel(event.channelName);
+    if (services.length === 0) return;
+
+    for (const svc of services) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (svc.auth?.type === 'bearer' && svc.auth.token) {
+          headers['Authorization'] = `Bearer ${svc.auth.token}`;
+        } else if (config.api_secret) {
+          headers['Authorization'] = `Bearer ${config.api_secret}`;
+        }
+        const res = await fetch(svc.webhook, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(event),
+        });
+        console.log(`[group_update] Dispatched ${event.action} for ${event.groupId} → ${svc.webhook} (${res.status})`);
+      } catch (err: any) {
+        console.error(`[group_update] Dispatch to ${svc.webhook} failed: ${err.message}`);
+      }
+    }
   });
 }

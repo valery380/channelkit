@@ -1,6 +1,6 @@
 node_modules/
 dist/
-auth/
+/auth/
 config.yaml
 *.log
 .DS_Store

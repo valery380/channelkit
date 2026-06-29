@@ -17,6 +17,36 @@ import { loadConfig, saveConfig } from './config/parser';
 import { ChannelKitMcpServer } from './mcp';
 import { Updater } from './core/updater';
 import { setAllowLocalWebhooks } from './core/webhook';
+import { AuthModule } from './auth';
+import { GroupStore } from './core/groupStore';
+
+/**
+ * Build onboarding codes from a config: each service's `code` (or `command`
+ * fallback) plus any legacy onboarding.codes. Used at startup and on hot-reload.
+ */
+function buildOnboardingCodes(config: AppConfig): any[] {
+  const codes: any[] = [];
+  if (config.services) {
+    for (const [svcName, svc] of Object.entries(config.services)) {
+      // In groups mode the connect keyword is the service's `code`, falling
+      // back to its slash `command` (without the leading slash) if no code is set.
+      const connectCode = svc.code || svc.command?.replace(/^\//, '');
+      if (connectCode) {
+        codes.push({
+          code: connectCode.toUpperCase(),
+          name: svcName,
+          webhook: svc.webhook,
+          channels: [svc.channel],
+          description: svc.description,
+        });
+      }
+    }
+  }
+  if (config.onboarding?.codes) {
+    codes.push(...config.onboarding.codes);
+  }
+  return codes;
+}
 
 export class ChannelKit {
   private channels: Channel[] = [];
@@ -24,12 +54,14 @@ export class ChannelKit {
   private router: Router;
   private apiServer: ApiServer;
   private logger: Logger;
+  private groupStore: GroupStore;
   private onboarding?: Onboarding;
   private tunnel?: TunnelManager;
   private tunnelStartedBy: 'cli' | 'dashboard' | null = null;
   private mcpServer?: ChannelKitMcpServer;
   private updater?: Updater;
   private authSyncTimer?: ReturnType<typeof setInterval>;
+  private authModule?: AuthModule;
 
   constructor(private config: AppConfig, private configPath?: string) {
     // Populate process.env from config.settings (existing env vars take precedence)
@@ -59,6 +91,8 @@ export class ChannelKit {
     if (config.settings) this.router.setSettings(config.settings);
     this.apiServer = new ApiServer(config.apiPort || 4000);
     this.logger = new Logger();
+    this.groupStore = new GroupStore();
+    this.router.setGroupStore(this.groupStore);
 
     if (config.dashboard?.enabled !== false) {
       this.router.setLogger(this.logger);
@@ -146,44 +180,32 @@ export class ChannelKit {
       console.log(`[channelkit] Channel "${name}" (${channelConfig.type}) → ${mode} mode`);
     }
 
-    // Set up Telegram slash commands for multi-service channels
+    // Set up the Telegram command menu / routing mode per channel.
+    // Groups mode is owned by the onboarding flow (code/keyword/AI), so the
+    // slash-command "switch service" mechanism must NOT be activated there —
+    // it would intercept /start and route messages before onboarding runs.
     for (const [name, channel] of this.channelMap.entries()) {
       if (channel instanceof TelegramChannel) {
-        const services = this.router.getServicesForChannel(name);
-        if (services.length > 1) {
-          const svcEntries = Object.entries(this.config.services || {})
-            .filter(([_, svc]) => svc.channel === name)
-            .map(([svcName, svc]) => ({ name: svcName, config: svc }));
-          (channel as TelegramChannel).setSlashCommands(svcEntries);
+        if (this.router.getChannelMode(name) === 'groups') {
+          (channel as TelegramChannel).enableOnboardingCommands();
+        } else {
+          const services = this.router.getServicesForChannel(name);
+          if (services.length > 1) {
+            const svcEntries = Object.entries(this.config.services || {})
+              .filter(([_, svc]) => svc.channel === name)
+              .map(([svcName, svc]) => ({ name: svcName, config: svc }));
+            (channel as TelegramChannel).setSlashCommands(svcEntries);
+          }
         }
       }
     }
 
     // Set up onboarding for channels in groups mode
-    // Build onboarding codes from services that have codes
-    const onboardingCodes: any[] = [];
-    if (this.config.services) {
-      for (const [svcName, svc] of Object.entries(this.config.services)) {
-        if (svc.code) {
-          onboardingCodes.push({
-            code: svc.code.toUpperCase(),
-            name: svcName,
-            webhook: svc.webhook,
-            channels: [svc.channel],
-          });
-        }
-      }
-    }
-
-    // Also support legacy onboarding config
-    if (this.config.onboarding?.codes) {
-      onboardingCodes.push(...this.config.onboarding.codes);
-    }
+    const onboardingCodes = buildOnboardingCodes(this.config);
 
     if (onboardingCodes.length > 0) {
       const onboardingConfig = { codes: onboardingCodes };
-      this.onboarding = new Onboarding(onboardingConfig, whatsappChannel, telegramChannel);
-      this.router.setGroupStore(this.onboarding.getGroupStore());
+      this.onboarding = new Onboarding(onboardingConfig, whatsappChannel, telegramChannel, this.groupStore);
 
       // Wire up remote store sync if configured
       if (this.config.data_store?.type === 'remote' && this.config.data_store.endpoint) {
@@ -221,6 +243,18 @@ export class ChannelKit {
       this.setupAuthSync(remoteStore);
     }
 
+    // Initialize auth module if enabled
+    if (this.config.auth?.enabled) {
+      const authChannel = this.config.auth.channel;
+      if (!this.channelMap.has(authChannel)) {
+        console.error(`[auth] Auth channel "${authChannel}" not found — auth module disabled.`);
+      } else {
+        this.authModule = new AuthModule(this.config.auth, this.channelMap);
+        this.apiServer.authModule = this.authModule;
+        console.log(`[auth] Auth module enabled on channel "${authChannel}"`);
+      }
+    }
+
     // Wire up message handlers
     const handlerDeps = {
       router: this.router,
@@ -228,6 +262,7 @@ export class ChannelKit {
       logger: this.logger,
       onboarding: this.onboarding,
       config: this.config,
+      authModule: this.authModule,
     };
     for (const channel of this.channels) {
       wireMessageHandler(channel, handlerDeps);
@@ -259,6 +294,9 @@ export class ChannelKit {
       this.apiServer.setApiSecret(this.config.api_secret);
     } else {
       console.warn('[security] No api_secret configured — dashboard and API endpoints are unauthenticated.');
+    }
+    if (this.config.provision_secret) {
+      this.apiServer.setProvisionSecret(this.config.provision_secret);
     }
     if (this.config.mcp?.secret) {
       this.apiServer.setMcpSecret(this.config.mcp.secret);
@@ -293,6 +331,12 @@ export class ChannelKit {
           this.router.reloadServices(freshConfig.services, freshConfig.channels);
           if (freshConfig.settings) this.router.setSettings(freshConfig.settings);
           console.log('[router] Services reloaded from config');
+        }
+        // Also refresh onboarding codes so a newly-created service is connectable
+        // immediately — no restart needed.
+        if (this.onboarding) {
+          this.onboarding.reloadCodes(buildOnboardingCodes(freshConfig));
+          console.log('[onboarding] Codes reloaded from config');
         }
       } catch (err: any) {
         console.error(`[router] Failed to reload services: ${err.message}`);
@@ -574,6 +618,9 @@ export class ChannelKit {
     if (this.authSyncTimer) {
       clearInterval(this.authSyncTimer);
     }
+    if (this.authModule) {
+      this.authModule.stop();
+    }
     if (this.updater) {
       this.updater.stopAutoUpdate();
     }
@@ -589,4 +636,5 @@ export class ChannelKit {
 }
 
 export { UnifiedMessage, WebhookResponse } from './core/types';
-export { AppConfig } from './config/types';
+export { AppConfig, AuthConfig } from './config/types';
+export { AuthModule, AuthSession, AuthCallbackPayload } from './auth';

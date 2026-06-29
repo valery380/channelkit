@@ -7,7 +7,7 @@ function isMcpPath(p: string): boolean {
 }
 
 /** Timing-safe string comparison to prevent timing attacks. */
-function safeEqual(a: string, b: string): boolean {
+export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
@@ -36,7 +36,8 @@ export function externalAccessGuard(ctx: ServerContext) {
       (req.headers.host && !req.headers.host.includes('localhost') && !req.headers.host.includes('127.0.0.1'));
     if (!isExternal) { next(); return; }
     const p = req.path;
-    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health'
+        || p.startsWith('/api/provision/')) {
       next(); return;
     }
     if (ctx.exposeMcp && isMcpPath(p)) {
@@ -64,6 +65,10 @@ export function mcpAuthCheck(ctx: ServerContext) {
 export function apiSecretCheck(ctx: ServerContext) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!ctx.apiSecret) { next(); return; }
+    const p = req.path;
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health') {
+      next(); return;
+    }
     const auth = req.headers.authorization;
     if (!auth || !safeEqual(auth, `Bearer ${ctx.apiSecret}`)) {
       res.status(401).json({ error: 'Invalid or missing Authorization header' });
@@ -83,10 +88,12 @@ export function adminAuthCheck(ctx: ServerContext) {
     if (!ctx.apiSecret) { next(); return; }
     const p = req.path;
     // Allow inbound webhooks, health check, static dashboard assets, QR page, and auth check
-    if (p.startsWith('/inbound/') || p === '/api/health' || p === '/api/auth/check'
-        || p === '/qr' || p === '/dashboard' || p.startsWith('/dashboard/')) {
+    if (p.startsWith('/inbound/') || p.startsWith('/api/send/') || p === '/api/health' || p === '/api/auth/check'
+        || p === '/qr' || p === '/dashboard' || p.startsWith('/dashboard/')
+        || p.startsWith('/api/provision/')) {
       next(); return;
     }
+    // /api/provision/* enforces its own provision_secret inside the route handler.
     // MCP paths have their own auth
     if (isMcpPath(p)) { next(); return; }
     const auth = req.headers.authorization;

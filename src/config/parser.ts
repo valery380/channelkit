@@ -24,8 +24,9 @@ export function loadConfig(path: string, opts: { validate?: boolean } = {}): App
     const hasServices = config.services && Object.keys(config.services).length > 0;
     const hasRoutes = config.routes && config.routes.length > 0;
     const hasOnboarding = config.onboarding?.codes && config.onboarding.codes.length > 0;
+    const hasAuth = config.auth?.enabled;
 
-    if (!hasServices && !hasRoutes && !hasOnboarding) {
+    if (!hasServices && !hasRoutes && !hasOnboarding && !hasAuth) {
       throw new Error('Config must define at least one service (or legacy route)');
     }
 

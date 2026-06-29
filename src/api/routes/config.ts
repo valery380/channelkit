@@ -3,6 +3,7 @@ import { ServerContext } from '../types';
 import { loadConfig, saveConfig } from '../../config/parser';
 import { WhatsAppChannel, isBaileysAvailable } from '../../channels/whatsapp';
 import { DEFAULT_AUTH_DIR } from '../../paths';
+import { createService } from '../services/createService';
 
 /** Per-channel QR state for polling. */
 const pairState = new Map<string, { qr: string | null; status: 'waiting' | 'paired' | 'error'; error?: string }>();
@@ -50,7 +51,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
         (ch as any).connected = runtime ? runtime.connected : false;
         (ch as any).statusMessage = runtime ? (runtime as any).statusMessage || null : null;
       }
-      res.json({ channels, services: config.services || {}, baileysAvailable: isBaileysAvailable() });
+      res.json({ channels, services: config.services || {}, auth: config.auth || null, baileysAvailable: isBaileysAvailable() });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to load config' });
     }
@@ -58,54 +59,8 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
 
   // POST /api/config/services — add a new service
   app.post('/api/config/services', (req, res) => {
-    if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
-    const { name, channel, webhook, code, command, allow_list, method, auth, description } = req.body;
-    if (!name || !channel || !webhook) {
-      res.status(400).json({ error: 'name, channel, and webhook are required' });
-      return;
-    }
-    if (!isValidName(name)) {
-      res.status(400).json({ error: 'Name must contain only letters, numbers, hyphens, and underscores' });
-      return;
-    }
-    const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
-    if (method && !validMethods.includes(method.toUpperCase())) {
-      res.status(400).json({ error: `Invalid method. Must be one of: ${validMethods.join(', ')}` });
-      return;
-    }
-    if (auth && !['bearer', 'header'].includes(auth.type)) {
-      res.status(400).json({ error: 'Invalid auth type. Must be "bearer" or "header"' });
-      return;
-    }
-    try {
-      const config = loadConfig(ctx.configPath, { validate: false });
-      if (!config.services) config.services = {};
-      if (config.services[name]) {
-        res.status(409).json({ error: `Service "${name}" already exists` });
-        return;
-      }
-      if (!config.channels[channel]) {
-        res.status(400).json({ error: `Channel "${channel}" does not exist` });
-        return;
-      }
-      const methodUpper = method ? method.toUpperCase() : undefined;
-      config.services[name] = {
-        channel, webhook,
-        ...(methodUpper && methodUpper !== 'POST' && { method: methodUpper }),
-        ...(auth?.type && { auth }),
-        ...(code && { code }),
-        ...(command && { command }),
-        ...(Array.isArray(allow_list) && allow_list.length > 0 && { allow_list }),
-        ...(description && { description }),
-      };
-      saveConfig(ctx.configPath, config);
-      ctx.reloadRouter?.();
-      ctx.broadcast({ type: 'configChanged' });
-      res.json({ ok: true });
-    } catch (err: any) {
-      console.error('[config]', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
+    const { status, body } = createService(ctx, req.body || {});
+    res.status(status).json(body);
   });
 
   // PUT /api/config/services/:name — update service fields
@@ -287,7 +242,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/channels/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { unmatched, allow_list, mode, ai_routing } = req.body;
+    const { unmatched, allow_list, mode, ai_routing, start, connect } = req.body;
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
       if (!config.channels[name]) {
@@ -313,15 +268,38 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           delete config.channels[name].allow_list;
         }
       }
-      // AI routing config
-      if (mode === 'ai' && ai_routing) {
+      // AI routing config — used for 'ai' mode and AI-assisted onboarding in 'groups' mode.
+      if (ai_routing && (mode === 'ai' || mode === 'groups')) {
         (config.channels[name] as any).ai_routing = {
           provider: ai_routing.provider,
           ...(ai_routing.model && { model: ai_routing.model }),
           ...(ai_routing.no_match && { no_match: ai_routing.no_match }),
         };
-      } else if (mode !== 'ai') {
+      } else if (mode === 'service') {
         delete (config.channels[name] as any).ai_routing;
+      }
+      // /start customization (groups mode)
+      if (start !== undefined) {
+        if (start && (start.message || start.webhook)) {
+          (config.channels[name] as any).start = {
+            ...(start.message && { message: start.message }),
+            ...(start.webhook && { webhook: start.webhook }),
+            ...(start.auth?.type && { auth: start.auth }),
+          };
+        } else {
+          delete (config.channels[name] as any).start;
+        }
+      }
+      // Connect behavior (groups mode): send welcome / forward connecting message
+      if (connect !== undefined) {
+        if (connect && (connect.welcome !== undefined || connect.forward !== undefined)) {
+          (config.channels[name] as any).connect = {
+            ...(connect.welcome !== undefined && { welcome: !!connect.welcome }),
+            ...(connect.forward !== undefined && { forward: !!connect.forward }),
+          };
+        } else {
+          delete (config.channels[name] as any).connect;
+        }
       }
       saveConfig(ctx.configPath, config);
       ctx.reloadRouter?.();
@@ -722,6 +700,58 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
 
       res.json({ ok: true, auth_url: authUrl });
       ctx.broadcast({ type: 'gmail-auth-url', channel: name, authUrl });
+    } catch (err: any) {
+      console.error('[config]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // PUT /api/config/auth — update auth module configuration
+  app.put('/api/config/auth', (req, res) => {
+    if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
+    const { enabled, channel, channel_number, callback_url, callback_auth, session_ttl, code_length, qr_code_length, messages } = req.body;
+    try {
+      const config = loadConfig(ctx.configPath, { validate: false });
+
+      if (enabled === false) {
+        delete config.auth;
+      } else {
+        if (!config.auth) {
+          config.auth = { enabled: true, channel: '', callback_url: '' };
+        }
+        if (enabled !== undefined) config.auth.enabled = !!enabled;
+        if (channel !== undefined) config.auth.channel = channel;
+        if (channel_number !== undefined) {
+          if (channel_number) config.auth.channel_number = channel_number;
+          else delete config.auth.channel_number;
+        }
+        if (callback_url !== undefined) config.auth.callback_url = callback_url;
+        if (callback_auth !== undefined) {
+          if (callback_auth?.type && callback_auth?.token) {
+            config.auth.callback_auth = callback_auth;
+          } else {
+            delete config.auth.callback_auth;
+          }
+        }
+        if (session_ttl !== undefined) config.auth.session_ttl = Number(session_ttl) || 300;
+        if (code_length !== undefined) config.auth.code_length = Number(code_length) || 6;
+        if (qr_code_length !== undefined) config.auth.qr_code_length = Number(qr_code_length) || 8;
+        if (messages !== undefined) {
+          if (messages && typeof messages === 'object' && Object.values(messages).some(v => v)) {
+            config.auth.messages = {};
+            if (messages.verify_request) config.auth.messages.verify_request = messages.verify_request;
+            if (messages.qr_link_prefix) config.auth.messages.qr_link_prefix = messages.qr_link_prefix;
+            if (messages.verify_success) config.auth.messages.verify_success = messages.verify_success;
+            if (messages.verify_error) config.auth.messages.verify_error = messages.verify_error;
+          } else {
+            delete config.auth.messages;
+          }
+        }
+      }
+
+      saveConfig(ctx.configPath, config);
+      ctx.broadcast({ type: 'configChanged' });
+      res.json({ ok: true, needsRestart: true });
     } catch (err: any) {
       console.error('[config]', err);
       res.status(500).json({ error: 'Internal server error' });

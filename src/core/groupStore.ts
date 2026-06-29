@@ -58,6 +58,14 @@ export class GroupStore {
     this.save();
   }
 
+  /** Remove a mapping. Returns true if one existed. */
+  remove(groupId: string): boolean {
+    if (!this.groups[groupId]) return false;
+    delete this.groups[groupId];
+    this.save();
+    return true;
+  }
+
   get(groupId: string): GroupMapping | undefined {
     return this.groups[groupId];
   }

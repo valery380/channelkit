@@ -13,12 +13,28 @@ export interface ChannelConfig {
    *  If set and non-empty, only senders matching an entry are allowed.
    *  Numbers are normalized (non-digit chars stripped) before comparison. */
   allow_list?: string[];
-  /** AI routing configuration (used when mode is 'ai'). */
+  /** AI routing configuration (used when mode is 'ai', and for AI-assisted
+   *  onboarding keyword extraction in groups mode). */
   ai_routing?: {
     provider: 'openai' | 'anthropic' | 'google';
     model?: string;
     /** What to do when AI can't match a service — default 'reply' */
     no_match?: 'ignore' | 'reply';
+  };
+  /** Customizes the Telegram /start reply (groups mode).
+   *  If `webhook` is set, ChannelKit POSTs the message context to it and replies
+   *  with the returned text; else `message` is sent; else the default service menu. */
+  start?: {
+    message?: string;
+    webhook?: string;
+    auth?: ServiceAuthConfig;
+  };
+  /** Behavior when onboarding connects a user to a service (groups mode).
+   *  welcome: send the "Welcome to X" reply (default true).
+   *  forward: also forward the connecting message to the service (default true). */
+  connect?: {
+    welcome?: boolean;
+    forward?: boolean;
   };
   [key: string]: unknown;
 }
@@ -156,6 +172,7 @@ export interface OnboardingCodeConfig {
   name: string;
   webhook: string;
   channels?: string[];
+  description?: string;   // used for AI-assisted keyword extraction
 }
 
 export interface OnboardingConfig {
@@ -205,6 +222,23 @@ export interface DataStoreConfig {
   sync_interval?: number;  // How often to push changes (seconds, default: 30)
 }
 
+export interface AuthConfig {
+  enabled: boolean;
+  channel: string;              // which WhatsApp channel handles auth
+  channel_number?: string;      // WhatsApp number override (if not in channel config)
+  callback_url: string;         // POST when verified
+  callback_auth?: ServiceAuthConfig;
+  session_ttl?: number;         // seconds, default 300
+  code_length?: number;         // numeric code digits for flow A, default 6
+  qr_code_length?: number;      // alphanumeric code length for flow B, default 8
+  messages?: {
+    verify_request?: string;    // message sent to user for flow A
+    qr_link_prefix?: string;    // human-readable line prepended to LOGIN-XXX in wa.me link
+    verify_success?: string;    // reply sent after successful verification
+    verify_error?: string;      // reply sent on wrong code (recognized auth attempt)
+  };
+}
+
 export interface AppConfig {
   channels: Record<string, ChannelConfig>;
   services?: Record<string, ServiceConfig>;
@@ -216,7 +250,9 @@ export interface AppConfig {
   tunnel?: TunnelConfig;
   settings?: SettingsConfig;
   api_secret?: string;         // Bearer token required for /api/send/ endpoint
+  provision_secret?: string;   // Scoped Bearer token for POST /api/provision/services (create-only)
   mcp?: McpConfig;             // MCP server configuration
   auto_update?: AutoUpdateConfig; // Auto-update from GitHub
   data_store?: DataStoreConfig;  // Remote data storage configuration
+  auth?: AuthConfig;            // WhatsApp auth module configuration
 }
