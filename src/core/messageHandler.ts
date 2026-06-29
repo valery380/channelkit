@@ -103,7 +103,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
         const replyUrl = apiServer.getReplyUrl(channel.name, replyTo);
         const { dispatchWebhook } = await import('./webhook');
         const startTime = Date.now();
-        const { response, error: webhookError } = await dispatchWebhook(aiMatch.config.webhook, message, replyUrl, { method: aiMatch.config.method, auth: aiMatch.config.auth });
+        const { response, error: webhookError, transcript } = await dispatchWebhook(aiMatch.config.webhook, message, replyUrl, { method: aiMatch.config.method, auth: aiMatch.config.auth });
         const latency = Date.now() - startTime;
         let responseText = response?.text;
         if (webhookError) {
@@ -117,6 +117,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
           from: message.from, senderName: message.senderName, text: message.text,
           type: message.type, route: aiMatch.config.webhook, serviceName: aiMatch.name, responseText,
           status: response ? 'success' : 'error', latency,
+          httpCall: transcript,
         });
         if (response) await channel.send(replyTo, response);
         return;
@@ -209,6 +210,8 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
     }
 
     let sttTranscription: string | undefined;
+    let sttError: string | undefined;
+    let translateError: string | undefined;
     let formatApplied: boolean | undefined;
     let formatOriginalText: string | undefined;
     if (serviceConfig) {
@@ -217,6 +220,8 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       if (message.type === 'audio' && message.text && message.text !== originalText) {
         sttTranscription = message.text;
       }
+      sttError = inboundResult.sttError;
+      translateError = inboundResult.translateError;
       formatApplied = inboundResult.formatApplied;
       formatOriginalText = inboundResult.formatOriginalText;
 
@@ -243,7 +248,7 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     const replyTo = message.groupId || message.from;
     const replyUrl = apiServer.getReplyUrl(message.channel, replyTo);
-    const { response: routedResponse, webhook: routedWebhook, latency, webhookError } = await router.route(message, replyUrl);
+    const { response: routedResponse, webhook: routedWebhook, latency, webhookError, transcript: routedTranscript } = await router.route(message, replyUrl);
     let response = routedResponse;
 
     // If no service matched, check channel's unmatched policy
@@ -309,6 +314,14 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
 
     // Build response text for logging
     let logResponseText = response?.text;
+    if (sttError) {
+      const detail = `[STT failed: ${sttError}]`;
+      logResponseText = logResponseText ? `${logResponseText}\n${detail}` : detail;
+    }
+    if (translateError) {
+      const detail = `[Translation failed: ${translateError}]`;
+      logResponseText = logResponseText ? `${logResponseText}\n${detail}` : detail;
+    }
     if (webhookError) {
       const detail = webhookError.status
         ? `[Webhook error ${webhookError.status}: ${webhookError.message}]`
@@ -339,9 +352,15 @@ export function wireMessageHandler(channel: Channel, deps: MessageHandlerDeps): 
       status: (sendError || ttsError || response?._error) ? 'error' : (!routedWebhook ? 'no-route' : (response ? 'success' : 'error')),
       latency,
       sttTranscription,
+      sttError,
+      detectedLanguage: message.detectedLanguage,
+      translatedText: message.translatedText,
+      translatedLanguage: message.translatedLanguage,
+      translateError,
       ttsGenerated: ttsGenerated || undefined,
       formatApplied,
       formatOriginalText,
+      httpCall: routedTranscript,
     });
   });
 

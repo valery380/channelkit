@@ -2,8 +2,15 @@
  * Speech-to-Text providers for ChannelKit
  */
 
+export interface STTResult {
+  /** Transcribed text. */
+  text: string;
+  /** ISO 639-1 language code if detected (e.g. 'en', 'he'). Only set when provider auto-detects. */
+  detectedLanguage?: string;
+}
+
 export interface STTProvider {
-  transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string>;
+  transcribe(audio: Buffer, mimetype: string, language?: string): Promise<STTResult>;
 }
 
 export interface STTConfig {
@@ -116,7 +123,7 @@ class GoogleSTT implements STTProvider {
     return data.access_token;
   }
 
-  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
+  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<STTResult> {
     const encoding = this.getEncoding(mimetype);
     const langCode = language || this.sttConfig.language || 'en-US';
     const config: any = {
@@ -177,10 +184,13 @@ class GoogleSTT implements STTProvider {
     if (!results.length) {
       console.log(`[stt:google] No results returned. Response: ${JSON.stringify(data).slice(0, 500)}`);
     }
-    return results
+    const text = results
       .map((r: any) => r.alternatives?.[0]?.transcript || '')
       .join(' ')
       .trim();
+    // Google returns languageCode per result when alternative_languages is configured.
+    const detectedRaw: string | undefined = results.find((r: any) => r.languageCode)?.languageCode;
+    return { text, detectedLanguage: detectedRaw ? detectedRaw.split('-')[0].toLowerCase() : undefined };
   }
 
   private getEncoding(mimetype: string): string {
@@ -203,11 +213,13 @@ class WhisperSTT implements STTProvider {
     this.apiKey = getApiKey('openai');
   }
 
-  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
+  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<STTResult> {
     const ext = this.getExtension(mimetype);
     const formData = new FormData();
     formData.append('file', new Blob([new Uint8Array(audio)], { type: mimetype }), `audio.${ext}`);
     formData.append('model', 'whisper-1');
+    // verbose_json returns the detected language alongside the transcript.
+    formData.append('response_format', 'verbose_json');
     if (language) {
       // Whisper expects ISO 639-1 (e.g. 'he', 'en'), not full locale
       formData.append('language', language.split('-')[0]);
@@ -225,7 +237,10 @@ class WhisperSTT implements STTProvider {
     }
 
     const data = await res.json() as any;
-    return (data.text || '').trim();
+    return {
+      text: (data.text || '').trim(),
+      detectedLanguage: typeof data.language === 'string' ? data.language.toLowerCase() : undefined,
+    };
   }
 
   private getExtension(mimetype: string): string {
@@ -244,20 +259,34 @@ class WhisperSTT implements STTProvider {
 class DeepgramSTT implements STTProvider {
   private apiKey: string;
 
+  /** ISO 639-1 codes Deepgram nova-2 supports (fast + cheap). Languages outside this list
+   *  (e.g. Hebrew, Arabic, Persian) fall back to whisper-large, which covers ~99 languages. */
+  private static readonly NOVA_2_LANGUAGES = new Set([
+    'bg','ca','cs','da','de','el','en','es','et','fi','fr','hi','hu',
+    'id','it','ja','ko','lt','lv','ms','nl','no','pl','pt','ro','ru',
+    'sk','sv','th','tr','uk','vi','zh',
+  ]);
+
   constructor() {
     this.apiKey = getApiKey('deepgram');
   }
 
-  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<string> {
+  async transcribe(audio: Buffer, mimetype: string, language?: string): Promise<STTResult> {
+    const langCode = language ? language.split('-')[0].toLowerCase() : undefined;
+    // Pick model:
+    //  - known language supported by nova-2 → nova-2 (fastest/cheapest)
+    //  - unsupported language OR auto-detect (no language) → whisper-large (covers ~99 langs)
+    const model = langCode && DeepgramSTT.NOVA_2_LANGUAGES.has(langCode) ? 'nova-2' : 'whisper-large';
     const params = new URLSearchParams({
-      model: 'nova-2',
+      model,
       punctuate: 'true',
     });
-    if (language) {
-      params.set('language', language.split('-')[0]);
+    if (langCode) {
+      params.set('language', langCode);
     } else {
       params.set('detect_language', 'true');
     }
+    console.log(`[stt:deepgram] model=${model} language=${langCode || '(auto-detect)'}`);
 
     const res = await fetch(
       `https://api.deepgram.com/v1/listen?${params}`,
@@ -277,7 +306,13 @@ class DeepgramSTT implements STTProvider {
     }
 
     const data = await res.json() as any;
-    return (data.results?.channels?.[0]?.alternatives?.[0]?.transcript || '').trim();
+    const channel = data.results?.channels?.[0];
+    const text = (channel?.alternatives?.[0]?.transcript || '').trim();
+    const detectedRaw: string | undefined = channel?.detected_language || channel?.alternatives?.[0]?.language;
+    return {
+      text,
+      detectedLanguage: typeof detectedRaw === 'string' ? detectedRaw.split('-')[0].toLowerCase() : undefined,
+    };
   }
 }
 

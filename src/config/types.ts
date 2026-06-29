@@ -124,6 +124,15 @@ export interface FormatServiceConfig {
   prompt: string;             // instructions for how to format/transform the text
 }
 
+export interface TranslateServiceConfig {
+  /** ISO 639-1 target language code (e.g. 'en', 'he', 'el'). */
+  target_language: string;
+  /** Optional explicit LLM provider. Defaults to whichever key is available (openai > anthropic > google). */
+  provider?: 'openai' | 'anthropic' | 'google';
+  /** Optional model override (e.g. 'gpt-4o-mini'). */
+  model?: string;
+}
+
 export interface ServiceAuthConfig {
   type: 'bearer' | 'header';
   token?: string;            // for bearer: the token value
@@ -143,6 +152,8 @@ export interface ServiceConfig {
   tts?: TTSServiceConfig;   // text-to-speech config
   voice?: VoiceServiceConfig; // voice call settings
   format?: FormatServiceConfig; // AI data formatting config
+  translate?: TranslateServiceConfig; // LLM translation to a target language
+
   /** Optional allow list of sender identifiers (phone numbers, emails, user IDs).
    *  If set and non-empty, only senders matching an entry are allowed.
    *  Numbers are normalized (non-digit chars stripped) before comparison. */

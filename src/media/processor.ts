@@ -10,6 +10,7 @@ import { UnifiedMessage, WebhookResponse } from '../core/types';
 import { createSTTProvider, STTProvider } from './stt';
 import { createTTSProvider, TTSProvider } from './tts';
 import { createFormatProvider, FormatProvider } from './formatter';
+import { translate as runTranslate } from './translator';
 
 interface ProcessorCache {
   stt: Map<string, STTProvider>;       // key = provider+language
@@ -57,6 +58,12 @@ export interface InboundResult {
   formatOriginalText?: string;
   /** If formatting failed, the error message — signals the request should be cancelled */
   formatError?: string;
+  /** If STT transcription failed, the error message — recorded for visibility in logs */
+  sttError?: string;
+  /** Whether translation produced a result */
+  translateApplied?: boolean;
+  /** If translation failed, the error message — recorded for visibility in logs */
+  translateError?: string;
 }
 
 /**
@@ -74,20 +81,29 @@ export async function processInbound(message: UnifiedMessage, serviceConfig: Ser
     if (stt) {
       try {
         const mimetype = message.media.mimetype || 'audio/ogg';
-        console.log(`[stt] Transcribing message ${message.id} (${mimetype}, ${message.media.buffer.length} bytes)...`);
-        const transcript = await stt.transcribe(message.media.buffer, mimetype, serviceConfig.stt.language);
+        const langHint = serviceConfig.stt.language || '(auto-detect)';
+        console.log(`[stt] Transcribing message ${message.id} (${mimetype}, ${message.media.buffer.length} bytes, lang=${langHint})...`);
+        const sttResult = await stt.transcribe(message.media.buffer, mimetype, serviceConfig.stt.language);
+        const transcript = sttResult.text;
         if (transcript) {
           message.text = transcript;
-          console.log(`[stt] Transcribed: "${transcript.substring(0, 80)}${transcript.length > 80 ? '...' : ''}"`);
+          if (sttResult.detectedLanguage) {
+            message.detectedLanguage = sttResult.detectedLanguage;
+          }
+          const detected = sttResult.detectedLanguage ? ` (detected=${sttResult.detectedLanguage})` : '';
+          console.log(`[stt] Transcribed${detected}: "${transcript.substring(0, 80)}${transcript.length > 80 ? '...' : ''}"`);
         } else {
           console.log(`[stt] Empty transcription for message ${message.id}`);
         }
-        // Clear media buffer after transcription unless forward_audio is enabled
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        console.error(`[stt] Transcription failed for message ${message.id}:`, errMsg);
+        result.sttError = errMsg.substring(0, 300);
+      } finally {
+        // Honor forward_audio: false even on STT failure — don't leak raw audio to webhook
         if (!serviceConfig.stt.forward_audio) {
           delete message.media;
         }
-      } catch (err) {
-        console.error(`[stt] Transcription failed for message ${message.id}:`, err);
       }
     }
   }
@@ -111,6 +127,26 @@ export async function processInbound(message: UnifiedMessage, serviceConfig: Ser
         console.error(`[format] Formatting failed for message ${message.id}:`, errMsg);
         result.formatError = errMsg.substring(0, 300);
       }
+    }
+  }
+
+  // Step 3: Translation — produces `translatedText` alongside the (possibly STT/format-processed) `text`.
+  // Target language is configured per service; source language is whatever STT detected (or unknown).
+  if (serviceConfig.translate && message.text) {
+    const target = serviceConfig.translate.target_language;
+    try {
+      console.log(`[translate] Translating message ${message.id} to ${target}${message.detectedLanguage ? ` (source=${message.detectedLanguage})` : ''}...`);
+      const translated = await runTranslate(message.text, serviceConfig.translate, message.detectedLanguage);
+      if (translated) {
+        message.translatedText = translated;
+        message.translatedLanguage = target;
+        result.translateApplied = true;
+        console.log(`[translate] Result: "${translated.substring(0, 80)}${translated.length > 80 ? '...' : ''}"`);
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      console.error(`[translate] Translation failed for message ${message.id}:`, errMsg);
+      result.translateError = errMsg.substring(0, 300);
     }
   }
 

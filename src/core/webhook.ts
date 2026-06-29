@@ -97,9 +97,50 @@ export interface WebhookError {
   body?: string;
 }
 
+export interface WebhookTranscript {
+  request: {
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body?: string;
+  };
+  response?: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body?: string;
+  };
+}
+
 export interface WebhookResult {
   response: WebhookResponse | null;
   error?: WebhookError;
+  transcript?: WebhookTranscript;
+}
+
+const REDACT_HEADER_NAMES = new Set([
+  'authorization', 'cookie', 'set-cookie', 'proxy-authorization',
+  'x-api-key', 'x-auth-token',
+]);
+const BODY_PREVIEW_LIMIT = 8 * 1024;
+
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    out[k] = REDACT_HEADER_NAMES.has(k.toLowerCase()) ? '[redacted]' : v;
+  }
+  return out;
+}
+
+function headersToObject(h: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  h.forEach((v, k) => { out[k] = v; });
+  return out;
+}
+
+function truncatePreview(s: string, n: number = BODY_PREVIEW_LIMIT): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n) + `\n... [truncated, ${s.length - n} more chars]`;
 }
 
 /** Read up to 1 KB of response body text for error diagnostics. */
@@ -118,14 +159,19 @@ export async function dispatchWebhook(
   replyUrl?: string,
   { maxRetries = 3, timeout = 5000, method = 'POST', auth }: { maxRetries?: number; timeout?: number; method?: string; auth?: ServiceAuthConfig } = {}
 ): Promise<WebhookResult> {
+  const httpMethod = (method || 'POST').toUpperCase();
+
   if (isBlockedUrl(url)) {
     const msg = `Blocked request to private/reserved address: ${url}`;
     console.error(`[webhook] ${msg}`);
-    return { response: null, error: { type: 'blocked', message: msg } };
+    return {
+      response: null,
+      error: { type: 'blocked', message: msg },
+      transcript: { request: { url, method: httpMethod, headers: {} } },
+    };
   }
 
   const payload = replyUrl ? { ...message, replyUrl } : message;
-  const httpMethod = (method || 'POST').toUpperCase();
   const authHeaders = buildAuthHeaders(auth);
 
   // Send as multipart/form-data when method is POST and message carries a media buffer
@@ -133,6 +179,7 @@ export async function dispatchWebhook(
 
   let body: FormData | string | undefined;
   let headers: Record<string, string>;
+  let requestBodyPreview: string | undefined;
 
   if (useMultipart) {
     const formData = new FormData();
@@ -154,11 +201,31 @@ export async function dispatchWebhook(
     body = formData;
     // Don't set Content-Type — fetch sets it with the boundary automatically
     headers = { ...authHeaders };
+    requestBodyPreview = truncatePreview(JSON.stringify({
+      metadata,
+      file: { filename, mimetype, size: message.media!.buffer!.length },
+    }, null, 2));
   } else {
     const canHaveBody = httpMethod !== 'GET' && httpMethod !== 'HEAD';
     body = canHaveBody ? JSON.stringify(payload) : undefined;
     headers = { 'Content-Type': 'application/json', ...authHeaders };
+    if (body) {
+      try {
+        requestBodyPreview = truncatePreview(JSON.stringify(JSON.parse(body), null, 2));
+      } catch {
+        requestBodyPreview = truncatePreview(body);
+      }
+    }
   }
+
+  const transcript: WebhookTranscript = {
+    request: {
+      url,
+      method: httpMethod,
+      headers: redactHeaders(headers),
+      body: requestBodyPreview,
+    },
+  };
 
   let lastError: WebhookError | undefined;
 
@@ -176,8 +243,34 @@ export async function dispatchWebhook(
 
       clearTimeout(timer);
 
+      const resHeaders = redactHeaders(headersToObject(res.headers));
+      const contentType = res.headers.get('content-type') || '';
+      const isBinary = !!contentType && !contentType.includes('application/json') && !contentType.includes('text/');
+
+      // Read the body once. Use arrayBuffer for binary so we can still return it as media.
+      let arrayBuf: ArrayBuffer | undefined;
+      let bodyText: string | undefined;
+      if (isBinary) {
+        arrayBuf = await res.arrayBuffer();
+      } else {
+        try { bodyText = await res.text(); } catch { bodyText = ''; }
+      }
+
+      const responseBodyPreview = isBinary
+        ? `[binary: ${contentType.split(';')[0].trim() || 'application/octet-stream'}, ${arrayBuf?.byteLength ?? 0} bytes]`
+        : (bodyText ? (contentType.includes('application/json')
+            ? (() => { try { return truncatePreview(JSON.stringify(JSON.parse(bodyText!), null, 2)); } catch { return truncatePreview(bodyText!); } })()
+            : truncatePreview(bodyText)) : '');
+
+      transcript.response = {
+        status: res.status,
+        statusText: res.statusText || `HTTP ${res.status}`,
+        headers: resHeaders,
+        body: responseBodyPreview,
+      };
+
       if (!res.ok) {
-        const errorBody = await readErrorBody(res);
+        const errorBody = bodyText ? bodyText.slice(0, 1024) : undefined;
         const statusText = res.statusText || `HTTP ${res.status}`;
         lastError = {
           type: 'http',
@@ -189,7 +282,7 @@ export async function dispatchWebhook(
         // 4xx = permanent failure, don't retry
         if (res.status >= 400 && res.status < 500) {
           console.error(`[webhook] ${url} responded ${res.status} (permanent)${errorBody ? ` — ${errorBody.slice(0, 200)}` : ''}`);
-          return { response: null, error: lastError };
+          return { response: null, error: lastError, transcript };
         }
         // 5xx = transient, retry
         if (attempt < maxRetries) {
@@ -198,39 +291,32 @@ export async function dispatchWebhook(
           continue;
         }
         console.error(`[webhook] ${url} responded ${res.status} after ${maxRetries} retries${errorBody ? ` — ${errorBody.slice(0, 200)}` : ''}`);
-        return { response: null, error: lastError };
+        return { response: null, error: lastError, transcript };
       }
 
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        return { response: (await res.json()) as WebhookResponse };
-      }
-
-      // Non-JSON response — return binary content (PDF, images, etc.) as media
-      if (contentType && !contentType.includes('text/')) {
-        const arrayBuf = await res.arrayBuffer();
-        if (arrayBuf.byteLength > 0) {
-          const mimetype = contentType.split(';')[0].trim();
-          return {
-            response: {
-              media: {
-                buffer: Buffer.from(arrayBuf),
-                mimetype,
-              },
-            } as WebhookResponse,
-          };
+      if (contentType.includes('application/json') && bodyText) {
+        try {
+          return { response: JSON.parse(bodyText) as WebhookResponse, transcript };
+        } catch {
+          return { response: { text: bodyText } as WebhookResponse, transcript };
         }
       }
 
-      // Text response (text/plain, text/csv, text/html, etc.) — return as text
-      if (contentType && contentType.includes('text/')) {
-        const text = await res.text();
-        if (text) {
-          return { response: { text } as WebhookResponse };
-        }
+      if (isBinary && arrayBuf && arrayBuf.byteLength > 0) {
+        const mimetype = contentType.split(';')[0].trim();
+        return {
+          response: {
+            media: { buffer: Buffer.from(arrayBuf), mimetype },
+          } as WebhookResponse,
+          transcript,
+        };
       }
 
-      return { response: null };
+      if (contentType.includes('text/') && bodyText) {
+        return { response: { text: bodyText } as WebhookResponse, transcript };
+      }
+
+      return { response: null, transcript };
     } catch (err: any) {
       clearTimeout(timer);
       const isAbort = err?.name === 'AbortError';
@@ -239,6 +325,7 @@ export async function dispatchWebhook(
         type: isAbort ? 'timeout' : 'network',
         message: label,
       };
+      transcript.response = undefined;
 
       if (attempt < maxRetries) {
         console.warn(`[webhook] ${url} ${label}, retrying (${attempt + 1}/${maxRetries})...`);
@@ -249,5 +336,5 @@ export async function dispatchWebhook(
     }
   }
 
-  return { response: null, error: lastError };
+  return { response: null, error: lastError, transcript };
 }
