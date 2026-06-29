@@ -112,7 +112,7 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
   app.put('/api/config/services/:name', (req, res) => {
     if (!ctx.configPath) { res.status(503).json({ error: 'Config path not set' }); return; }
     const { name } = req.params;
-    const { webhook, code, command, stt, tts, voice, format, allow_list, method, auth, description } = req.body;
+    const { webhook, code, command, stt, tts, voice, format, translate, allow_list, method, auth, description } = req.body;
     if (!webhook) { res.status(400).json({ error: 'webhook is required' }); return; }
     const validMethods = ['POST', 'GET', 'PUT', 'PATCH'];
     if (method && !validMethods.includes(method.toUpperCase())) {
@@ -137,6 +137,16 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
     if (format && format.provider && !validFormatProviders.includes(format.provider)) {
       res.status(400).json({ error: `Invalid format provider. Must be one of: ${validFormatProviders.join(', ')}` });
       return;
+    }
+    if (translate) {
+      if (!translate.target_language || typeof translate.target_language !== 'string') {
+        res.status(400).json({ error: 'translate.target_language is required (e.g. "en", "he", "el")' });
+        return;
+      }
+      if (translate.provider && !validFormatProviders.includes(translate.provider)) {
+        res.status(400).json({ error: `Invalid translate provider. Must be one of: ${validFormatProviders.join(', ')}` });
+        return;
+      }
     }
     try {
       const config = loadConfig(ctx.configPath, { validate: false });
@@ -194,6 +204,16 @@ export function registerConfigRoutes(app: Express, ctx: ServerContext): void {
           if (format.model) config.services[name].format!.model = format.model;
         } else {
           delete config.services[name].format;
+        }
+      }
+      if ('translate' in req.body) {
+        if (translate && translate.target_language) {
+          const tr: any = { target_language: String(translate.target_language).toLowerCase() };
+          if (translate.provider) tr.provider = translate.provider;
+          if (translate.model) tr.model = translate.model;
+          config.services[name].translate = tr;
+        } else {
+          delete config.services[name].translate;
         }
       }
       if (Array.isArray(allow_list) && allow_list.length > 0) {

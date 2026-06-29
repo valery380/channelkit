@@ -115,22 +115,28 @@ function ProviderSelect({ map, value, onChange, settings }) {
 function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
   const stt = svc.stt || {};
   const tts = svc.tts || {};
+  const tr = svc.translate || {};
   const [sttProvider, setSttProvider] = useState(stt.provider || '');
   const [sttLang, setSttLang] = useState(stt.language || '');
   const [forwardAudio, setForwardAudio] = useState(!!stt.forward_audio);
   const [ttsProvider, setTtsProvider] = useState(tts.provider || '');
   const [ttsLang, setTtsLang] = useState(tts.language || '');
   const [ttsVoice, setTtsVoice] = useState(tts.voice || '');
+  const [translateTarget, setTranslateTarget] = useState(tr.target_language || '');
+  const [translateProvider, setTranslateProvider] = useState(tr.provider || '');
   const [status, setStatus] = useState('');
 
   async function save() {
     const sttVal = sttProvider ? { provider: sttProvider, ...(sttLang && { language: sttLang }), ...(forwardAudio && { forward_audio: true }) } : null;
     const ttsVal = ttsProvider ? { provider: ttsProvider, ...(ttsLang && { language: ttsLang }), ...(ttsVoice && { voice: ttsVoice }) } : null;
+    const trVal = translateTarget
+      ? { target_language: translateTarget.trim().toLowerCase(), ...(translateProvider && { provider: translateProvider }) }
+      : null;
     try {
       const res = await apiFetch(API + '/api/config/services/' + encodeURIComponent(name), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, voice: svc.voice || null, format: svc.format || null }),
+        body: JSON.stringify({ webhook: svc.webhook, method: svc.method || 'POST', auth: svc.auth || null, code: svc.code || null, command: svc.command || null, stt: sttVal, tts: ttsVal, voice: svc.voice || null, format: svc.format || null, translate: trVal }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Save failed');
       setStatus('Saved');
@@ -142,12 +148,12 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
     <tr>
       <td colSpan={5} className="px-6 py-4">
         <div className="bg-bg-light border border-border rounded-lg p-4 space-y-4">
-          <div className="text-sm font-semibold text-text">Audio Settings &mdash; {name}</div>
+          <div className="text-sm font-semibold text-text">Audio &amp; Translation &mdash; {name}</div>
           <div className="flex gap-6 flex-wrap">
             <div className="flex-1 min-w-[220px] space-y-2">
               <div className="text-xs font-semibold text-dim">Speech-to-Text (incoming audio)</div>
               <ProviderSelect map={sttProviderMap} value={sttProvider} onChange={setSttProvider} settings={settings} />
-              {sttProvider && <input value={sttLang} onChange={e => setSttLang(e.target.value)} placeholder="Language (e.g. en-US, he-IL)" className={inputCls} />}
+              {sttProvider && <input value={sttLang} onChange={e => setSttLang(e.target.value)} placeholder="Language (leave empty to auto-detect)" className={inputCls} />}
               {sttProvider && <label className="flex items-center gap-2 text-xs text-dim cursor-pointer"><input type="checkbox" checked={forwardAudio} onChange={e => setForwardAudio(e.target.checked)} />Forward original audio to webhook</label>}
             </div>
             <div className="flex-1 min-w-[220px] space-y-2">
@@ -155,6 +161,19 @@ function AudioSettingsRow({ name, svc, settings, onClose, loadConfig }) {
               <ProviderSelect map={ttsProviderMap} value={ttsProvider} onChange={setTtsProvider} settings={settings} />
               {ttsProvider && <input value={ttsLang} onChange={e => setTtsLang(e.target.value)} placeholder="Language (e.g. en-US, he-IL)" className={inputCls} />}
               {ttsProvider && <input value={ttsVoice} onChange={e => setTtsVoice(e.target.value)} placeholder="Voice (optional, e.g. alloy, Rachel)" className={inputCls} />}
+            </div>
+            <div className="flex-1 min-w-[220px] space-y-2">
+              <div className="text-xs font-semibold text-dim">Translation (sends translated copy alongside original)</div>
+              <input value={translateTarget} onChange={e => setTranslateTarget(e.target.value)} placeholder="Target language (e.g. en, he, el)" className={inputCls} />
+              {translateTarget && (
+                <select value={translateProvider} onChange={e => setTranslateProvider(e.target.value)} className={selectCls + ' flex-1'}>
+                  <option value="">Auto (first available)</option>
+                  <option value="openai" disabled={!settings.openai_api_key}>OpenAI{!settings.openai_api_key ? ' (no API key)' : ''}</option>
+                  <option value="anthropic" disabled={!settings.anthropic_api_key}>Anthropic{!settings.anthropic_api_key ? ' (no API key)' : ''}</option>
+                  <option value="google" disabled={!settings.google_api_key}>Google{!settings.google_api_key ? ' (no API key)' : ''}</option>
+                </select>
+              )}
+              {translateTarget && <div className="text-[11px] text-dim leading-snug">Webhook receives <code className="font-mono">text</code> (original) and <code className="font-mono">translatedText</code>.</div>}
             </div>
           </div>
           <div className="flex items-center gap-2 pt-1">
@@ -482,11 +501,12 @@ function ServiceRowWithAudio({ name, svc, loadConfig, settings, audioTarget, set
   const showFormat = formatTarget === name;
 
   const infoParts = [];
-  if (svc.stt) infoParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ''));
+  if (svc.stt) infoParts.push('STT: ' + svc.stt.provider + (svc.stt.language ? ' (' + svc.stt.language + ')' : ' (auto)'));
   if (svc.tts) infoParts.push('TTS: ' + svc.tts.provider + (svc.tts.language ? ' (' + svc.tts.language + ')' : ''));
   if (svc.voice?.greeting) infoParts.push('Greeting');
   if (svc.voice?.conversational) infoParts.push('Conversational');
   if (svc.format) infoParts.push('Format: ' + svc.format.provider);
+  if (svc.translate) infoParts.push('Translate → ' + svc.translate.target_language);
   if (svc.allow_list?.length) infoParts.push(svc.allow_list.length + ' allowed');
 
   return (

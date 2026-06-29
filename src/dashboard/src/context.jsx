@@ -29,6 +29,18 @@ function reducer(state, action) {
   switch (action.type) {
     case 'SET_ENTRIES':
       return { ...state, entries: action.payload };
+    case 'MERGE_ENTRIES': {
+      const fetched = action.payload || [];
+      const byId = new Map();
+      for (const e of fetched) if (e?.id) byId.set(e.id, e);
+      for (const e of state.entries) {
+        if (e?.id && !byId.has(e.id)) byId.set(e.id, e);
+      }
+      const merged = Array.from(byId.values()).sort(
+        (a, b) => (b.timestamp || 0) - (a.timestamp || 0)
+      );
+      return { ...state, entries: merged.slice(0, 1000) };
+    }
     case 'ADD_ENTRY':
       return {
         ...state,

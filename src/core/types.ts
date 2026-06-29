@@ -16,6 +16,12 @@ export interface UnifiedMessage {
   senderName?: string;
   groupId?: string;
   groupName?: string;
+  /** ISO 639-1 code of the language detected by STT (e.g. 'en', 'he'). Set when STT auto-detection is used. */
+  detectedLanguage?: string;
+  /** Translation of `text` into the service's target language. Set when service.translate is configured. */
+  translatedText?: string;
+  /** ISO 639-1 code of the translation target language (mirrors service.translate.target_language). */
+  translatedLanguage?: string;
   // Email-specific fields
   email?: {
     subject?: string;

@@ -5,6 +5,21 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import { DEFAULT_DATA_DIR } from '../paths';
 
+export interface HttpCallRecord {
+  request: {
+    url: string;
+    method: string;
+    headers: Record<string, string>;
+    body?: string;
+  };
+  response?: {
+    status: number;
+    statusText: string;
+    headers: Record<string, string>;
+    body?: string;
+  };
+}
+
 export interface LogEntry {
   id: string;
   timestamp: number;
@@ -21,9 +36,19 @@ export interface LogEntry {
   status: 'success' | 'error' | 'no-route' | 'blocked' | 'format-error';
   latency?: number;
   sttTranscription?: string;
+  sttError?: string;
+  /** ISO 639-1 language code that STT detected (when auto-detection was used). */
+  detectedLanguage?: string;
+  /** Translation of the message text, when service.translate is configured. */
+  translatedText?: string;
+  /** ISO 639-1 target language for the translation. */
+  translatedLanguage?: string;
+  /** If translation failed, the error message. */
+  translateError?: string;
   ttsGenerated?: boolean;
   formatApplied?: boolean;
   formatOriginalText?: string;
+  httpCall?: HttpCallRecord;
 }
 
 const RETENTION_DAYS = 30;
@@ -73,6 +98,12 @@ export class Logger extends EventEmitter {
     try { this.db.exec('ALTER TABLE logs ADD COLUMN format_applied INTEGER'); } catch {}
     try { this.db.exec('ALTER TABLE logs ADD COLUMN format_original_text TEXT'); } catch {}
     try { this.db.exec('ALTER TABLE logs ADD COLUMN service_name TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN http_call TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN stt_error TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN detected_language TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN translated_text TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN translated_language TEXT'); } catch {}
+    try { this.db.exec('ALTER TABLE logs ADD COLUMN translate_error TEXT'); } catch {}
   }
 
   private cleanup(): void {
@@ -85,8 +116,8 @@ export class Logger extends EventEmitter {
 
   log(entry: LogEntry): void {
     this.db.prepare(`
-      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms, stt_transcription, tts_generated, format_applied, format_original_text, service_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO logs (id, timestamp, channel, from_jid, sender_name, text, type, group_id, group_name, webhook_url, response_text, status, latency_ms, stt_transcription, tts_generated, format_applied, format_original_text, service_name, http_call, stt_error, detected_language, translated_text, translated_language, translate_error)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       entry.id,
       entry.timestamp,
@@ -105,7 +136,13 @@ export class Logger extends EventEmitter {
       entry.ttsGenerated ? 1 : null,
       entry.formatApplied ? 1 : null,
       entry.formatOriginalText || null,
-      entry.serviceName || null
+      entry.serviceName || null,
+      entry.httpCall ? JSON.stringify(entry.httpCall) : null,
+      entry.sttError || null,
+      entry.detectedLanguage || null,
+      entry.translatedText || null,
+      entry.translatedLanguage || null,
+      entry.translateError || null
     );
     this.emit('entry', entry);
   }
@@ -174,6 +211,10 @@ export class Logger extends EventEmitter {
   }
 
   private rowToEntry(row: any): LogEntry {
+    let httpCall: HttpCallRecord | undefined;
+    if (row.http_call) {
+      try { httpCall = JSON.parse(row.http_call); } catch {}
+    }
     return {
       id: row.id,
       timestamp: row.timestamp,
@@ -190,9 +231,15 @@ export class Logger extends EventEmitter {
       status: row.status,
       latency: row.latency_ms ?? undefined,
       sttTranscription: row.stt_transcription || undefined,
+      sttError: row.stt_error || undefined,
+      detectedLanguage: row.detected_language || undefined,
+      translatedText: row.translated_text || undefined,
+      translatedLanguage: row.translated_language || undefined,
+      translateError: row.translate_error || undefined,
       ttsGenerated: row.tts_generated ? true : undefined,
       formatApplied: row.format_applied ? true : undefined,
       formatOriginalText: row.format_original_text || undefined,
+      httpCall,
     };
   }
 }

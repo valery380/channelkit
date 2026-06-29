@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { WS_URL, getToken } from '../api.js';
+import { API, WS_URL, apiFetch, getToken } from '../api.js';
 
 export function useWebSocket(dispatch) {
   const wsRef = useRef(null);
@@ -33,6 +33,11 @@ export function useWebSocket(dispatch) {
 
       ws.onopen = () => {
         dispatch({ type: 'SET_WS_CONNECTED', payload: true });
+        // Backfill any entries we may have missed while disconnected.
+        apiFetch(API + '/api/logs')
+          .then(r => r.json())
+          .then(data => dispatch({ type: 'MERGE_ENTRIES', payload: data }))
+          .catch(() => {});
       };
 
       ws.onclose = (ev) => {

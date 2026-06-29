@@ -142,6 +142,69 @@ function AllowActions({ entry, onToast }) {
   );
 }
 
+function HttpCall({ httpCall }) {
+  if (!httpCall) return null;
+  const { request, response } = httpCall;
+
+  const headerLines = (h) => Object.entries(h || {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-[11px] text-dim uppercase block mb-1">HTTP Request</label>
+        <div className="bg-surface border border-border rounded-lg p-3 space-y-2">
+          <div className="text-sm font-mono">
+            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 mr-2">{request.method}</span>
+            <span className="break-all">{request.url}</span>
+          </div>
+          {Object.keys(request.headers || {}).length > 0 && (
+            <details>
+              <summary className="text-[11px] text-dim cursor-pointer hover:text-text">Headers</summary>
+              <pre className="text-xs font-mono whitespace-pre-wrap mt-1 text-dim">{headerLines(request.headers)}</pre>
+            </details>
+          )}
+          {request.body && (
+            <div>
+              <div className="text-[11px] text-dim mb-1">Body</div>
+              <pre className="text-xs font-mono whitespace-pre-wrap bg-bg-light border border-border rounded p-2 max-h-80 overflow-auto">{request.body}</pre>
+            </div>
+          )}
+        </div>
+      </div>
+      <div>
+        <label className="text-[11px] text-dim uppercase block mb-1">HTTP Response</label>
+        <div className="bg-surface border border-border rounded-lg p-3 space-y-2">
+          {response ? (
+            <>
+              <div className="text-sm font-mono">
+                <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border mr-2 ${response.status >= 200 && response.status < 300 ? 'bg-green/10 text-green border-green/20' : 'bg-red/10 text-red border-red/20'}`}>
+                  {response.status} {response.statusText}
+                </span>
+              </div>
+              {Object.keys(response.headers || {}).length > 0 && (
+                <details>
+                  <summary className="text-[11px] text-dim cursor-pointer hover:text-text">Headers</summary>
+                  <pre className="text-xs font-mono whitespace-pre-wrap mt-1 text-dim">{headerLines(response.headers)}</pre>
+                </details>
+              )}
+              {response.body && (
+                <div>
+                  <div className="text-[11px] text-dim mb-1">Body</div>
+                  <pre className="text-xs font-mono whitespace-pre-wrap bg-bg-light border border-border rounded p-2 max-h-80 overflow-auto">{response.body}</pre>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="text-xs text-dim italic">No response received (timeout, network error, or blocked).</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LogRow({ entry, isNew, onToast }) {
   const [expanded, setExpanded] = useState(false);
   const icon = channelIcons[entry.channel] || null;
@@ -198,7 +261,33 @@ function LogRow({ entry, isNew, onToast }) {
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Webhook</label><p className="text-sm font-mono break-all">{entry.route || '\u2014'}</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Status</label><p className="text-sm">{entry.status}</p></div>
                 <div><label className="text-[11px] text-dim uppercase block mb-0.5">Latency</label><p className="text-sm">{entry.latency != null ? entry.latency + 'ms' : '\u2014'}</p></div>
+                {entry.detectedLanguage && (
+                  <div><label className="text-[11px] text-dim uppercase block mb-0.5">Detected Language</label><p className="text-sm font-mono">{entry.detectedLanguage}</p></div>
+                )}
+                {entry.translatedLanguage && (
+                  <div><label className="text-[11px] text-dim uppercase block mb-0.5">Translated To</label><p className="text-sm font-mono">{entry.translatedLanguage}</p></div>
+                )}
               </div>
+              {entry.translatedText && (
+                <div>
+                  <label className="text-[11px] text-dim uppercase block mb-1">
+                    Translated Message
+                    <span className="inline-flex items-center ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                      {entry.detectedLanguage || '?'} \u2192 {entry.translatedLanguage}
+                    </span>
+                  </label>
+                  <div className="bg-surface border border-border rounded-lg p-3 text-sm whitespace-pre-wrap">{entry.translatedText}</div>
+                </div>
+              )}
+              {entry.translateError && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red/10 border border-red/30 rounded-lg">
+                  <span className="material-symbols-outlined text-red text-[18px] shrink-0">translate</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-red mb-0.5">Translation failed</div>
+                    <div className="text-text whitespace-pre-wrap break-words">{entry.translateError}</div>
+                  </div>
+                </div>
+              )}
               {entry.formatApplied && entry.formatOriginalText && (
                 <div>
                   <label className="text-[11px] text-dim uppercase block mb-1">Original Message <span className="text-primary font-normal normal-case">(before formatting)</span></label>
@@ -215,6 +304,16 @@ function LogRow({ entry, isNew, onToast }) {
                 <label className="text-[11px] text-dim uppercase block mb-1">Response</label>
                 <div className="bg-surface border border-border rounded-lg p-3 text-sm whitespace-pre-wrap">{entry.responseText || '\u2014'}</div>
               </div>
+              {entry.sttError && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red/10 border border-red/30 rounded-lg">
+                  <span className="material-symbols-outlined text-red text-[18px] shrink-0">graphic_eq</span>
+                  <div className="text-xs">
+                    <div className="font-bold text-red mb-0.5">Speech-to-text failed</div>
+                    <div className="text-text whitespace-pre-wrap break-words">{entry.sttError}</div>
+                  </div>
+                </div>
+              )}
+              {entry.httpCall && <HttpCall httpCall={entry.httpCall} />}
               {entry.status === 'blocked' && <AllowActions entry={entry} onToast={onToast} />}
             </div>
           </td>
@@ -246,7 +345,7 @@ export default function Logs({ onSend }) {
   useEffect(() => {
     apiFetch(API + '/api/logs')
       .then(r => r.json())
-      .then(data => dispatch({ type: 'SET_ENTRIES', payload: data }))
+      .then(data => dispatch({ type: 'MERGE_ENTRIES', payload: data }))
       .catch(() => {});
   }, [dispatch]);
 
